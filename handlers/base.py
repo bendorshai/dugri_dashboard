@@ -16,7 +16,7 @@ from keyboards import (
     THUMBS_UP, OK_HAND,
     make_daily_summary_keyboard, make_main_menu_keyboard,
     make_profile_keyboard, make_settings_keyboard,
-    make_food_edit_keyboard, format_daily_status,
+    make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_DELETE, CB_BACK,
 )
@@ -81,6 +81,28 @@ class HealthHandlers:
         total_prot = sum(e.get("protein", 0) for e in entries)
         return total_cal, total_prot
 
+    def _get_daily_totals_from_sheet(self, today_str: str) -> tuple[int, int]:
+        """Read daily totals from Google Sheets as source of truth."""
+        try:
+            all_entries = self.sheets.get_all_entries()
+            total_cal = 0
+            total_prot = 0
+            for entry in all_entries:
+                if entry.get("תאריך") == today_str:
+                    try:
+                        total_cal += int(entry.get("קלוריות", 0) or 0)
+                    except (ValueError, TypeError):
+                        pass
+                    try:
+                        total_prot += int(entry.get("חלבון", 0) or 0)
+                    except (ValueError, TypeError):
+                        pass
+            return total_cal, total_prot
+        except Exception:
+            logger.exception("Failed to read daily totals from sheet, falling back to MongoDB")
+            entries = self.mongo.get_today_entries(self.chat_id, today_str)
+            return self._calculate_daily_totals(entries)
+
     def _build_food_response(
         self,
         items_text: str,
@@ -136,6 +158,25 @@ class HealthHandlers:
         )
         await message.reply_text(text, reply_markup=make_main_menu_keyboard())
 
+    async def handle_menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        message = update.effective_message
+        if not message:
+            return
+
+        profile = self._get_profile()
+        today_str = self._get_today_str(profile)
+        total_cal, total_protein = self._get_daily_totals_from_sheet(today_str)
+
+        status = format_daily_status(
+            total_cal, total_protein,
+            profile.get("target_calories", 2000),
+            profile.get("target_protein", 150),
+        )
+        await message.reply_text(
+            f"📋 תפריט ראשי{status}",
+            reply_markup=make_main_menu_keyboard(),
+        )
+
     # ------------------------------------------------------------------
     # Text message handler
     # ------------------------------------------------------------------
@@ -161,62 +202,143 @@ class HealthHandlers:
         today_str = self._get_today_str(profile)
         time_str = self._get_time_str(profile)
 
-        # Get previous totals for crossing alerts
-        prev_entries = self.mongo.get_today_entries(self.chat_id, today_str)
-        prev_cal, prev_protein = self._calculate_daily_totals(prev_entries)
+        # Get previous totals from sheet
+        prev_cal, prev_protein = self._get_daily_totals_from_sheet(today_str)
 
-        # Analyze food
-        result = self.analyzer.analyze_food_text(message.text, today_str)
+        # Get last entry context for correction detection
+        last_entry = context.chat_data.get("last_entry")
+
+        # Parse message: food or correction?
+        parse_result = self.analyzer.parse_message(message.text, today_str, last_entry)
+
+        if parse_result.type == "correction" and parse_result.correction and last_entry:
+            await self._handle_correction(message, context, parse_result.correction, last_entry, profile, today_str)
+            return
+
+        # Treat as new food (use parsed food result, or fall back to analyze_food_text)
+        if parse_result.type == "food" and parse_result.food and parse_result.food.items:
+            result = parse_result.food
+        else:
+            result = self.analyzer.analyze_food_text(message.text, today_str)
+
         if result is None or not result.items:
             await message.reply_text("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?")
             return
 
-        # Log each item
-        items_lines = []
-        running_cal = prev_cal
-        running_prot = prev_protein
-        for item in result.items:
-            running_cal += item.calories
-            running_prot += item.protein
-            row_number = self.sheets.append_food_entry(
-                date_str=today_str,
-                time_str=time_str,
-                description=item.description,
-                calories=item.calories,
-                protein=item.protein,
-                daily_total_cal=running_cal,
-                daily_total_protein=running_prot,
-            )
-            self.mongo.save_food_entry(
-                chat_id=self.chat_id,
-                date_str=today_str,
-                time_str=time_str,
-                description=item.description,
-                calories=item.calories,
-                protein=item.protein,
-                source="text",
-                sheet_row=row_number,
-            )
-            items_lines.append(f"• {item.description}: {item.calories} קל׳ | {item.protein}g חלבון")
-            logger.info("Recorded: %s (%d cal, %dg protein) -> row %d",
-                        item.description, item.calories, item.protein, row_number)
+        # One row per message: consolidate all items
+        combined_desc = ", ".join(item.description for item in result.items)
+        total_cal = result.total_calories
+        total_prot = result.total_protein
 
+        new_daily_cal = prev_cal + total_cal
+        new_daily_prot = prev_protein + total_prot
+
+        row_number = self.sheets.append_food_entry(
+            date_str=today_str,
+            time_str=time_str,
+            description=combined_desc,
+            calories=total_cal,
+            protein=total_prot,
+            daily_total_cal=new_daily_cal,
+            daily_total_protein=new_daily_prot,
+        )
+        self.mongo.save_food_entry(
+            chat_id=self.chat_id,
+            date_str=today_str,
+            time_str=time_str,
+            description=combined_desc,
+            calories=total_cal,
+            protein=total_prot,
+            source="text",
+            sheet_row=row_number,
+        )
+        logger.info("Recorded: %s (%d cal, %dg protein) -> row %d",
+                    combined_desc, total_cal, total_prot, row_number)
+
+        # Store last entry for correction context
+        context.chat_data["last_entry"] = {
+            "description": combined_desc,
+            "calories": total_cal,
+            "protein": total_prot,
+            "sheet_row": row_number,
+        }
+
+        # Build response with item breakdown
+        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein}g חלבון" for item in result.items]
         items_text = "\n".join(items_lines)
         if len(result.items) > 1:
-            items_text += f"\n\nסה\"כ: {result.total_calories} קל׳ | {result.total_protein}g חלבון"
-
-        # Calculate new totals
-        new_cal = prev_cal + result.total_calories
-        new_protein = prev_protein + result.total_protein
+            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot}g חלבון"
 
         # Check crossing alerts
-        alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_cal, new_protein, profile)
+        alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
 
-        response = self._build_food_response(items_text, new_cal, new_protein, profile)
+        response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
         if alerts:
             response = f"{alerts}\n\n{response}"
 
-        await send_long_text(message, response, reply_markup=make_daily_summary_keyboard())
+        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(row_number))
+        await safe_react(message, OK_HAND)
+
+    async def _handle_correction(
+        self, message, context, correction, last_entry: dict, profile: dict, today_str: str,
+    ):
+        """Handle a correction to the last food entry."""
+        sheet_row = last_entry["sheet_row"]
+        old_cal = last_entry["calories"]
+        old_prot = last_entry["protein"]
+
+        new_desc = correction.corrected_description
+        new_cal = correction.corrected_calories
+        new_prot = correction.corrected_protein
+
+        # Update Google Sheets
+        self.sheets.update_cell_by_name(sheet_row, "תיאור", new_desc)
+        self.sheets.update_cell_by_name(sheet_row, "קלוריות", str(new_cal))
+        self.sheets.update_cell_by_name(sheet_row, "חלבון", str(new_prot))
+
+        # Update daily totals in sheet
+        daily_cal, daily_prot = self._get_daily_totals_from_sheet(today_str)
+        # Adjust: sheet already has old values, we need to replace them
+        adjusted_cal = daily_cal - old_cal + new_cal
+        adjusted_prot = daily_prot - old_prot + new_prot
+        self.sheets.update_cell_by_name(sheet_row, "סהכ קלוריות יומי", str(adjusted_cal))
+        self.sheets.update_cell_by_name(sheet_row, "סהכ חלבון יומי", str(adjusted_prot))
+
+        # Update MongoDB
+        self.mongo.update_food_entry(self.chat_id, sheet_row, {
+            "description": new_desc,
+            "calories": new_cal,
+            "protein": new_prot,
+        })
+
+        # Update last_entry context
+        context.chat_data["last_entry"] = {
+            "description": new_desc,
+            "calories": new_cal,
+            "protein": new_prot,
+            "sheet_row": sheet_row,
+        }
+
+        # Re-read totals from sheet after correction
+        final_cal, final_prot = self._get_daily_totals_from_sheet(today_str)
+
+        cal_diff = new_cal - old_cal
+        prot_diff = new_prot - old_prot
+        diff_text = []
+        if cal_diff != 0:
+            diff_text.append(f"קלוריות: {old_cal} → {new_cal} ({'+' if cal_diff > 0 else ''}{cal_diff})")
+        if prot_diff != 0:
+            diff_text.append(f"חלבון: {old_prot}g → {new_prot}g ({'+' if prot_diff > 0 else ''}{prot_diff}g)")
+
+        response = f"✏️ עודכן: {new_desc}\n" + "\n".join(diff_text)
+        status = format_daily_status(
+            final_cal, final_prot,
+            profile.get("target_calories", 2000),
+            profile.get("target_protein", 150),
+        )
+        response += status
+
+        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(sheet_row))
         await safe_react(message, OK_HAND)
 
     # ------------------------------------------------------------------
@@ -244,55 +366,61 @@ class HealthHandlers:
 
         caption = message.caption or ""
 
-        # Get previous totals
-        prev_entries = self.mongo.get_today_entries(self.chat_id, today_str)
-        prev_cal, prev_protein = self._calculate_daily_totals(prev_entries)
+        # Get previous totals from sheet
+        prev_cal, prev_protein = self._get_daily_totals_from_sheet(today_str)
 
         result = self.analyzer.analyze_food_photo(b64, today_str, caption=caption)
         if result is None or not result.items:
             await message.reply_text("לא הצלחתי לזהות מאכל בתמונה. נסה לתאר מה אכלת בטקסט.")
             return
 
-        items_lines = []
-        running_cal = prev_cal
-        running_prot = prev_protein
-        for item in result.items:
-            running_cal += item.calories
-            running_prot += item.protein
-            row_number = self.sheets.append_food_entry(
-                date_str=today_str,
-                time_str=time_str,
-                description=item.description,
-                calories=item.calories,
-                protein=item.protein,
-                daily_total_cal=running_cal,
-                daily_total_protein=running_prot,
-            )
-            self.mongo.save_food_entry(
-                chat_id=self.chat_id,
-                date_str=today_str,
-                time_str=time_str,
-                description=item.description,
-                calories=item.calories,
-                protein=item.protein,
-                source="photo",
-                sheet_row=row_number,
-            )
-            items_lines.append(f"• {item.description}: {item.calories} קל׳ | {item.protein}g חלבון")
+        # One row per message
+        combined_desc = ", ".join(item.description for item in result.items)
+        total_cal = result.total_calories
+        total_prot = result.total_protein
 
+        new_daily_cal = prev_cal + total_cal
+        new_daily_prot = prev_protein + total_prot
+
+        row_number = self.sheets.append_food_entry(
+            date_str=today_str,
+            time_str=time_str,
+            description=combined_desc,
+            calories=total_cal,
+            protein=total_prot,
+            daily_total_cal=new_daily_cal,
+            daily_total_protein=new_daily_prot,
+        )
+        self.mongo.save_food_entry(
+            chat_id=self.chat_id,
+            date_str=today_str,
+            time_str=time_str,
+            description=combined_desc,
+            calories=total_cal,
+            protein=total_prot,
+            source="photo",
+            sheet_row=row_number,
+        )
+
+        # Store last entry for correction context
+        context.chat_data["last_entry"] = {
+            "description": combined_desc,
+            "calories": total_cal,
+            "protein": total_prot,
+            "sheet_row": row_number,
+        }
+
+        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein}g חלבון" for item in result.items]
         items_text = "\n".join(items_lines)
         if len(result.items) > 1:
-            items_text += f"\n\nסה\"כ: {result.total_calories} קל׳ | {result.total_protein}g חלבון"
+            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot}g חלבון"
 
-        new_cal = prev_cal + result.total_calories
-        new_protein = prev_protein + result.total_protein
-
-        alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_cal, new_protein, profile)
-        response = self._build_food_response(items_text, new_cal, new_protein, profile)
+        alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
+        response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
         if alerts:
             response = f"{alerts}\n\n{response}"
 
-        await send_long_text(message, response, reply_markup=make_daily_summary_keyboard())
+        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(row_number))
         await safe_react(message, OK_HAND)
 
     # ------------------------------------------------------------------
@@ -554,8 +682,7 @@ class HealthHandlers:
 
         profile = self._get_profile()
         today_str = self._get_today_str(profile)
-        entries = self.mongo.get_today_entries(self.chat_id, today_str)
-        total_cal, total_protein = self._calculate_daily_totals(entries)
+        total_cal, total_protein = self._get_daily_totals_from_sheet(today_str)
 
         status = format_daily_status(
             total_cal, total_protein,

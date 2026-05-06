@@ -82,6 +82,7 @@ def create_bot(
 
     # Command handlers
     app.add_handler(CommandHandler("start", h.handle_start_command))
+    app.add_handler(CommandHandler("menu", h.handle_menu_command))
 
     # Message handlers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, h.handle_message))

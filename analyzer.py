@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Literal
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -20,6 +21,34 @@ class FoodAnalysisResult(BaseModel):
     total_calories: int
     total_protein: int
 
+
+class CorrectionResult(BaseModel):
+    corrected_description: str
+    corrected_calories: int
+    corrected_protein: int
+
+
+class MessageParseResult(BaseModel):
+    type: Literal["food", "correction", "unknown"]
+    food: FoodAnalysisResult | None = None
+    correction: CorrectionResult | None = None
+
+
+PARSE_MESSAGE_SYSTEM_PROMPT = (
+    "אתה מערכת ניתוח תזונתי. תפקידך לנתח הודעת טקסט מהמשתמש ולהחליט אם זו:\n"
+    '1. "food" — הודעה על מאכל חדש שהמשתמש אכל\n'
+    '2. "correction" — תיקון או עדכון לרשומה האחרונה (למשל "ההמבורגר היה 300 גרם לא 150", "תוסיף קטשופ")\n'
+    '3. "unknown" — לא ברור\n\n'
+    "כללי מזון:\n"
+    "- אם המשתמש ציין כמות (גרמים), חשב לפי הכמות המדויקת.\n"
+    "- אם לא ציין כמות, העריך מנה סטנדרטית.\n"
+    "- היה מדויק ככל האפשר.\n"
+    "- שמור על התיאור בעברית כפי שהמשתמש כתב.\n\n"
+    "כללי תיקון:\n"
+    "- אם המשתמש מתקן (משנה כמות, מוסיף פריט, מתקן טעות) — החזר type=correction.\n"
+    "- בתיקון, החזר את התיאור המעודכן המלא (כולל חלקים שלא השתנו), ואת הקלוריות והחלבון המעודכנים.\n"
+    "- אם אין רשומה קודמת לתיקון, התייחס כ-food חדש.\n"
+)
 
 FOOD_TEXT_SYSTEM_PROMPT = (
     "אתה מערכת ניתוח תזונתי. תפקידך לנתח תיאור מזון ולהעריך קלוריות וחלבון.\n\n"
@@ -101,6 +130,40 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT food analysis failed for: %s", text[:80])
             return None
+
+    def parse_message(
+        self, text: str, today_str: str, last_entry: dict | None = None,
+    ) -> MessageParseResult:
+        """Classify a message as new food or correction to last entry."""
+        system = PARSE_MESSAGE_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
+        if last_entry:
+            system += (
+                f"\nהרשומה האחרונה שנרשמה:\n"
+                f"תיאור: {last_entry.get('description', '')}\n"
+                f"קלוריות: {last_entry.get('calories', 0)}\n"
+                f"חלבון: {last_entry.get('protein', 0)}\n"
+            )
+        else:
+            system += "\nאין רשומה קודמת. התייחס לכל הודעה כ-food חדש.\n"
+
+        try:
+            response = self.client.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text},
+                ],
+                response_format=MessageParseResult,
+                temperature=0,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                logger.warning("GPT parse_message returned None for: %s", text[:80])
+                return MessageParseResult(type="unknown")
+            return result
+        except Exception:
+            logger.exception("GPT parse_message failed for: %s", text[:80])
+            return MessageParseResult(type="unknown")
 
     def analyze_food_photo(
         self, base64_image: str, today_str: str, caption: str = "",

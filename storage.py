@@ -79,6 +79,12 @@ class MongoStorage:
     def get_week_entries(self, chat_id: int, date_strings: list[str]) -> list[dict]:
         return list(self._food.find({"chat_id": chat_id, "date": {"$in": date_strings}}))
 
+    def update_food_entry(self, chat_id: int, sheet_row: int, updates: dict) -> None:
+        self._food.update_one(
+            {"chat_id": chat_id, "sheet_row": sheet_row},
+            {"$set": updates},
+        )
+
     def delete_food_entry(self, chat_id: int, sheet_row: int) -> None:
         self._food.delete_one({"chat_id": chat_id, "sheet_row": sheet_row})
 

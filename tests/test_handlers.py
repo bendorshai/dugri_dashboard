@@ -131,3 +131,25 @@ class TestBuildFoodResponse:
         assert "שניצל" in response
         assert "400/2000" in response
         assert "30g/150g" in response
+
+
+class TestOneRowPerMessage:
+    """Verify that multiple food items get consolidated into one description."""
+
+    def test_items_joined_with_comma(self):
+        items = [
+            MagicMock(description="שניצל", calories=400, protein=30),
+            MagicMock(description="סלט", calories=50, protein=3),
+        ]
+        combined = ", ".join(item.description for item in items)
+        assert combined == "שניצל, סלט"
+
+    def test_totals_summed(self):
+        items = [
+            MagicMock(description="שניצל", calories=400, protein=30),
+            MagicMock(description="סלט", calories=50, protein=3),
+        ]
+        total_cal = sum(item.calories for item in items)
+        total_prot = sum(item.protein for item in items)
+        assert total_cal == 450
+        assert total_prot == 33

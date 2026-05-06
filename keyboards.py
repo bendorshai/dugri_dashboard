@@ -72,6 +72,23 @@ def make_food_edit_keyboard(row_number: int) -> InlineKeyboardMarkup:
     ])
 
 
+def make_food_entry_keyboard(row_number: int) -> InlineKeyboardMarkup:
+    """Keyboard shown after logging food: edit/delete + daily menu options."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{row_number}"),
+        ],
+        [
+            InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals"),
+            InlineKeyboardButton("❓ שאל שאלה", callback_data=f"{CB_ASK}question"),
+        ],
+        [
+            InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings"),
+            InlineKeyboardButton("👤 פרופיל", callback_data=f"{CB_MENU}profile"),
+        ],
+    ])
+
+
 def format_daily_status(
     total_cal: int,
     total_protein: int,
