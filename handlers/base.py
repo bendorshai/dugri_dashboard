@@ -18,7 +18,7 @@ from keyboards import (
     make_profile_keyboard, make_settings_keyboard,
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
-    CB_ASK, CB_FOOD_DELETE, CB_BACK,
+    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_BULK_FIX, CB_BACK,
 )
 from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, safe_answer
 
@@ -193,6 +193,14 @@ class HealthHandlers:
 
         # Check for pending question
         if await self._handle_pending_question(message, context):
+            return
+
+        # Check for pending food correction (from edit button)
+        if await self._handle_pending_correction(message, context):
+            return
+
+        # Check for pending bulk fix
+        if await self._handle_pending_bulk_fix(message, context):
             return
 
         await safe_react(message, THUMBS_UP)
@@ -494,6 +502,118 @@ class HealthHandlers:
 
         return True
 
+    async def _handle_pending_correction(self, message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        pending = context.chat_data.get("pending_correction")
+        if not pending:
+            return False
+        if time.time() - pending.get("timestamp", 0) > PENDING_STATE_TTL:
+            del context.chat_data["pending_correction"]
+            return False
+
+        del context.chat_data["pending_correction"]
+        await safe_react(message, THUMBS_UP)
+
+        entry = pending["entry"]
+        profile = self._get_profile()
+        today_str = self._get_today_str(profile)
+
+        # Force GPT to treat this as a correction by providing the entry context
+        parse_result = self.analyzer.parse_message(message.text, today_str, last_entry=entry)
+
+        if parse_result.type == "correction" and parse_result.correction:
+            await self._handle_correction(message, context, parse_result.correction, entry, profile, today_str)
+        else:
+            # GPT didn't understand as correction — re-analyze as correction explicitly
+            from analyzer import CorrectionResult
+            result = self.analyzer.analyze_food_text(message.text, today_str)
+            if result and result.items:
+                # Treat the full response as the corrected entry
+                combined_desc = ", ".join(item.description for item in result.items)
+                correction = CorrectionResult(
+                    corrected_description=combined_desc,
+                    corrected_calories=result.total_calories,
+                    corrected_protein=result.total_protein,
+                )
+                await self._handle_correction(message, context, correction, entry, profile, today_str)
+            else:
+                await message.reply_text("לא הצלחתי להבין את התיקון. נסה שוב.")
+
+        return True
+
+    async def _handle_pending_bulk_fix(self, message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        pending = context.chat_data.get("pending_bulk_fix")
+        if not pending:
+            return False
+        if time.time() - pending.get("timestamp", 0) > PENDING_STATE_TTL:
+            del context.chat_data["pending_bulk_fix"]
+            return False
+
+        del context.chat_data["pending_bulk_fix"]
+        await safe_react(message, THUMBS_UP)
+
+        correction_text = message.text.strip()
+
+        # Read all entries from sheet
+        all_entries = self.sheets.get_all_entries()
+        if not all_entries:
+            await message.reply_text("אין רשומות לתיקון.")
+            return True
+
+        # Build CSV for GPT
+        csv_lines = ["row_index,תאריך,שעה,תיאור,קלוריות,חלבון"]
+        for i, e in enumerate(all_entries):
+            csv_lines.append(
+                f"{i},{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות','0')},{e.get('חלבון','0')}"
+            )
+        entries_csv = "\n".join(csv_lines)
+
+        await message.reply_text("🔍 מחפש רשומות לתיקון...")
+
+        corrections = self.analyzer.analyze_bulk_correction(correction_text, entries_csv)
+
+        if not corrections:
+            await message.reply_text("לא מצאתי רשומות שמתאימות לתיקון.", reply_markup=make_main_menu_keyboard())
+            return True
+
+        # Apply corrections — sheet rows are 1-based, header is row 1, data starts at row 2
+        report_lines = []
+        total_cal_diff = 0
+        total_prot_diff = 0
+
+        for c in corrections:
+            sheet_row = c.row_index + 2  # row_index is 0-based in data, +2 for header + 1-based
+            old_entry = all_entries[c.row_index] if c.row_index < len(all_entries) else None
+            if not old_entry:
+                continue
+
+            old_cal = int(old_entry.get("קלוריות", 0) or 0)
+            old_prot = int(old_entry.get("חלבון", 0) or 0)
+
+            self.sheets.update_cell_by_name(sheet_row, "תיאור", c.corrected_description)
+            self.sheets.update_cell_by_name(sheet_row, "קלוריות", str(c.corrected_calories))
+            self.sheets.update_cell_by_name(sheet_row, "חלבון", str(c.corrected_protein))
+
+            cal_diff = c.corrected_calories - old_cal
+            prot_diff = c.corrected_protein - old_prot
+            total_cal_diff += cal_diff
+            total_prot_diff += prot_diff
+
+            report_lines.append(
+                f"• {c.original_description} → {c.corrected_description} "
+                f"({old_cal}→{c.corrected_calories} קל׳, {old_prot}→{c.corrected_protein}g)"
+            )
+
+        report = (
+            f"✅ תוקנו {len(corrections)} רשומות:\n\n"
+            + "\n".join(report_lines)
+            + f"\n\nשינוי כולל: {'+' if total_cal_diff >= 0 else ''}{total_cal_diff} קל׳, "
+            f"{'+' if total_prot_diff >= 0 else ''}{total_prot_diff}g חלבון"
+        )
+
+        await send_long_text(message, report, reply_markup=make_main_menu_keyboard())
+        await safe_react(message, OK_HAND)
+        return True
+
     # ------------------------------------------------------------------
     # Callback handlers
     # ------------------------------------------------------------------
@@ -643,6 +763,57 @@ class HealthHandlers:
         except Exception:
             logger.exception("Failed to delete food entry row %s", row_str)
             await query.edit_message_text("❌ שגיאה במחיקה.", reply_markup=make_daily_summary_keyboard())
+
+    async def handle_food_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        row_str = query.data.removeprefix(CB_FOOD_EDIT)
+        try:
+            row_number = int(row_str)
+            entry_data = self.sheets.get_entry_data(row_number)
+            description = entry_data.get("תיאור", "")
+            calories = int(entry_data.get("קלוריות", 0) or 0)
+            protein = int(entry_data.get("חלבון", 0) or 0)
+
+            context.chat_data["pending_correction"] = {
+                "entry": {
+                    "description": description,
+                    "calories": calories,
+                    "protein": protein,
+                    "sheet_row": row_number,
+                },
+                "timestamp": time.time(),
+            }
+
+            await query.edit_message_text(
+                f"✏️ עריכת רשומה: {description}\n"
+                f"קלוריות: {calories} | חלבון: {protein}g\n\n"
+                "שלח תיאור של התיקון (למשל: 'זה היה 300 גרם לא 150'):"
+            )
+        except Exception:
+            logger.exception("Failed to read entry for edit, row %s", row_str)
+            await query.edit_message_text("❌ שגיאה בקריאת הרשומה.", reply_markup=make_daily_summary_keyboard())
+
+    async def handle_bulk_fix_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        context.chat_data["pending_bulk_fix"] = {
+            "timestamp": time.time(),
+        }
+
+        await query.edit_message_text(
+            "🔧 תיקון כללי\n\n"
+            "תאר את הטעות שחוזרת על עצמה.\n"
+            "למשל: 'כל פעם שכתבתי עוגת בננה זה היה פרוסה לא עוגה שלמה'\n"
+            "או: 'הקפה שלי תמיד עם חלב שקד, לא חלב רגיל'\n\n"
+            "הבוט יתקן את כל הרשומות שמתאימות."
+        )
 
     async def handle_back_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query

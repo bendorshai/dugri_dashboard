@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.3.0"
-VERSION_NOTES = "תיקונים, עריכת רשומות, פקודת /menu, יומן אכילה רק בגוגל שיטס"
+VERSION = "0.4.0"
+VERSION_NOTES = "כפתור עריכה לתיקון רשומות + תיקון כללי רטרואקטיבי על כל הרשומות"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

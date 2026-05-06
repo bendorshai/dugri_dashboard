@@ -34,6 +34,18 @@ class MessageParseResult(BaseModel):
     correction: CorrectionResult | None = None
 
 
+class BulkCorrectionItem(BaseModel):
+    row_index: int
+    original_description: str
+    corrected_description: str
+    corrected_calories: int
+    corrected_protein: int
+
+
+class BulkCorrectionResult(BaseModel):
+    corrections: list[BulkCorrectionItem]
+
+
 PARSE_MESSAGE_SYSTEM_PROMPT = (
     "אתה מערכת ניתוח תזונתי. תפקידך לנתח הודעת טקסט מהמשתמש ולהחליט אם זו:\n"
     '1. "food" — הודעה על מאכל חדש שהמשתמש אכל\n'
@@ -103,6 +115,17 @@ TARGET_SUGGESTION_SYSTEM_PROMPT = (
     "הצע יעדי קלוריות וחלבון יומיים.\n"
     "החזר JSON עם target_calories ו-target_protein.\n"
     "התבסס על נוסחאות מקובלות כמו Mifflin-St Jeor.\n"
+)
+
+BULK_CORRECTION_SYSTEM_PROMPT = (
+    "אתה מערכת תיקון רשומות תזונה. המשתמש מתאר טעות חוזרת ברשומות שלו.\n"
+    "תפקידך לזהות את כל הרשומות שמתאימות לתיאור הטעות ולהחזיר ערכים מתוקנים.\n\n"
+    "כללים:\n"
+    "- סרוק את כל הרשומות וזהה את אלו שמתאימות לתיאור הטעות.\n"
+    "- עבור כל רשומה שמתאימה, החזר: row_index (מספר השורה ברשימה, מתחיל מ-0), "
+    "original_description, corrected_description, corrected_calories, corrected_protein.\n"
+    "- אם אין רשומות שמתאימות, החזר רשימה ריקה.\n"
+    "- חשב את הקלוריות והחלבון המתוקנים לפי התיקון שהמשתמש מתאר.\n"
 )
 
 
@@ -295,3 +318,28 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT target suggestion failed")
             return None
+
+    def analyze_bulk_correction(
+        self, correction_text: str, entries_csv: str,
+    ) -> list[BulkCorrectionItem]:
+        user_msg = (
+            f"רשומות האכילה:\n{entries_csv}\n\n"
+            f"תיקון מהמשתמש: {correction_text}"
+        )
+        try:
+            response = self.client.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": BULK_CORRECTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format=BulkCorrectionResult,
+                temperature=0,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                return []
+            return result.corrections
+        except Exception:
+            logger.exception("GPT bulk correction failed")
+            return []

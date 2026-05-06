@@ -13,6 +13,7 @@ CB_SUGGEST = "suggest_"
 CB_ASK = "ask_"
 CB_FOOD_EDIT = "fedit_"
 CB_FOOD_DELETE = "fdel_"
+CB_BULK_FIX = "bfix_"
 CB_BACK = "back_"
 
 
@@ -33,6 +34,7 @@ def make_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals")],
         [InlineKeyboardButton("❓ שאל שאלה על תזונה", callback_data=f"{CB_ASK}question")],
+        [InlineKeyboardButton("🔧 תיקון כללי", callback_data=f"{CB_BULK_FIX}start")],
         [InlineKeyboardButton("👤 פרופיל ויעדים", callback_data=f"{CB_MENU}profile")],
         [InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings")],
     ])
@@ -76,6 +78,7 @@ def make_food_entry_keyboard(row_number: int) -> InlineKeyboardMarkup:
     """Keyboard shown after logging food: edit/delete + daily menu options."""
     return InlineKeyboardMarkup([
         [
+            InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_FOOD_EDIT}{row_number}"),
             InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{row_number}"),
         ],
         [
