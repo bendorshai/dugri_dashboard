@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.1.0"
-VERSION_NOTES = "בוט מעקב תזונה - גרסה ראשונה"
+VERSION = "0.3.0"
+VERSION_NOTES = "תיקונים, עריכת רשומות, פקודת /menu, יומן אכילה רק בגוגל שיטס"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
