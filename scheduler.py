@@ -32,7 +32,7 @@ def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, a
         time=warning_time,
         chat_id=chat_id,
         name=f"window_{chat_id}_warning",
-        data={"chat_id": chat_id, "mongo": mongo, "profile": profile},
+        data={"chat_id": chat_id, "sheets": sheets, "profile": profile},
     )
 
     # Window close
@@ -58,13 +58,13 @@ def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, a
 async def _window_warning_callback(context):
     data = context.job.data
     chat_id = data["chat_id"]
-    mongo = data["mongo"]
+    sheets = data["sheets"]
     profile = data["profile"]
 
     today_str = datetime.now(pytz.timezone(profile.get("timezone", "Asia/Jerusalem"))).strftime("%d/%m/%Y")
-    entries = mongo.get_today_entries(chat_id, today_str)
-    total_cal = sum(e.get("calories", 0) for e in entries)
-    total_prot = sum(e.get("protein", 0) for e in entries)
+    entries = sheets.get_entries_by_dates([today_str])
+    total_cal = sum(int(e.get("קלוריות", 0) or 0) for e in entries)
+    total_prot = sum(int(e.get("חלבון", 0) or 0) for e in entries)
 
     target_cal = profile.get("target_calories", 2000)
     target_prot = profile.get("target_protein", 150)
@@ -90,13 +90,14 @@ async def _window_close_callback(context):
     chat_id = data["chat_id"]
     mongo = data["mongo"]
     analyzer = data["analyzer"]
+    sheets = data["sheets"]
     profile = data["profile"]
 
     tz_str = profile.get("timezone", "Asia/Jerusalem")
     today_str = datetime.now(pytz.timezone(tz_str)).strftime("%d/%m/%Y")
-    entries = mongo.get_today_entries(chat_id, today_str)
-    total_cal = sum(e.get("calories", 0) for e in entries)
-    total_prot = sum(e.get("protein", 0) for e in entries)
+    entries = sheets.get_entries_by_dates([today_str])
+    total_cal = sum(int(e.get("קלוריות", 0) or 0) for e in entries)
+    total_prot = sum(int(e.get("חלבון", 0) or 0) for e in entries)
 
     target_cal = profile.get("target_calories", 2000)
     target_prot = profile.get("target_protein", 150)
@@ -122,12 +123,12 @@ async def _window_close_callback(context):
         # Build week's data
         today = datetime.strptime(today_str, "%d/%m/%Y").date()
         dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
-        week_entries = mongo.get_week_entries(chat_id, dates)
+        week_entries = sheets.get_entries_by_dates(dates)
 
         csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
         for e in week_entries:
             csv_lines.append(
-                f"{e.get('date','')},{e.get('time','')},{e.get('description','')},{e.get('calories',0)},{e.get('protein',0)}"
+                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
             )
         week_csv = "\n".join(csv_lines)
 

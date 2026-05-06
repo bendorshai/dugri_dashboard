@@ -66,48 +66,6 @@ class TestUserProfiles:
         assert args[1]["upsert"] is True
 
 
-class TestFoodEntries:
-    def test_save_food_entry_inserts(self, mock_db):
-        storage, collections = mock_db
-        storage.save_food_entry(
-            chat_id=123,
-            date_str="05/05/2026",
-            time_str="14:30",
-            description="שניצל וסלט",
-            calories=450,
-            protein=35,
-            source="text",
-            sheet_row=5,
-        )
-        collections["food_entries"].insert_one.assert_called_once()
-        doc = collections["food_entries"].insert_one.call_args[0][0]
-        assert doc["chat_id"] == 123
-        assert doc["description"] == "שניצל וסלט"
-        assert doc["calories"] == 450
-        assert doc["protein"] == 35
-        assert doc["source"] == "text"
-        assert doc["sheet_row"] == 5
-
-    def test_get_today_entries(self, mock_db):
-        storage, collections = mock_db
-        collections["food_entries"].find.return_value = [
-            {"description": "ביצים", "calories": 200, "protein": 15},
-        ]
-        entries = storage.get_today_entries(123, "05/05/2026")
-        collections["food_entries"].find.assert_called_with(
-            {"chat_id": 123, "date": "05/05/2026"}
-        )
-        assert len(entries) == 1
-
-    def test_get_week_entries(self, mock_db):
-        storage, collections = mock_db
-        collections["food_entries"].find.return_value = []
-        storage.get_week_entries(123, ["05/05/2026", "04/05/2026"])
-        collections["food_entries"].find.assert_called_with(
-            {"chat_id": 123, "date": {"$in": ["05/05/2026", "04/05/2026"]}}
-        )
-
-
 class TestWeeklyFeedback:
     def test_save_weekly_feedback(self, mock_db):
         storage, collections = mock_db

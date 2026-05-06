@@ -16,7 +16,6 @@ class MongoStorage:
         self._client = MongoClient(uri)
         self._db = self._client[db_name]
         self._profiles = self._db["user_profiles"]
-        self._food = self._db["food_entries"]
         self._feedback = self._db["weekly_feedback"]
         self._insights = self._db["gpt_insights"]
         self._errors = self._db["error_logs"]
@@ -45,48 +44,6 @@ class MongoStorage:
             {"$set": data, "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
             upsert=True,
         )
-
-    # ------------------------------------------------------------------
-    # Food entries
-    # ------------------------------------------------------------------
-
-    def save_food_entry(
-        self,
-        chat_id: int,
-        date_str: str,
-        time_str: str,
-        description: str,
-        calories: int,
-        protein: int,
-        source: str,
-        sheet_row: int,
-    ) -> None:
-        self._food.insert_one({
-            "chat_id": chat_id,
-            "date": date_str,
-            "time": time_str,
-            "description": description,
-            "calories": calories,
-            "protein": protein,
-            "source": source,
-            "sheet_row": sheet_row,
-            "created_at": datetime.now(timezone.utc),
-        })
-
-    def get_today_entries(self, chat_id: int, date_str: str) -> list[dict]:
-        return list(self._food.find({"chat_id": chat_id, "date": date_str}))
-
-    def get_week_entries(self, chat_id: int, date_strings: list[str]) -> list[dict]:
-        return list(self._food.find({"chat_id": chat_id, "date": {"$in": date_strings}}))
-
-    def update_food_entry(self, chat_id: int, sheet_row: int, updates: dict) -> None:
-        self._food.update_one(
-            {"chat_id": chat_id, "sheet_row": sheet_row},
-            {"$set": updates},
-        )
-
-    def delete_food_entry(self, chat_id: int, sheet_row: int) -> None:
-        self._food.delete_one({"chat_id": chat_id, "sheet_row": sheet_row})
 
     # ------------------------------------------------------------------
     # Weekly feedback

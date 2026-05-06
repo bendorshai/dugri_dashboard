@@ -134,3 +134,38 @@ class TestGetAllEntries:
         assert len(entries) == 1
         assert entries[0]["תיאור"] == "שניצל"
         assert entries[0]["קלוריות"] == "400"
+
+
+class TestGetEntriesByDates:
+    def test_filters_by_date(self, sheets_client):
+        client, mock_gc = sheets_client
+        mock_spreadsheet = MagicMock()
+        mock_gc.open_by_key.return_value = mock_spreadsheet
+        mock_ws = MagicMock()
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        mock_ws.get_all_values.return_value = [
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "סהכ קלוריות יומי", "סהכ חלבון יומי"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "400", "30"],
+            ["06/05/2026", "10:00", "קפה", "50", "3", "50", "3"],
+            ["05/05/2026", "18:00", "סלט", "100", "5", "500", "35"],
+        ]
+
+        entries = client.get_entries_by_dates(["05/05/2026"])
+        assert len(entries) == 2
+        assert entries[0]["תיאור"] == "שניצל"
+        assert entries[1]["תיאור"] == "סלט"
+
+    def test_multiple_dates(self, sheets_client):
+        client, mock_gc = sheets_client
+        mock_spreadsheet = MagicMock()
+        mock_gc.open_by_key.return_value = mock_spreadsheet
+        mock_ws = MagicMock()
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        mock_ws.get_all_values.return_value = [
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "סהכ קלוריות יומי", "סהכ חלבון יומי"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "400", "30"],
+            ["06/05/2026", "10:00", "קפה", "50", "3", "50", "3"],
+        ]
+
+        entries = client.get_entries_by_dates(["05/05/2026", "06/05/2026"])
+        assert len(entries) == 2

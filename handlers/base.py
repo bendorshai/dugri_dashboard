@@ -99,9 +99,8 @@ class HealthHandlers:
                         pass
             return total_cal, total_prot
         except Exception:
-            logger.exception("Failed to read daily totals from sheet, falling back to MongoDB")
-            entries = self.mongo.get_today_entries(self.chat_id, today_str)
-            return self._calculate_daily_totals(entries)
+            logger.exception("Failed to read daily totals from sheet")
+            return 0, 0
 
     def _build_food_response(
         self,
@@ -242,16 +241,6 @@ class HealthHandlers:
             daily_total_cal=new_daily_cal,
             daily_total_protein=new_daily_prot,
         )
-        self.mongo.save_food_entry(
-            chat_id=self.chat_id,
-            date_str=today_str,
-            time_str=time_str,
-            description=combined_desc,
-            calories=total_cal,
-            protein=total_prot,
-            source="text",
-            sheet_row=row_number,
-        )
         logger.info("Recorded: %s (%d cal, %dg protein) -> row %d",
                     combined_desc, total_cal, total_prot, row_number)
 
@@ -303,13 +292,6 @@ class HealthHandlers:
         adjusted_prot = daily_prot - old_prot + new_prot
         self.sheets.update_cell_by_name(sheet_row, "סהכ קלוריות יומי", str(adjusted_cal))
         self.sheets.update_cell_by_name(sheet_row, "סהכ חלבון יומי", str(adjusted_prot))
-
-        # Update MongoDB
-        self.mongo.update_food_entry(self.chat_id, sheet_row, {
-            "description": new_desc,
-            "calories": new_cal,
-            "protein": new_prot,
-        })
 
         # Update last_entry context
         context.chat_data["last_entry"] = {
@@ -391,17 +373,6 @@ class HealthHandlers:
             daily_total_cal=new_daily_cal,
             daily_total_protein=new_daily_prot,
         )
-        self.mongo.save_food_entry(
-            chat_id=self.chat_id,
-            date_str=today_str,
-            time_str=time_str,
-            description=combined_desc,
-            calories=total_cal,
-            protein=total_prot,
-            source="photo",
-            sheet_row=row_number,
-        )
-
         # Store last entry for correction context
         context.chat_data["last_entry"] = {
             "description": combined_desc,
@@ -502,11 +473,11 @@ class HealthHandlers:
             d = today - timedelta(days=i)
             dates.append(d.strftime("%d/%m/%Y"))
 
-        entries = self.mongo.get_week_entries(self.chat_id, dates)
+        entries = self.sheets.get_entries_by_dates(dates)
         csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
         for e in entries:
             csv_lines.append(
-                f"{e.get('date','')},{e.get('time','')},{e.get('description','')},{e.get('calories',0)},{e.get('protein',0)}"
+                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
             )
         week_csv = "\n".join(csv_lines)
 
@@ -619,8 +590,8 @@ class HealthHandlers:
 
         profile = self._get_profile()
         today_str = self._get_today_str(profile)
-        entries = self.mongo.get_today_entries(self.chat_id, today_str)
-        total_cal, total_protein = self._calculate_daily_totals(entries)
+        total_cal, total_protein = self._get_daily_totals_from_sheet(today_str)
+        entries = self.sheets.get_entries_by_dates([today_str])
 
         target_cal = profile.get("target_calories", 2000)
         target_prot = profile.get("target_protein", 150)
@@ -628,7 +599,7 @@ class HealthHandlers:
         remaining_prot = max(0, target_prot - total_protein)
 
         today_text = "\n".join(
-            f"- {e.get('description', '')}: {e.get('calories', 0)} קל׳, {e.get('protein', 0)}g"
+            f"- {e.get('תיאור', '')}: {e.get('קלוריות', 0)} קל׳, {e.get('חלבון', 0)}g"
             for e in entries
         ) or "עדיין לא אכלת היום"
 
@@ -668,7 +639,6 @@ class HealthHandlers:
         try:
             row_number = int(row_str)
             self.sheets.delete_row(row_number)
-            self.mongo.delete_food_entry(self.chat_id, row_number)
             await query.edit_message_text("🗑 הרשומה נמחקה.", reply_markup=make_daily_summary_keyboard())
         except Exception:
             logger.exception("Failed to delete food entry row %s", row_str)

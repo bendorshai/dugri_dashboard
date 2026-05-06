@@ -138,3 +138,8 @@ class SheetsClient:
             if entry.get("תיאור") or entry.get("קלוריות"):
                 entries.append(entry)
         return entries
+
+    def get_entries_by_dates(self, date_strings: list[str]) -> list[dict[str, str]]:
+        """Filter entries by date column. Works for both single-day and multi-day queries."""
+        date_set = set(date_strings)
+        return [e for e in self.get_all_entries() if e.get("תאריך") in date_set]
