@@ -153,6 +153,7 @@ class TestGetAllEntries:
         assert len(entries) == 1
         assert entries[0]["תיאור"] == "שניצל"
         assert entries[0]["קלוריות"] == "400"
+        assert "בחלון אכילה" not in entries[0]
 
 
 class TestGetEntriesByDates:

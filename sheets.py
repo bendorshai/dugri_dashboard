@@ -24,6 +24,8 @@ class SheetsClient:
         self.tab_name = tab_name
         self.table_columns = table_columns
         self.total_cols = max(_col_letter_to_index(c) for c in table_columns) + 1
+        # Columns A-E are readable data; F onward are write-only indicators.
+        self._read_max_index = _col_letter_to_index("E")
 
     def _get_spreadsheet(self) -> gspread.Spreadsheet:
         return self.gc.open_by_key(self.sheet_id)
@@ -104,13 +106,18 @@ class SheetsClient:
         empty_row = [""] * self.total_cols
         ws.update(f"A{row_number}", [empty_row], value_input_option="RAW")
 
+    def _read_col_map(self) -> dict[int, str]:
+        """Column index → name mapping for readable columns only (A-E)."""
+        return {
+            _col_letter_to_index(letter): name
+            for letter, name in self.table_columns.items()
+            if _col_letter_to_index(letter) <= self._read_max_index
+        }
+
     def get_entry_data(self, row_number: int) -> dict[str, str]:
         ws = self._get_worksheet()
         row_values = ws.row_values(row_number)
-        col_index_to_name = {
-            _col_letter_to_index(letter): name
-            for letter, name in self.table_columns.items()
-        }
+        col_index_to_name = self._read_col_map()
         result = {}
         for idx, val in enumerate(row_values):
             if idx in col_index_to_name:
@@ -123,10 +130,7 @@ class SheetsClient:
         if len(all_rows) <= 1:
             return []
 
-        col_index_to_name = {
-            _col_letter_to_index(letter): name
-            for letter, name in self.table_columns.items()
-        }
+        col_index_to_name = self._read_col_map()
         entries = []
         for row in all_rows[1:]:
             entry = {}

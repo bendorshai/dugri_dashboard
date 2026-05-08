@@ -141,10 +141,10 @@ async def _window_close_callback(context):
         dates = [(day - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
         week_entries = sheets.get_entries_by_dates(dates)
 
-        csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון,בחלון אכילה"]
+        csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
         for e in week_entries:
             csv_lines.append(
-                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)},{e.get('בחלון אכילה','')}"
+                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
             )
         week_csv = "\n".join(csv_lines)
 

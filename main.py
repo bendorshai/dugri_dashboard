@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.5.1"
-VERSION_NOTES = "תפריט אחרי רישום אוכל מציג רק עריכה ומחיקה"
+VERSION = "0.5.2"
+VERSION_NOTES = "עמודת בחלון אכילה נכתבת בלבד — הבוט לא קורא מעמודה F והלאה"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
