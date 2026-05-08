@@ -75,19 +75,11 @@ def make_food_edit_keyboard(row_number: int) -> InlineKeyboardMarkup:
 
 
 def make_food_entry_keyboard(row_number: int) -> InlineKeyboardMarkup:
-    """Keyboard shown after logging food: edit/delete + daily menu options."""
+    """Keyboard shown after logging food: edit/delete only."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_FOOD_EDIT}{row_number}"),
             InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{row_number}"),
-        ],
-        [
-            InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals"),
-            InlineKeyboardButton("❓ שאל שאלה", callback_data=f"{CB_ASK}question"),
-        ],
-        [
-            InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings"),
-            InlineKeyboardButton("👤 פרופיל", callback_data=f"{CB_MENU}profile"),
         ],
     ])
 
