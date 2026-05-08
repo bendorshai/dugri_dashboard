@@ -855,25 +855,15 @@ class HealthHandlers:
         now = get_user_now(tz)
         today = now.date()
 
-        # Collect last 7 days
+        # Collect last 7 logical eating days
         dates = [(today - timedelta(days=i)) for i in range(7)]
-        date_strings = [d.strftime("%d/%m/%Y") for d in dates]
-        all_entries = self.sheets.get_entries_by_dates(date_strings)
-
-        # Group entries by date
-        by_date: dict[str, list[dict]] = {}
-        for ds in date_strings:
-            by_date[ds] = []
-        for e in all_entries:
-            d = e.get("תאריך", "")
-            if d in by_date:
-                by_date[d].append(e)
 
         lines = ["📅 סיכום שבועי:\n"]
         for d in dates:
             ds = d.strftime("%d/%m/%Y")
+            next_ds = (d + timedelta(days=1)).strftime("%d/%m/%Y")
             day_label = d.strftime("%a %d/%m")
-            entries = by_date.get(ds, [])
+            entries = self.sheets.get_entries_for_eating_day(ds, next_ds, window_start)
 
             if not entries:
                 lines.append(f"📆 {day_label}  —  אין נתונים")
