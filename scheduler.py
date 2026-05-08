@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, time, timedelta
 
@@ -32,7 +31,11 @@ def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, a
         time=warning_time,
         chat_id=chat_id,
         name=f"window_{chat_id}_warning",
-        data={"chat_id": chat_id, "sheets": sheets, "profile": profile},
+        data={
+            "chat_id": chat_id,
+            "mongo": mongo,
+            "sheets": sheets,
+        },
     )
 
     # Window close
@@ -47,7 +50,6 @@ def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, a
             "mongo": mongo,
             "analyzer": analyzer,
             "sheets": sheets,
-            "profile": profile,
         },
     )
 
@@ -55,16 +57,28 @@ def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, a
                 chat_id, warning_time, close_time)
 
 
+def _get_eating_day_totals(sheets, today_str, profile):
+    """Read totals for a logical eating day from Google Sheets."""
+    day = datetime.strptime(today_str, "%d/%m/%Y").date()
+    next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
+    window_start = profile.get("eating_window_start", "08:00")
+
+    entries = sheets.get_entries_for_eating_day(today_str, next_day, window_start)
+    total_cal = sum(int(e.get("קלוריות", 0) or 0) for e in entries)
+    total_prot = sum(int(e.get("חלבון", 0) or 0) for e in entries)
+    return total_cal, total_prot
+
+
 async def _window_warning_callback(context):
     data = context.job.data
     chat_id = data["chat_id"]
+    mongo = data["mongo"]
     sheets = data["sheets"]
-    profile = data["profile"]
 
-    today_str = datetime.now(pytz.timezone(profile.get("timezone", "Asia/Jerusalem"))).strftime("%d/%m/%Y")
-    entries = sheets.get_entries_by_dates([today_str])
-    total_cal = sum(int(e.get("קלוריות", 0) or 0) for e in entries)
-    total_prot = sum(int(e.get("חלבון", 0) or 0) for e in entries)
+    profile = mongo.get_user_profile(chat_id) or {}
+    tz_str = profile.get("timezone", "Asia/Jerusalem")
+    today_str = datetime.now(pytz.timezone(tz_str)).strftime("%d/%m/%Y")
+    total_cal, total_prot = _get_eating_day_totals(sheets, today_str, profile)
 
     target_cal = profile.get("target_calories", 2000)
     target_prot = profile.get("target_protein", 150)
@@ -91,13 +105,11 @@ async def _window_close_callback(context):
     mongo = data["mongo"]
     analyzer = data["analyzer"]
     sheets = data["sheets"]
-    profile = data["profile"]
 
+    profile = mongo.get_user_profile(chat_id) or {}
     tz_str = profile.get("timezone", "Asia/Jerusalem")
     today_str = datetime.now(pytz.timezone(tz_str)).strftime("%d/%m/%Y")
-    entries = sheets.get_entries_by_dates([today_str])
-    total_cal = sum(int(e.get("קלוריות", 0) or 0) for e in entries)
-    total_prot = sum(int(e.get("חלבון", 0) or 0) for e in entries)
+    total_cal, total_prot = _get_eating_day_totals(sheets, today_str, profile)
 
     target_cal = profile.get("target_calories", 2000)
     target_prot = profile.get("target_protein", 150)
@@ -119,16 +131,20 @@ async def _window_close_callback(context):
 
     # Daily GPT coaching feedback (GPT analyzes the full week for context)
     feedback_text = ""
-    if entries:
+    day = datetime.strptime(today_str, "%d/%m/%Y").date()
+    next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
+    window_start = profile.get("eating_window_start", "08:00")
+    today_entries = sheets.get_entries_for_eating_day(today_str, next_day, window_start)
+
+    if today_entries:
         # Build week's data
-        today = datetime.strptime(today_str, "%d/%m/%Y").date()
-        dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
+        dates = [(day - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
         week_entries = sheets.get_entries_by_dates(dates)
 
-        csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
+        csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון,בחלון אכילה"]
         for e in week_entries:
             csv_lines.append(
-                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
+                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)},{e.get('בחלון אכילה','')}"
             )
         week_csv = "\n".join(csv_lines)
 

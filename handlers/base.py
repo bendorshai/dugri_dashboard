@@ -11,7 +11,7 @@ from telegram.ext import ContextTypes
 from sheets import SheetsClient
 from analyzer import FoodAnalyzer
 from storage import MongoStorage
-from parsing import get_user_now, israel_today
+from parsing import get_user_now, israel_today, is_within_eating_window
 from keyboards import (
     THUMBS_UP, OK_HAND,
     make_daily_summary_keyboard, make_main_menu_keyboard,
@@ -76,30 +76,61 @@ class HealthHandlers:
         now = get_user_now(tz)
         return now.strftime("%H:%M")
 
-    def _calculate_daily_totals(self, entries: list[dict]) -> tuple[int, int]:
-        total_cal = sum(e.get("calories", 0) for e in entries)
-        total_prot = sum(e.get("protein", 0) for e in entries)
-        return total_cal, total_prot
+    def _is_within_window(self, profile: dict) -> bool:
+        tz = profile.get("timezone", "Asia/Jerusalem")
+        now = get_user_now(tz)
+        return is_within_eating_window(
+            now,
+            profile.get("eating_window_start", "08:00"),
+            profile.get("eating_window_end", "20:00"),
+        )
 
-    def _get_daily_totals_from_sheet(self, today_str: str) -> tuple[int, int]:
-        """Read daily totals from Google Sheets as source of truth."""
+    def _get_stats_date(self, profile: dict) -> str:
+        """Return the date string whose stats should be displayed.
+
+        Inside the eating window → today.
+        Outside the window (evening, after close) → today (completed day).
+        Outside the window (morning, before open) → yesterday.
+        """
+        tz = profile.get("timezone", "Asia/Jerusalem")
+        now = get_user_now(tz)
+        window_start = profile.get("eating_window_start", "08:00")
+        window_end = profile.get("eating_window_end", "20:00")
+
+        if is_within_eating_window(now, window_start, window_end):
+            return now.strftime("%d/%m/%Y")
+
+        current_minutes = now.hour * 60 + now.minute
+        start_h, start_m = int(window_start.split(":")[0]), int(window_start.split(":")[1])
+        start_minutes = start_h * 60 + start_m
+
+        if current_minutes < start_minutes:
+            yesterday = now - timedelta(days=1)
+            return yesterday.strftime("%d/%m/%Y")
+        return now.strftime("%d/%m/%Y")
+
+    def _get_eating_day_totals(self, date_str: str, profile: dict) -> tuple[int, int]:
+        """Read totals for a logical eating day from Google Sheets."""
         try:
-            all_entries = self.sheets.get_all_entries()
+            day = datetime.strptime(date_str, "%d/%m/%Y").date()
+            next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
+            window_start = profile.get("eating_window_start", "08:00")
+
+            entries = self.sheets.get_entries_for_eating_day(date_str, next_day, window_start)
             total_cal = 0
             total_prot = 0
-            for entry in all_entries:
-                if entry.get("תאריך") == today_str:
-                    try:
-                        total_cal += int(entry.get("קלוריות", 0) or 0)
-                    except (ValueError, TypeError):
-                        pass
-                    try:
-                        total_prot += int(entry.get("חלבון", 0) or 0)
-                    except (ValueError, TypeError):
-                        pass
+            for entry in entries:
+                try:
+                    total_cal += int(entry.get("קלוריות", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
+                try:
+                    total_prot += int(entry.get("חלבון", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
             return total_cal, total_prot
         except Exception:
-            logger.exception("Failed to read daily totals from sheet")
+            logger.exception("Failed to read eating day totals from sheet")
             return 0, 0
 
     def _build_food_response(
@@ -163,8 +194,8 @@ class HealthHandlers:
             return
 
         profile = self._get_profile()
-        today_str = self._get_today_str(profile)
-        total_cal, total_protein = self._get_daily_totals_from_sheet(today_str)
+        stats_date = self._get_stats_date(profile)
+        total_cal, total_protein = self._get_eating_day_totals(stats_date, profile)
 
         status = format_daily_status(
             total_cal, total_protein,
@@ -208,9 +239,7 @@ class HealthHandlers:
         profile = self._get_profile()
         today_str = self._get_today_str(profile)
         time_str = self._get_time_str(profile)
-
-        # Get previous totals from sheet
-        prev_cal, prev_protein = self._get_daily_totals_from_sheet(today_str)
+        within_window = self._is_within_window(profile)
 
         # Get last entry context for correction detection
         last_entry = context.chat_data.get("last_entry")
@@ -237,18 +266,20 @@ class HealthHandlers:
         total_cal = result.total_calories
         total_prot = result.total_protein
 
-        new_daily_cal = prev_cal + total_cal
-        new_daily_prot = prev_protein + total_prot
-
         row_number = self.sheets.append_food_entry(
             date_str=today_str,
             time_str=time_str,
             description=combined_desc,
             calories=total_cal,
             protein=total_prot,
-            daily_total_cal=new_daily_cal,
-            daily_total_protein=new_daily_prot,
+            within_window=within_window,
         )
+
+        # Read totals from sheet after appending (source of truth)
+        stats_date = self._get_stats_date(profile)
+        new_daily_cal, new_daily_prot = self._get_eating_day_totals(stats_date, profile)
+        prev_cal = new_daily_cal - total_cal
+        prev_protein = new_daily_prot - total_prot
         logger.info("Recorded: %s (%d cal, %dg protein) -> row %d",
                     combined_desc, total_cal, total_prot, row_number)
 
@@ -293,14 +324,6 @@ class HealthHandlers:
         self.sheets.update_cell_by_name(sheet_row, "קלוריות", str(new_cal))
         self.sheets.update_cell_by_name(sheet_row, "חלבון", str(new_prot))
 
-        # Update daily totals in sheet
-        daily_cal, daily_prot = self._get_daily_totals_from_sheet(today_str)
-        # Adjust: sheet already has old values, we need to replace them
-        adjusted_cal = daily_cal - old_cal + new_cal
-        adjusted_prot = daily_prot - old_prot + new_prot
-        self.sheets.update_cell_by_name(sheet_row, "סהכ קלוריות יומי", str(adjusted_cal))
-        self.sheets.update_cell_by_name(sheet_row, "סהכ חלבון יומי", str(adjusted_prot))
-
         # Update last_entry context
         context.chat_data["last_entry"] = {
             "description": new_desc,
@@ -310,7 +333,8 @@ class HealthHandlers:
         }
 
         # Re-read totals from sheet after correction
-        final_cal, final_prot = self._get_daily_totals_from_sheet(today_str)
+        stats_date = self._get_stats_date(profile)
+        final_cal, final_prot = self._get_eating_day_totals(stats_date, profile)
 
         cal_diff = new_cal - old_cal
         prot_diff = new_prot - old_prot
@@ -347,6 +371,7 @@ class HealthHandlers:
         profile = self._get_profile()
         today_str = self._get_today_str(profile)
         time_str = self._get_time_str(profile)
+        within_window = self._is_within_window(profile)
 
         # Download photo
         photo = message.photo[-1]  # Highest resolution
@@ -355,9 +380,6 @@ class HealthHandlers:
         b64 = base64.b64encode(photo_bytes).decode("utf-8")
 
         caption = message.caption or ""
-
-        # Get previous totals from sheet
-        prev_cal, prev_protein = self._get_daily_totals_from_sheet(today_str)
 
         result = self.analyzer.analyze_food_photo(b64, today_str, caption=caption)
         if result is None or not result.items:
@@ -369,17 +391,13 @@ class HealthHandlers:
         total_cal = result.total_calories
         total_prot = result.total_protein
 
-        new_daily_cal = prev_cal + total_cal
-        new_daily_prot = prev_protein + total_prot
-
         row_number = self.sheets.append_food_entry(
             date_str=today_str,
             time_str=time_str,
             description=combined_desc,
             calories=total_cal,
             protein=total_prot,
-            daily_total_cal=new_daily_cal,
-            daily_total_protein=new_daily_prot,
+            within_window=within_window,
         )
         # Store last entry for correction context
         context.chat_data["last_entry"] = {
@@ -388,6 +406,12 @@ class HealthHandlers:
             "protein": total_prot,
             "sheet_row": row_number,
         }
+
+        # Read totals from sheet after appending (source of truth)
+        stats_date = self._get_stats_date(profile)
+        new_daily_cal, new_daily_prot = self._get_eating_day_totals(stats_date, profile)
+        prev_cal = new_daily_cal - total_cal
+        prev_protein = new_daily_prot - total_prot
 
         items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein}g חלבון" for item in result.items]
         items_text = "\n".join(items_lines)
@@ -709,9 +733,9 @@ class HealthHandlers:
         await safe_answer(query)
 
         profile = self._get_profile()
-        today_str = self._get_today_str(profile)
-        total_cal, total_protein = self._get_daily_totals_from_sheet(today_str)
-        entries = self.sheets.get_entries_by_dates([today_str])
+        stats_date = self._get_stats_date(profile)
+        total_cal, total_protein = self._get_eating_day_totals(stats_date, profile)
+        entries = self.sheets.get_entries_by_dates([stats_date])
 
         target_cal = profile.get("target_calories", 2000)
         target_prot = profile.get("target_protein", 150)
@@ -822,8 +846,8 @@ class HealthHandlers:
         await safe_answer(query)
 
         profile = self._get_profile()
-        today_str = self._get_today_str(profile)
-        total_cal, total_protein = self._get_daily_totals_from_sheet(today_str)
+        stats_date = self._get_stats_date(profile)
+        total_cal, total_protein = self._get_eating_day_totals(stats_date, profile)
 
         status = format_daily_status(
             total_cal, total_protein,

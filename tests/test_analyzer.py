@@ -12,6 +12,7 @@ sys.modules.setdefault("openai", mock_openai_module)
 from analyzer import (
     FoodAnalyzer, FoodItem, FoodAnalysisResult, MessageParseResult,
     CorrectionResult, BulkCorrectionItem, BulkCorrectionResult,
+    WeeklyFeedbackResult,
 )
 
 
@@ -141,24 +142,57 @@ class TestAnalyzeFoodPhoto:
 
 
 class TestWeeklyFeedback:
-    def test_prompt_includes_history_and_past_feedbacks(self, analyzer):
+    def test_uses_structured_output(self, analyzer):
         fa, mock_client = analyzer
+        expected = WeeklyFeedbackResult(
+            feedback_text="כל הכבוד!",
+            insight="חיובי עובד",
+            insight_category="positive",
+        )
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = '{"feedback_text": "כל הכבוד!", "insight": "חיובי עובד", "insight_category": "positive"}'
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_response.choices[0].message.parsed = expected
+        mock_client.beta.chat.completions.parse.return_value = mock_response
 
-        fa.generate_weekly_feedback(
-            week_csv="date,food,cal,prot\n05/05,שניצל,400,30",
+        result = fa.generate_weekly_feedback(
+            week_csv="date,food,cal,prot,window\n05/05,שניצל,400,30,כן",
             targets={"calories": 2000, "protein": 150},
             past_feedbacks=["יפה מאוד!"],
             user_insights=["מגיב טוב לחיובי"],
         )
 
-        call_args = mock_client.chat.completions.create.call_args
-        system_msg = call_args[1]["messages"][0]["content"]
+        call_args = mock_client.beta.chat.completions.parse.call_args
+        assert call_args[1]["response_format"] == WeeklyFeedbackResult
         assert "שניצל" in call_args[1]["messages"][1]["content"]
         assert "יפה מאוד!" in call_args[1]["messages"][1]["content"]
+        assert result["feedback_text"] == "כל הכבוד!"
+
+    def test_returns_none_on_failure(self, analyzer):
+        fa, mock_client = analyzer
+        mock_client.beta.chat.completions.parse.side_effect = Exception("API error")
+
+        result = fa.generate_weekly_feedback(
+            week_csv="data",
+            targets={"calories": 2000, "protein": 150},
+            past_feedbacks=[],
+            user_insights=[],
+        )
+        assert result is None
+
+    def test_returns_none_when_parsed_is_none(self, analyzer):
+        fa, mock_client = analyzer
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = None
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        result = fa.generate_weekly_feedback(
+            week_csv="data",
+            targets={"calories": 2000, "protein": 150},
+            past_feedbacks=[],
+            user_insights=[],
+        )
+        assert result is None
 
 
 class TestMealSuggestions:

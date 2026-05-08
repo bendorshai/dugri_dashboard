@@ -46,6 +46,12 @@ class BulkCorrectionResult(BaseModel):
     corrections: list[BulkCorrectionItem]
 
 
+class WeeklyFeedbackResult(BaseModel):
+    feedback_text: str
+    insight: str
+    insight_category: str
+
+
 PARSE_MESSAGE_SYSTEM_PROMPT = (
     "אתה מערכת ניתוח תזונתי. תפקידך לנתח הודעת טקסט מהמשתמש ולהחליט אם זו:\n"
     '1. "food" — הודעה על מאכל חדש שהמשתמש אכל\n'
@@ -83,16 +89,13 @@ FOOD_PHOTO_SYSTEM_PROMPT = (
 )
 
 WEEKLY_FEEDBACK_SYSTEM_PROMPT = (
-    "אתה מאמן תזונה חיובי ומעודד. תפקידך לתת משוב קצר (שורה אחת) על השבוע.\n\n"
+    "אתה מאמן תזונה חיובי ומעודד. תפקידך לתת משוב קצר (שורה אחת) על היום.\n\n"
     "כללים:\n"
     "- המשוב חייב להיות בעברית, עליז ומכבד.\n"
     "- שורה אחת בלבד.\n"
     "- עודד שינוי חיובי.\n"
-    "- נתח את המשובים הקודמים שלך ואת תגובת המשתמש כדי לבחור את סגנון המשוב היעיל ביותר.\n\n"
-    "החזר JSON עם:\n"
-    "- feedback_text: המשוב למשתמש (שורה אחת)\n"
-    "- insight: תובנה קצרה על מה עובד/לא עובד במשובים שלך\n"
-    "- insight_category: קטגוריית התובנה (למשל positive_reinforcement, specific_goals)\n"
+    "- נתח את המשובים הקודמים שלך ואת תגובת המשתמש כדי לבחור את סגנון המשוב היעיל ביותר.\n"
+    "- שים לב לעמודת 'בחלון אכילה' — אכילה מחוץ לחלון היא נקודה חשובה למשוב.\n"
 )
 
 MEAL_SUGGESTION_SYSTEM_PROMPT = (
@@ -235,17 +238,24 @@ class FoodAnalyzer:
         )
 
         try:
-            response = self.client.chat.completions.create(
+            response = self.client.beta.chat.completions.parse(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": WEEKLY_FEEDBACK_SYSTEM_PROMPT},
                     {"role": "user", "content": user_msg},
                 ],
+                response_format=WeeklyFeedbackResult,
                 temperature=0.7,
-                max_tokens=500,
             )
-            content = response.choices[0].message.content.strip()
-            return json.loads(content)
+            result = response.choices[0].message.parsed
+            if result is None:
+                logger.warning("GPT weekly feedback returned None")
+                return None
+            return {
+                "feedback_text": result.feedback_text,
+                "insight": result.insight,
+                "insight_category": result.insight_category,
+            }
         except Exception:
             logger.exception("GPT weekly feedback failed")
             return None

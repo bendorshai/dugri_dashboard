@@ -20,8 +20,7 @@ TABLE_COLUMNS = {
     "C": "תיאור",
     "D": "קלוריות",
     "E": "חלבון",
-    "F": "סהכ קלוריות יומי",
-    "G": "סהכ חלבון יומי",
+    "F": "בחלון אכילה",
 }
 
 
@@ -57,7 +56,7 @@ class TestColLetterToIndex:
 class TestSheetsClientInit:
     def test_total_cols(self, sheets_client):
         client, _ = sheets_client
-        assert client.total_cols == 7  # A through G
+        assert client.total_cols == 6  # A through F
 
 
 class TestBuildRow:
@@ -69,16 +68,14 @@ class TestBuildRow:
             "תיאור": "שניצל",
             "קלוריות": "400",
             "חלבון": "30",
-            "סהכ קלוריות יומי": "1200",
-            "סהכ חלבון יומי": "80",
+            "בחלון אכילה": "כן",
         })
         assert row[0] == "05/05/2026"  # A
         assert row[1] == "14:30"       # B
         assert row[2] == "שניצל"       # C
         assert row[3] == "400"         # D
         assert row[4] == "30"          # E
-        assert row[5] == "1200"        # F
-        assert row[6] == "80"          # G
+        assert row[5] == "כן"          # F
 
     def test_missing_values_are_empty(self, sheets_client):
         client, _ = sheets_client
@@ -105,8 +102,7 @@ class TestAppendFoodEntry:
             description="שניצל וסלט",
             calories=400,
             protein=30,
-            daily_total_cal=1200,
-            daily_total_protein=80,
+            within_window=True,
         )
 
         assert row_num == 15
@@ -116,6 +112,29 @@ class TestAppendFoodEntry:
         assert row_arg[2] == "שניצל וסלט"
         assert row_arg[3] == "400"
         assert row_arg[4] == "30"
+        assert row_arg[5] == "כן"
+
+    def test_outside_window_flag(self, sheets_client):
+        client, mock_gc = sheets_client
+        mock_spreadsheet = MagicMock()
+        mock_gc.open_by_key.return_value = mock_spreadsheet
+        mock_ws = MagicMock()
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        mock_ws.append_row.return_value = {
+            "updates": {"updatedRange": "food_log!A16:F16"}
+        }
+
+        client.append_food_entry(
+            date_str="05/05/2026",
+            time_str="22:30",
+            description="נשנוש",
+            calories=200,
+            protein=10,
+            within_window=False,
+        )
+
+        row_arg = mock_ws.append_row.call_args[0][0]
+        assert row_arg[5] == "לא"
 
 
 class TestGetAllEntries:
@@ -126,8 +145,8 @@ class TestGetAllEntries:
         mock_ws = MagicMock()
         mock_spreadsheet.worksheet.return_value = mock_ws
         mock_ws.get_all_values.return_value = [
-            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "סהכ קלוריות יומי", "סהכ חלבון יומי"],
-            ["05/05/2026", "14:30", "שניצל", "400", "30", "400", "30"],
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "בחלון אכילה"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "כן"],
         ]
 
         entries = client.get_all_entries()
@@ -144,10 +163,10 @@ class TestGetEntriesByDates:
         mock_ws = MagicMock()
         mock_spreadsheet.worksheet.return_value = mock_ws
         mock_ws.get_all_values.return_value = [
-            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "סהכ קלוריות יומי", "סהכ חלבון יומי"],
-            ["05/05/2026", "14:30", "שניצל", "400", "30", "400", "30"],
-            ["06/05/2026", "10:00", "קפה", "50", "3", "50", "3"],
-            ["05/05/2026", "18:00", "סלט", "100", "5", "500", "35"],
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "בחלון אכילה"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "כן"],
+            ["06/05/2026", "10:00", "קפה", "50", "3", "כן"],
+            ["05/05/2026", "18:00", "סלט", "100", "5", "כן"],
         ]
 
         entries = client.get_entries_by_dates(["05/05/2026"])
@@ -162,10 +181,64 @@ class TestGetEntriesByDates:
         mock_ws = MagicMock()
         mock_spreadsheet.worksheet.return_value = mock_ws
         mock_ws.get_all_values.return_value = [
-            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "סהכ קלוריות יומי", "סהכ חלבון יומי"],
-            ["05/05/2026", "14:30", "שניצל", "400", "30", "400", "30"],
-            ["06/05/2026", "10:00", "קפה", "50", "3", "50", "3"],
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "בחלון אכילה"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "כן"],
+            ["06/05/2026", "10:00", "קפה", "50", "3", "כן"],
         ]
 
         entries = client.get_entries_by_dates(["05/05/2026", "06/05/2026"])
         assert len(entries) == 2
+
+
+class TestGetEntriesForEatingDay:
+    def test_includes_same_day_entries(self, sheets_client):
+        client, mock_gc = sheets_client
+        mock_spreadsheet = MagicMock()
+        mock_gc.open_by_key.return_value = mock_spreadsheet
+        mock_ws = MagicMock()
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        mock_ws.get_all_values.return_value = [
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "בחלון אכילה"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "כן"],
+            ["05/05/2026", "22:00", "נשנוש", "200", "10", "לא"],
+            ["06/05/2026", "10:00", "קפה", "50", "3", "כן"],
+        ]
+
+        entries = client.get_entries_for_eating_day("05/05/2026", "06/05/2026", "08:00")
+        assert len(entries) == 2
+        assert entries[0]["תיאור"] == "שניצל"
+        assert entries[1]["תיאור"] == "נשנוש"
+
+    def test_includes_next_day_before_window(self, sheets_client):
+        client, mock_gc = sheets_client
+        mock_spreadsheet = MagicMock()
+        mock_gc.open_by_key.return_value = mock_spreadsheet
+        mock_ws = MagicMock()
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        mock_ws.get_all_values.return_value = [
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "בחלון אכילה"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "כן"],
+            ["06/05/2026", "02:00", "נשנוש לילה", "300", "5", "לא"],
+            ["06/05/2026", "10:00", "קפה", "50", "3", "כן"],
+        ]
+
+        entries = client.get_entries_for_eating_day("05/05/2026", "06/05/2026", "08:00")
+        assert len(entries) == 2
+        assert entries[0]["תיאור"] == "שניצל"
+        assert entries[1]["תיאור"] == "נשנוש לילה"
+
+    def test_excludes_next_day_after_window(self, sheets_client):
+        client, mock_gc = sheets_client
+        mock_spreadsheet = MagicMock()
+        mock_gc.open_by_key.return_value = mock_spreadsheet
+        mock_ws = MagicMock()
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        mock_ws.get_all_values.return_value = [
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "בחלון אכילה"],
+            ["05/05/2026", "14:30", "שניצל", "400", "30", "כן"],
+            ["06/05/2026", "09:00", "ארוחת בוקר", "350", "20", "כן"],
+        ]
+
+        entries = client.get_entries_for_eating_day("05/05/2026", "06/05/2026", "08:00")
+        assert len(entries) == 1
+        assert entries[0]["תיאור"] == "שניצל"

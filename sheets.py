@@ -71,8 +71,7 @@ class SheetsClient:
         description: str,
         calories: int,
         protein: int,
-        daily_total_cal: int = 0,
-        daily_total_protein: int = 0,
+        within_window: bool = True,
     ) -> int:
         ws = self._get_worksheet()
         values = {
@@ -81,8 +80,7 @@ class SheetsClient:
             "תיאור": description,
             "קלוריות": str(calories),
             "חלבון": str(protein),
-            "סהכ קלוריות יומי": str(daily_total_cal) if daily_total_cal else "",
-            "סהכ חלבון יומי": str(daily_total_protein) if daily_total_protein else "",
+            "בחלון אכילה": "כן" if within_window else "לא",
         }
         row = self._build_row(values)
         result = ws.append_row(row, value_input_option="USER_ENTERED", table_range="A1")
@@ -143,3 +141,23 @@ class SheetsClient:
         """Filter entries by date column. Works for both single-day and multi-day queries."""
         date_set = set(date_strings)
         return [e for e in self.get_all_entries() if e.get("תאריך") in date_set]
+
+    def get_entries_for_eating_day(
+        self, date_str: str, next_date_str: str, window_start_str: str,
+    ) -> list[dict[str, str]]:
+        """Get all entries belonging to a logical eating day.
+
+        A logical day includes all entries with ``date_str`` plus entries
+        from ``next_date_str`` whose time is before the eating window opens.
+        """
+        all_entries = self.get_all_entries()
+        results = []
+        for entry in all_entries:
+            entry_date = entry.get("תאריך", "")
+            if entry_date == date_str:
+                results.append(entry)
+            elif entry_date == next_date_str:
+                entry_time = entry.get("שעה", "")
+                if entry_time and entry_time < window_start_str:
+                    results.append(entry)
+        return results

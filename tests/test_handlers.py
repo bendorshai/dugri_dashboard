@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
 
 import pytest
 
@@ -94,28 +94,59 @@ class TestCrossingAlerts:
         assert "עברת" in result
 
 
-class TestDailyTotalsCalculation:
+class TestGetStatsDate:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
         return h
 
-    def test_empty_entries(self):
-        h = self._make_handler()
-        cal, prot = h._calculate_daily_totals([])
-        assert cal == 0
-        assert prot == 0
+    @patch("handlers.base.get_user_now")
+    def test_within_window_returns_today(self, mock_now):
+        from datetime import datetime
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = datetime(2026, 5, 8, 12, 0, tzinfo=tz)
 
-    def test_multiple_entries(self):
         h = self._make_handler()
-        entries = [
-            {"calories": 400, "protein": 30},
-            {"calories": 300, "protein": 25},
-            {"calories": 200, "protein": 10},
-        ]
-        cal, prot = h._calculate_daily_totals(entries)
-        assert cal == 900
-        assert prot == 65
+        profile = {
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        result = h._get_stats_date(profile)
+        assert result == "08/05/2026"
+
+    @patch("handlers.base.get_user_now")
+    def test_evening_after_close_returns_today(self, mock_now):
+        from datetime import datetime
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = datetime(2026, 5, 8, 22, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = {
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        result = h._get_stats_date(profile)
+        assert result == "08/05/2026"
+
+    @patch("handlers.base.get_user_now")
+    def test_morning_before_open_returns_yesterday(self, mock_now):
+        from datetime import datetime
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = datetime(2026, 5, 8, 6, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = {
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        result = h._get_stats_date(profile)
+        assert result == "07/05/2026"
 
 
 class TestBuildFoodResponse:

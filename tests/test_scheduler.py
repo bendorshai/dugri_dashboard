@@ -56,3 +56,23 @@ class TestScheduleEatingWindowJobs:
         names = [c[1]["name"] for c in calls]
         assert "window_123_warning" in names
         assert "window_123_close" in names
+
+    def test_passes_mongo_to_both_jobs(self):
+        job_queue = MagicMock()
+        job_queue.get_jobs_by_name.return_value = []
+        mock_mongo = MagicMock()
+
+        profile = {
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+
+        schedule_eating_window_jobs(
+            job_queue, 123, profile,
+            mock_mongo, MagicMock(), MagicMock(),
+        )
+
+        calls = job_queue.run_daily.call_args_list
+        for call in calls:
+            assert call[1]["data"]["mongo"] is mock_mongo
