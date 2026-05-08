@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.5.2"
-VERSION_NOTES = "עמודת בחלון אכילה נכתבת בלבד — הבוט לא קורא מעמודה F והלאה"
+VERSION = "0.6.0"
+VERSION_NOTES = "סיכום שבועי בתפריט — קלוריות, חלבון, אחוזים, שמירת חלון אכילה"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

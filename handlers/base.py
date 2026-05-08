@@ -18,7 +18,7 @@ from keyboards import (
     make_profile_keyboard, make_settings_keyboard,
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
-    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_BULK_FIX, CB_BACK,
+    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_BULK_FIX, CB_WEEKLY, CB_BACK,
 )
 from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, safe_answer
 
@@ -837,6 +837,81 @@ class HealthHandlers:
             "למשל: 'כל פעם שכתבתי עוגת בננה זה היה פרוסה לא עוגה שלמה'\n"
             "או: 'הקפה שלי תמיד עם חלב שקד, לא חלב רגיל'\n\n"
             "הבוט יתקן את כל הרשומות שמתאימות."
+        )
+
+    async def handle_weekly_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        profile = self._get_profile()
+        target_cal = profile.get("target_calories", 2000)
+        target_prot = profile.get("target_protein", 150)
+        window_start = profile.get("eating_window_start", "08:00")
+        window_end = profile.get("eating_window_end", "20:00")
+
+        tz = profile.get("timezone", "Asia/Jerusalem")
+        now = get_user_now(tz)
+        today = now.date()
+
+        # Collect last 7 days
+        dates = [(today - timedelta(days=i)) for i in range(7)]
+        date_strings = [d.strftime("%d/%m/%Y") for d in dates]
+        all_entries = self.sheets.get_entries_by_dates(date_strings)
+
+        # Group entries by date
+        by_date: dict[str, list[dict]] = {}
+        for ds in date_strings:
+            by_date[ds] = []
+        for e in all_entries:
+            d = e.get("תאריך", "")
+            if d in by_date:
+                by_date[d].append(e)
+
+        lines = ["📅 סיכום שבועי:\n"]
+        for d in dates:
+            ds = d.strftime("%d/%m/%Y")
+            day_label = d.strftime("%a %d/%m")
+            entries = by_date.get(ds, [])
+
+            if not entries:
+                lines.append(f"📆 {day_label}  —  אין נתונים")
+                continue
+
+            day_cal = 0
+            day_prot = 0
+            window_kept = True
+            for e in entries:
+                try:
+                    day_cal += int(e.get("קלוריות", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
+                try:
+                    day_prot += int(e.get("חלבון", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
+                entry_time = e.get("שעה", "")
+                if entry_time and not (window_start <= entry_time < window_end):
+                    window_kept = False
+
+            cal_pct = round(day_cal / target_cal * 100) if target_cal else 0
+            prot_pct = round(day_prot / target_prot * 100) if target_prot else 0
+            cal_icon = "✅" if day_cal <= target_cal else "⚠️"
+            prot_icon = "✅" if day_prot >= target_prot else "⚠️"
+            window_icon = "✅" if window_kept else "🍽"
+
+            lines.append(
+                f"📆 {day_label}\n"
+                f"  {cal_icon} קלוריות: {day_cal}/{target_cal} ({cal_pct}%)\n"
+                f"  {prot_icon} חלבון: {day_prot}g/{target_prot}g ({prot_pct}%)\n"
+                f"  {window_icon} חלון אכילה: {'נשמר' if window_kept else 'לא נשמר'}"
+            )
+
+        text = "\n".join(lines)
+        await query.edit_message_text(
+            text,
+            reply_markup=make_main_menu_keyboard(),
         )
 
     async def handle_back_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
