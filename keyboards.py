@@ -96,10 +96,12 @@ def format_daily_status(
     prot_icon = "✅" if total_protein >= target_protein else "⚠️"
     cal_remaining = target_cal - total_cal
     prot_remaining = target_protein - total_protein
+    cal_pct = round(total_cal / target_cal * 100) if target_cal else 0
+    prot_pct = round(total_protein / target_protein * 100) if target_protein else 0
 
     lines = [
         "\n📊 סיכום יומי:",
-        f"{cal_icon} קלוריות: {total_cal}/{target_cal} (נותרו: {cal_remaining})",
-        f"{prot_icon} חלבון: {total_protein}g/{target_protein}g (נותרו: {prot_remaining}g)",
+        f"{cal_icon} קלוריות: {total_cal}/{target_cal} ({cal_pct}%, נותרו: {cal_remaining})",
+        f"{prot_icon} גרם חלבון: {total_protein}/{target_protein} ({prot_pct}%, נותרו: {prot_remaining})",
     ]
     return "\n".join(lines)

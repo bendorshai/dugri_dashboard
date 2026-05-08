@@ -160,7 +160,7 @@ class HealthHandlers:
         target_prot = profile.get("target_protein", 150)
 
         if prev_protein < target_prot <= new_protein:
-            alerts.append("🎉 כל הכבוד! הגעת ליעד החלבון היומי!")
+            alerts.append("🎉 כל הכבוד! הגעת ליעד גרם החלבון היומי!")
         if prev_cal <= target_cal < new_cal:
             alerts.append("⚠️ שים לב — עברת את יעד הקלוריות היומי.")
 
@@ -179,10 +179,10 @@ class HealthHandlers:
         text = (
             "שלום! 👋\n"
             "אני הבוט שלך למעקב תזונה.\n\n"
-            "שלח לי תיאור של מה שאכלת (טקסט או תמונה) ואני אחשב קלוריות וחלבון.\n\n"
+            "שלח לי תיאור של מה שאכלת (טקסט או תמונה) ואני אחשב קלוריות וגרם חלבון.\n\n"
             f"📊 היעדים שלך:\n"
             f"  קלוריות: {profile.get('target_calories', 2000)}\n"
-            f"  חלבון: {profile.get('target_protein', 150)}g\n"
+            f"  גרם חלבון: {profile.get('target_protein', 150)}\n"
             f"  חלון אכילה: {profile.get('eating_window_start', '08:00')}-{profile.get('eating_window_end', '20:00')}\n\n"
             "אפשר לשנות הגדרות דרך התפריט למטה."
         )
@@ -292,10 +292,10 @@ class HealthHandlers:
         }
 
         # Build response with item breakdown
-        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein}g חלבון" for item in result.items]
+        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein} גרם חלבון" for item in result.items]
         items_text = "\n".join(items_lines)
         if len(result.items) > 1:
-            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot}g חלבון"
+            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot} גרם חלבון"
 
         # Check crossing alerts
         alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
@@ -342,7 +342,7 @@ class HealthHandlers:
         if cal_diff != 0:
             diff_text.append(f"קלוריות: {old_cal} → {new_cal} ({'+' if cal_diff > 0 else ''}{cal_diff})")
         if prot_diff != 0:
-            diff_text.append(f"חלבון: {old_prot}g → {new_prot}g ({'+' if prot_diff > 0 else ''}{prot_diff}g)")
+            diff_text.append(f"גרם חלבון: {old_prot} → {new_prot} ({'+' if prot_diff > 0 else ''}{prot_diff})")
 
         response = f"✏️ עודכן: {new_desc}\n" + "\n".join(diff_text)
         status = format_daily_status(
@@ -413,10 +413,10 @@ class HealthHandlers:
         prev_cal = new_daily_cal - total_cal
         prev_protein = new_daily_prot - total_prot
 
-        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein}g חלבון" for item in result.items]
+        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein} גרם חלבון" for item in result.items]
         items_text = "\n".join(items_lines)
         if len(result.items) > 1:
-            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot}g חלבון"
+            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot} גרם חלבון"
 
         alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
         response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
@@ -624,14 +624,14 @@ class HealthHandlers:
 
             report_lines.append(
                 f"• {c.original_description} → {c.corrected_description} "
-                f"({old_cal}→{c.corrected_calories} קל׳, {old_prot}→{c.corrected_protein}g)"
+                f"({old_cal}→{c.corrected_calories} קל׳, {old_prot}→{c.corrected_protein} גרם חלבון)"
             )
 
         report = (
             f"✅ תוקנו {len(corrections)} רשומות:\n\n"
             + "\n".join(report_lines)
             + f"\n\nשינוי כולל: {'+' if total_cal_diff >= 0 else ''}{total_cal_diff} קל׳, "
-            f"{'+' if total_prot_diff >= 0 else ''}{total_prot_diff}g חלבון"
+            f"{'+' if total_prot_diff >= 0 else ''}{total_prot_diff} גרם חלבון"
         )
 
         await send_long_text(message, report, reply_markup=make_main_menu_keyboard())
@@ -659,7 +659,7 @@ class HealthHandlers:
                 f"משקל: {profile.get('weight_kg', '-')} ק\"ג\n\n"
                 f"🎯 יעדים:\n"
                 f"קלוריות: {profile.get('target_calories', '-')}\n"
-                f"חלבון: {profile.get('target_protein', '-')}g\n\n"
+                f"גרם חלבון: {profile.get('target_protein', '-')}\n\n"
                 f"⏰ חלון אכילה: {profile.get('eating_window_start', '08:00')}-{profile.get('eating_window_end', '20:00')}\n"
                 f"🌍 אזור זמן: {profile.get('timezone', 'Asia/Jerusalem')}\n\n"
                 "לחץ על שדה לעריכה:"
@@ -701,7 +701,7 @@ class HealthHandlers:
                 await query.edit_message_text(
                     f"🎯 יעדים מומלצים עודכנו:\n"
                     f"קלוריות: {cal}\n"
-                    f"חלבון: {prot}g",
+                    f"גרם חלבון: {prot}",
                     reply_markup=make_profile_keyboard(),
                 )
             else:
@@ -743,7 +743,7 @@ class HealthHandlers:
         remaining_prot = max(0, target_prot - total_protein)
 
         today_text = "\n".join(
-            f"- {e.get('תיאור', '')}: {e.get('קלוריות', 0)} קל׳, {e.get('חלבון', 0)}g"
+            f"- {e.get('תיאור', '')}: {e.get('קלוריות', 0)} קל׳, {e.get('חלבון', 0)} גרם חלבון"
             for e in entries
         ) or "עדיין לא אכלת היום"
 
@@ -814,7 +814,7 @@ class HealthHandlers:
 
             await query.edit_message_text(
                 f"✏️ עריכת רשומה: {description}\n"
-                f"קלוריות: {calories} | חלבון: {protein}g\n\n"
+                f"קלוריות: {calories} | גרם חלבון: {protein}\n\n"
                 "שלח תיאור של התיקון (למשל: 'זה היה 300 גרם לא 150'):"
             )
         except Exception:
@@ -894,7 +894,7 @@ class HealthHandlers:
             lines.append(
                 f"📆 {day_label}\n"
                 f"  {cal_icon} קלוריות: {day_cal}/{target_cal} ({cal_pct}%)\n"
-                f"  {prot_icon} חלבון: {day_prot}g/{target_prot}g ({prot_pct}%)\n"
+                f"  {prot_icon} גרם חלבון: {day_prot}/{target_prot} ({prot_pct}%)\n"
                 f"  {window_icon} חלון אכילה: {'נשמר' if window_kept else 'לא נשמר'}"
             )
 

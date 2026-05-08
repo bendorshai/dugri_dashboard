@@ -85,12 +85,14 @@ async def _window_warning_callback(context):
     remaining_cal = target_cal - total_cal
     remaining_prot = target_prot - total_prot
 
-    prot_status = f"נותרו {remaining_prot}g" if remaining_prot > 0 else "✅ הגעת ליעד!"
+    cal_pct = round(total_cal / target_cal * 100) if target_cal else 0
+    prot_pct = round(total_prot / target_prot * 100) if target_prot else 0
+    prot_status = f"נותרו {remaining_prot}" if remaining_prot > 0 else "✅ הגעת ליעד!"
 
     text = (
         "⏰ חלון האכילה נסגר בעוד 30 דקות!\n\n"
-        f"קלוריות: {total_cal}/{target_cal} (נותרו: {remaining_cal})\n"
-        f"חלבון: {total_prot}g/{target_prot}g ({prot_status})"
+        f"קלוריות: {total_cal}/{target_cal} ({cal_pct}%, נותרו: {remaining_cal})\n"
+        f"גרם חלבון: {total_prot}/{target_prot} ({prot_pct}%, {prot_status})"
     )
 
     try:
@@ -120,13 +122,15 @@ async def _window_close_callback(context):
     cal_icon = "✅" if cal_delta <= 0 else "⚠️"
     prot_icon = "✅" if prot_delta >= 0 else "⚠️"
 
+    cal_pct = round(total_cal / target_cal * 100) if target_cal else 0
+    prot_pct = round(total_prot / target_prot * 100) if target_prot else 0
     cal_text = f"{abs(cal_delta)} מתחת ליעד" if cal_delta <= 0 else f"{cal_delta} מעל היעד"
     prot_text = f"{prot_delta} מעל היעד" if prot_delta >= 0 else f"{abs(prot_delta)} מתחת ליעד"
 
     summary = (
         "🌙 חלון האכילה נסגר! סיכום יומי:\n\n"
-        f"{cal_icon} קלוריות: {total_cal}/{target_cal} ({cal_text})\n"
-        f"{prot_icon} חלבון: {total_prot}g/{target_prot}g ({prot_text})"
+        f"{cal_icon} קלוריות: {total_cal}/{target_cal} ({cal_pct}%, {cal_text})\n"
+        f"{prot_icon} גרם חלבון: {total_prot}/{target_prot} ({prot_pct}%, {prot_text})"
     )
 
     # Daily GPT coaching feedback (GPT analyzes the full week for context)

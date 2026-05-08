@@ -161,7 +161,7 @@ class TestBuildFoodResponse:
         response = h._build_food_response("• שניצל: 400 קל׳", 400, 30, profile)
         assert "שניצל" in response
         assert "400/2000" in response
-        assert "30g/150g" in response
+        assert "30/150" in response
 
 
 class TestOneRowPerMessage:

@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.6.1"
-VERSION_NOTES = "סיכום שבועי משתמש ביום אכילה לוגי — כולל אכילת לילה"
+VERSION = "0.6.2"
+VERSION_NOTES = "גרם חלבון במקום חלבון, אחוזים בכל הסיכומים"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
