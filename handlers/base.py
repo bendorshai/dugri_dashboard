@@ -109,14 +109,20 @@ class HealthHandlers:
             return yesterday.strftime("%d/%m/%Y")
         return now.strftime("%d/%m/%Y")
 
-    def _get_eating_day_totals(self, date_str: str, profile: dict) -> tuple[int, int]:
-        """Read totals for a logical eating day from Google Sheets."""
-        try:
-            day = datetime.strptime(date_str, "%d/%m/%Y").date()
-            next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
-            window_start = profile.get("eating_window_start", "08:00")
+    def _get_eating_day_entries(self, date_str: str, profile: dict) -> list[dict[str, str]]:
+        """Return entries for a logical eating day. Single source of truth for daily views."""
+        day = datetime.strptime(date_str, "%d/%m/%Y").date()
+        next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
+        window_start = profile.get("eating_window_start", "08:00")
+        return self.sheets.get_entries_for_eating_day(date_str, next_day, window_start)
 
-            entries = self.sheets.get_entries_for_eating_day(date_str, next_day, window_start)
+    def _get_eating_day_totals(self, date_str: str, profile: dict) -> tuple[int, int]:
+        """Read totals for a logical eating day from Google Sheets.
+
+        Uses eating-day-aware filtering — the single source of truth for daily totals.
+        """
+        try:
+            entries = self._get_eating_day_entries(date_str, profile)
             total_cal = 0
             total_prot = 0
             for entry in entries:
@@ -505,6 +511,9 @@ class HealthHandlers:
             d = today - timedelta(days=i)
             dates.append(d.strftime("%d/%m/%Y"))
 
+        # NOTE: using calendar-date filtering here is acceptable for the 7-day
+        # context window sent to GPT. For single-day totals, always use
+        # _get_eating_day_entries / _get_eating_day_totals instead.
         entries = self.sheets.get_entries_by_dates(dates)
         csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
         for e in entries:
@@ -735,7 +744,8 @@ class HealthHandlers:
         profile = self._get_profile()
         stats_date = self._get_stats_date(profile)
         total_cal, total_protein = self._get_eating_day_totals(stats_date, profile)
-        entries = self.sheets.get_entries_by_dates([stats_date])
+        # Must use eating-day-aware filtering to match the totals above
+        entries = self._get_eating_day_entries(stats_date, profile)
 
         target_cal = profile.get("target_calories", 2000)
         target_prot = profile.get("target_protein", 150)

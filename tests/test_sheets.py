@@ -228,6 +228,23 @@ class TestGetEntriesForEatingDay:
         assert entries[0]["תיאור"] == "שניצל"
         assert entries[1]["תיאור"] == "נשנוש לילה"
 
+    def test_excludes_same_day_before_window(self, sheets_client):
+        """Entries on date_str before window_start belong to the previous eating day."""
+        client, mock_gc = sheets_client
+        mock_spreadsheet = MagicMock()
+        mock_gc.open_by_key.return_value = mock_spreadsheet
+        mock_ws = MagicMock()
+        mock_spreadsheet.worksheet.return_value = mock_ws
+        mock_ws.get_all_values.return_value = [
+            ["תאריך", "שעה", "תיאור", "קלוריות", "חלבון", "בחלון אכילה"],
+            ["05/05/2026", "01:00", "נשנוש לילה", "290", "23", "לא"],
+            ["05/05/2026", "12:00", "ארוחת צהריים", "600", "43", "כן"],
+        ]
+
+        entries = client.get_entries_for_eating_day("05/05/2026", "06/05/2026", "08:00")
+        assert len(entries) == 1
+        assert entries[0]["תיאור"] == "ארוחת צהריים"
+
     def test_excludes_next_day_after_window(self, sheets_client):
         client, mock_gc = sheets_client
         mock_spreadsheet = MagicMock()

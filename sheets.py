@@ -142,7 +142,12 @@ class SheetsClient:
         return entries
 
     def get_entries_by_dates(self, date_strings: list[str]) -> list[dict[str, str]]:
-        """Filter entries by date column. Works for both single-day and multi-day queries."""
+        """Filter entries by calendar date. Does NOT use eating-day logic.
+
+        WARNING: For daily totals or daily views, use ``get_entries_for_eating_day``
+        instead. Calendar-date filtering will misattribute entries eaten after
+        midnight but before the eating window opens.
+        """
         date_set = set(date_strings)
         return [e for e in self.get_all_entries() if e.get("תאריך") in date_set]
 
@@ -151,17 +156,25 @@ class SheetsClient:
     ) -> list[dict[str, str]]:
         """Get all entries belonging to a logical eating day.
 
-        A logical day includes all entries with ``date_str`` plus entries
-        from ``next_date_str`` whose time is before the eating window opens.
+        An eating day runs from ``window_start_str`` on ``date_str`` to
+        ``window_start_str`` on ``next_date_str``. Specifically:
+
+        - Entries on ``date_str`` at or after ``window_start_str`` are included.
+        - Entries on ``next_date_str`` before ``window_start_str`` are included
+          (late-night eating that belongs to this eating day).
+        - Entries on ``date_str`` BEFORE ``window_start_str`` are EXCLUDED —
+          they belong to the previous eating day.
         """
         all_entries = self.get_all_entries()
         results = []
         for entry in all_entries:
             entry_date = entry.get("תאריך", "")
+            entry_time = entry.get("שעה", "")
             if entry_date == date_str:
-                results.append(entry)
+                # Exclude entries before window — they belong to the previous eating day
+                if not entry_time or entry_time >= window_start_str:
+                    results.append(entry)
             elif entry_date == next_date_str:
-                entry_time = entry.get("שעה", "")
                 if entry_time and entry_time < window_start_str:
                     results.append(entry)
         return results
