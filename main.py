@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.6.3"
-VERSION_NOTES = "תיקון חישוב יומי — ארוחות לפני חלון האכילה נספרות ליום הקודם"
+VERSION = "0.7.0"
+VERSION_NOTES = "סיכום יומי מפורט + עריכה חכמה עם היסטוריית תיקונים"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

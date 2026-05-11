@@ -347,3 +347,86 @@ class TestBulkCorrection:
         mock_client.beta.chat.completions.parse.side_effect = Exception("API error")
         result = fa.analyze_bulk_correction("test", "data")
         assert result == []
+
+
+class TestAnalyzeCorrection:
+    def test_prompt_includes_original_and_new_correction(self, analyzer):
+        fa, mock_client = analyzer
+        expected = CorrectionResult(
+            corrected_description="המבורגר 300 גרם, צ'יפס, סלט",
+            corrected_calories=950,
+            corrected_protein=55,
+        )
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = expected
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        result = fa.analyze_correction(
+            original_description="המבורגר 100 גרם, צ'יפס, סלט",
+            original_calories=650,
+            original_protein=40,
+            correction_history=[],
+            new_correction="ההמבורגר הוא 300 גרם",
+            today_str="11/05/2026",
+        )
+
+        call_args = mock_client.beta.chat.completions.parse.call_args
+        user_msg = call_args[1]["messages"][1]["content"]
+        assert "המבורגר 100 גרם" in user_msg
+        assert "ההמבורגר הוא 300 גרם" in user_msg
+        assert result.corrected_calories == 950
+
+    def test_prompt_includes_correction_history(self, analyzer):
+        fa, mock_client = analyzer
+        expected = CorrectionResult(
+            corrected_description="המבורגר 300 גרם, צ'יפס גדול, סלט",
+            corrected_calories=1100,
+            corrected_protein=55,
+        )
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = expected
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        result = fa.analyze_correction(
+            original_description="המבורגר 100 גרם, צ'יפס, סלט",
+            original_calories=650,
+            original_protein=40,
+            correction_history=["ההמבורגר הוא 300 גרם"],
+            new_correction="הצ'יפס היה מנה גדולה",
+            today_str="11/05/2026",
+        )
+
+        call_args = mock_client.beta.chat.completions.parse.call_args
+        user_msg = call_args[1]["messages"][1]["content"]
+        assert "ההמבורגר הוא 300 גרם" in user_msg  # history
+        assert "הצ'יפס היה מנה גדולה" in user_msg  # new correction
+        assert result.corrected_calories == 1100
+
+    def test_handles_failure(self, analyzer):
+        fa, mock_client = analyzer
+        mock_client.beta.chat.completions.parse.side_effect = Exception("API error")
+        result = fa.analyze_correction(
+            original_description="test",
+            original_calories=100,
+            original_protein=10,
+            correction_history=[],
+            new_correction="fix",
+            today_str="11/05/2026",
+        )
+        assert result is None
+
+    def test_uses_structured_output(self, analyzer):
+        fa, mock_client = analyzer
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = CorrectionResult(
+            corrected_description="test", corrected_calories=100, corrected_protein=10,
+        )
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        fa.analyze_correction("test", 100, 10, [], "fix", "11/05/2026")
+
+        call_args = mock_client.beta.chat.completions.parse.call_args
+        assert call_args[1]["response_format"] == CorrectionResult

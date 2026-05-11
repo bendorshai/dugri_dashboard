@@ -119,6 +119,15 @@ TARGET_SUGGESTION_SYSTEM_PROMPT = (
     "התבסס על נוסחאות מקובלות כמו Mifflin-St Jeor.\n"
 )
 
+CORRECTION_SYSTEM_PROMPT = (
+    "אתה מערכת ניתוח תזונתי. המשתמש רשם ארוחה ועכשיו מתקן אותה.\n\n"
+    "כללים:\n"
+    "- שנה רק את הפריטים שהמשתמש מציין במפורש בתיקון.\n"
+    "- פריטים שלא הוזכרו בתיקון נשארים כפי שהיו — אל תשנה את הקלוריות או החלבון שלהם.\n"
+    "- החזר את התיאור המלא המעודכן (כולל פריטים שלא השתנו), קלוריות וחלבון מעודכנים.\n"
+    "- היה מדויק ככל האפשר.\n"
+)
+
 BULK_CORRECTION_SYSTEM_PROMPT = (
     "אתה מערכת תיקון רשומות תזונה. המשתמש מתאר טעות חוזרת ברשומות שלו.\n"
     "תפקידך לזהות את כל הרשומות שמתאימות לתיאור הטעות ולהחזיר ערכים מתוקנים.\n\n"
@@ -189,6 +198,46 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT parse_message failed for: %s", text[:80])
             return MessageParseResult(type="unknown")
+
+    def analyze_correction(
+        self,
+        original_description: str,
+        original_calories: int,
+        original_protein: int,
+        correction_history: list[str],
+        new_correction: str,
+        today_str: str,
+    ) -> CorrectionResult | None:
+        """Re-analyze a food entry given the original + chain of corrections."""
+        system = CORRECTION_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
+
+        user_parts = [
+            f"הרשומה המקורית: {original_description}",
+            f"קלוריות: {original_calories} | חלבון: {original_protein}",
+        ]
+        for i, prev in enumerate(correction_history, 1):
+            user_parts.append(f"\nתיקון {i}: {prev}")
+        user_parts.append(f"\nתיקון חדש: {new_correction}")
+        user_msg = "\n".join(user_parts)
+
+        try:
+            response = self.client.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format=CorrectionResult,
+                temperature=0,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                logger.warning("GPT correction analysis returned None")
+                return None
+            return result
+        except Exception:
+            logger.exception("GPT correction analysis failed")
+            return None
 
     def analyze_food_photo(
         self, base64_image: str, today_str: str, caption: str = "",

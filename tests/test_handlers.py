@@ -184,3 +184,209 @@ class TestOneRowPerMessage:
         total_prot = sum(item.protein for item in items)
         assert total_cal == 450
         assert total_prot == 33
+
+
+class TestDailySummaryCallback:
+    """Test the daily summary handler."""
+
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        h.chat_id = 123
+        h.mongo = MagicMock()
+        h.sheets = MagicMock()
+        h.analyzer = MagicMock()
+        return h
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_daily_summary_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_answer", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_shows_itemized_entries(self, mock_send, mock_answer, mock_now, _kb):
+        from datetime import datetime as dt
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        h.mongo.get_user_profile.return_value = {
+            "target_calories": 2000,
+            "target_protein": 150,
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        h.sheets.get_entries_for_eating_day.return_value = [
+            {"תאריך": "11/05/2026", "שעה": "09:30", "תיאור": "שניצל ואורז", "קלוריות": 650, "חלבון": 40},
+            {"תאריך": "11/05/2026", "שעה": "13:00", "תיאור": "סלט יווני", "קלוריות": 300, "חלבון": 15},
+        ]
+
+        query = AsyncMock()
+        query.data = "daily_summary"
+        update = MagicMock()
+        update.callback_query = query
+        context = MagicMock()
+
+        await h.handle_daily_callback(update, context)
+
+        mock_answer.assert_called_once()
+        call_text = mock_send.call_args[0][1]
+        assert "שניצל ואורז" in call_text
+        assert "סלט יווני" in call_text
+        assert "09:30" in call_text
+        assert "950/2000" in call_text  # totals
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_daily_summary_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_answer", new_callable=AsyncMock)
+    async def test_shows_empty_message(self, mock_answer, mock_now, _kb):
+        from datetime import datetime as dt
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        h.mongo.get_user_profile.return_value = {
+            "target_calories": 2000,
+            "target_protein": 150,
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        h.sheets.get_entries_for_eating_day.return_value = []
+
+        query = AsyncMock()
+        query.data = "daily_summary"
+        update = MagicMock()
+        update.callback_query = query
+        context = MagicMock()
+
+        await h.handle_daily_callback(update, context)
+
+        query.edit_message_text.assert_called_once()
+        call_text = query.edit_message_text.call_args[0][0]
+        assert "אין רשומות" in call_text
+
+
+class TestCorrectionHistory:
+    """Test that correction history is preserved and passed to analyzer."""
+
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        h.chat_id = 123
+        h.mongo = MagicMock()
+        h.sheets = MagicMock()
+        h.analyzer = MagicMock()
+        return h
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_calls_analyze_correction(self, mock_send, mock_react, mock_now, _kb):
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        h.mongo.get_user_profile.return_value = {
+            "target_calories": 2000,
+            "target_protein": 150,
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        h.sheets.get_entries_for_eating_day.return_value = [
+            {"קלוריות": 950, "חלבון": 55},
+        ]
+
+        correction_result = CorrectionResult(
+            corrected_description="המבורגר 300 גרם, צ'יפס, סלט",
+            corrected_calories=950,
+            corrected_protein=55,
+        )
+        h.analyzer.analyze_correction.return_value = correction_result
+
+        message = AsyncMock()
+        message.text = "ההמבורגר הוא 300 גרם"
+        context = MagicMock()
+        context.chat_data = {
+            "pending_correction": {
+                "entry": {
+                    "description": "המבורגר 100 גרם, צ'יפס, סלט",
+                    "calories": 650,
+                    "protein": 40,
+                    "sheet_row": 5,
+                },
+                "correction_history": [],
+                "timestamp": __import__("time").time(),
+            }
+        }
+
+        await h._handle_pending_correction(message, context)
+
+        h.analyzer.analyze_correction.assert_called_once()
+        call_kwargs = h.analyzer.analyze_correction.call_args
+        assert call_kwargs[1]["original_description"] == "המבורגר 100 גרם, צ'יפס, סלט"
+        assert call_kwargs[1]["new_correction"] == "ההמבורגר הוא 300 גרם"
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_history_accumulates(self, mock_send, mock_react, mock_now, _kb):
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        h.mongo.get_user_profile.return_value = {
+            "target_calories": 2000,
+            "target_protein": 150,
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        h.sheets.get_entries_for_eating_day.return_value = [
+            {"קלוריות": 1100, "חלבון": 55},
+        ]
+
+        correction_result = CorrectionResult(
+            corrected_description="המבורגר 300 גרם, צ'יפס גדול, סלט",
+            corrected_calories=1100,
+            corrected_protein=55,
+        )
+        h.analyzer.analyze_correction.return_value = correction_result
+
+        message = AsyncMock()
+        message.text = "הצ'יפס היה מנה גדולה"
+        context = MagicMock()
+        context.chat_data = {
+            "pending_correction": {
+                "entry": {
+                    "description": "המבורגר 100 גרם, צ'יפס, סלט",
+                    "calories": 650,
+                    "protein": 40,
+                    "sheet_row": 5,
+                },
+                "correction_history": ["ההמבורגר הוא 300 גרם"],
+                "timestamp": __import__("time").time(),
+            },
+            "correction_histories": {5: ["ההמבורגר הוא 300 גרם"]},
+        }
+
+        await h._handle_pending_correction(message, context)
+
+        call_kwargs = h.analyzer.analyze_correction.call_args
+        assert call_kwargs[1]["correction_history"] == ["ההמבורגר הוא 300 גרם"]
+        # After correction, history should include the new correction too
+        assert "הצ'יפס היה מנה גדולה" in context.chat_data["correction_histories"][5]

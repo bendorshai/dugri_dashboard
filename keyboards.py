@@ -15,11 +15,13 @@ CB_FOOD_EDIT = "fedit_"
 CB_FOOD_DELETE = "fdel_"
 CB_BULK_FIX = "bfix_"
 CB_WEEKLY = "weekly_"
+CB_DAILY = "daily_"
 CB_BACK = "back_"
 
 
 def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 סיכום יומי", callback_data=f"{CB_DAILY}summary")],
         [
             InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals"),
             InlineKeyboardButton("❓ שאל שאלה", callback_data=f"{CB_ASK}question"),
@@ -33,6 +35,7 @@ def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
 
 def make_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 סיכום יומי", callback_data=f"{CB_DAILY}summary")],
         [InlineKeyboardButton("📅 סיכום שבועי", callback_data=f"{CB_WEEKLY}summary")],
         [InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals")],
         [InlineKeyboardButton("❓ שאל שאלה על תזונה", callback_data=f"{CB_ASK}question")],

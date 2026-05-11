@@ -17,7 +17,7 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
-    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_BULK_FIX, CB_WEEKLY, CB_BACK,
+    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
 )
 from handlers import HealthHandlers
 from scheduler import schedule_eating_window_jobs
@@ -98,6 +98,7 @@ def create_bot(
     app.add_handler(CallbackQueryHandler(h.handle_food_delete_callback, pattern=f"^{CB_FOOD_DELETE}"))
     app.add_handler(CallbackQueryHandler(h.handle_bulk_fix_callback, pattern=f"^{CB_BULK_FIX}"))
     app.add_handler(CallbackQueryHandler(h.handle_weekly_callback, pattern=f"^{CB_WEEKLY}"))
+    app.add_handler(CallbackQueryHandler(h.handle_daily_callback, pattern=f"^{CB_DAILY}"))
     app.add_handler(CallbackQueryHandler(h.handle_back_callback, pattern=f"^{CB_BACK}"))
 
     # Error handler
