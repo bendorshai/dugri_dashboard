@@ -1,0 +1,7 @@
+flask==3.1.1
+pymongo==4.11.3
+authlib==1.4.1
+requests==2.32.3
+openai==1.66.3
+python-dotenv==1.1.0
+pytest==8.3.5

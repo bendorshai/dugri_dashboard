@@ -1,0 +1,28 @@
+{% extends "onboarding/base_step.html" %}
+
+{% block step_content %}
+<h2>חיבור לבוט</h2>
+<p style="text-align: center; color: var(--text-muted); margin-bottom: 1.5rem;">
+    עוד רגע מסיימים! עכשיו צריך לחבר את חשבונך לבוט בטלגרם.
+</p>
+
+<div class="key-display">{{ bot_key }}</div>
+
+<ol class="instructions-list">
+    <li>
+        <a href="{{ telegram_bot_url }}" target="_blank" style="font-weight: 600;">
+            לחץ כאן כדי לפתוח את הבוט בטלגרם
+        </a>
+    </li>
+    <li>לחץ על <strong>Start</strong> (התחל)</li>
+    <li>הבוט ישאל אותך אם יש לך מפתח — <strong>שלח לו את המפתח למעלה</strong></li>
+    <li>זהו! הבוט מוכן לשימוש</li>
+</ol>
+
+<form method="POST" action="{{ url_for('onboarding.step_post', step_num=4) }}">
+    <div class="step-nav">
+        <a href="{{ url_for('onboarding.step', step_num=3) }}" class="btn btn--secondary">חזרה</a>
+        <button type="submit" class="btn btn--primary">ביצעתי — קדימה!</button>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "onboarding/base_step.html" %}
+
+{% block step_content %}
+<h2>תנאים ופרטיות</h2>
+<p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">
+    כמעט סיימנו. רק צריך לאשר כמה דברים.
+</p>
+
+<form method="POST" action="{{ url_for('onboarding.step_post', step_num=3) }}"
+      x-data="{ terms: false, privacy: false }">
+
+    <div class="checkbox-group" :class="{'checkbox-group--checked': terms}"
+         @click="terms = !terms">
+        <input type="checkbox" x-model="terms" @click.stop>
+        <div>
+            <label>אני מאשר/ת את תנאי השימוש</label>
+            <div class="sub-label">תנאי השימוש המלאים יפורסמו בקרוב</div>
+        </div>
+    </div>
+
+    <div class="checkbox-group" :class="{'checkbox-group--checked': privacy}"
+         @click="privacy = !privacy">
+        <input type="checkbox" x-model="privacy" @click.stop>
+        <div>
+            <label>אני מאשר/ת את מדיניות הפרטיות</label>
+            <div class="sub-label">מדיניות הפרטיות המלאה תפורסם בקרוב</div>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <a href="{{ url_for('onboarding.step', step_num=2) }}" class="btn btn--secondary">חזרה</a>
+        <button type="submit" class="btn btn--primary" :disabled="!terms || !privacy">המשך</button>
+    </div>
+</form>
+{% endblock %}

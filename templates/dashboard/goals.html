@@ -1,0 +1,109 @@
+{% extends "dashboard/layout.html" %}
+
+{% block dashboard_content %}
+<h1>הגדרת יעדים</h1>
+
+<form method="POST" action="{{ url_for('dashboard_views.goals_post') }}"
+      x-data="goalsForm()">
+
+    <div class="card">
+        <!-- Calories -->
+        <div class="checkbox-group" :class="{'checkbox-group--checked': goals.calories}"
+             @click="goals.calories = !goals.calories">
+            <input type="checkbox" name="calories_enabled" value="1"
+                   x-model="goals.calories" @click.stop>
+            <div>
+                <label>קלוריות</label>
+                <div class="sub-label">יעד יומי</div>
+                <div class="goal-target" x-show="goals.calories" x-transition @click.stop>
+                    <input class="form-input" type="number" name="calories_target"
+                           x-model="targets.calories" placeholder="2000" min="800" max="6000">
+                </div>
+            </div>
+        </div>
+
+        <!-- Protein -->
+        <div class="checkbox-group" :class="{'checkbox-group--checked': goals.protein}"
+             @click="goals.protein = !goals.protein">
+            <input type="checkbox" name="protein_enabled" value="1"
+                   x-model="goals.protein" @click.stop>
+            <div>
+                <label>חלבון</label>
+                <div class="sub-label">יעד יומי (גרם)</div>
+                <div class="goal-target" x-show="goals.protein" x-transition @click.stop>
+                    <input class="form-input" type="number" name="protein_target"
+                           x-model="targets.protein" placeholder="150" min="30" max="400">
+                </div>
+            </div>
+        </div>
+
+        <!-- Sleep -->
+        <div class="checkbox-group" :class="{'checkbox-group--checked': goals.sleep}"
+             @click="goals.sleep = !goals.sleep">
+            <input type="checkbox" name="sleep_enabled" value="1"
+                   x-model="goals.sleep" @click.stop>
+            <div>
+                <label>שעת שינה</label>
+                <div class="sub-label">באיזו שעה אתה רוצה לישון?</div>
+                <div class="goal-target" x-show="goals.sleep" x-transition @click.stop>
+                    <input class="form-input" type="time" name="sleep_target"
+                           x-model="targets.sleep">
+                </div>
+            </div>
+        </div>
+
+        <!-- Coffee -->
+        <div class="checkbox-group" :class="{'checkbox-group--checked': goals.coffee}"
+             @click="goals.coffee = !goals.coffee">
+            <input type="checkbox" name="coffee_enabled" value="1"
+                   x-model="goals.coffee" @click.stop>
+            <div>
+                <label>כוסות קפה</label>
+                <div class="sub-label">יעד יומי</div>
+                <div class="goal-target" x-show="goals.coffee" x-transition @click.stop>
+                    <input class="form-input" type="number" name="coffee_target"
+                           x-model="targets.coffee" placeholder="3" min="0" max="20">
+                </div>
+            </div>
+        </div>
+
+        <!-- Workouts -->
+        <div class="checkbox-group" :class="{'checkbox-group--checked': goals.workouts}"
+             @click="goals.workouts = !goals.workouts">
+            <input type="checkbox" name="workouts_enabled" value="1"
+                   x-model="goals.workouts" @click.stop>
+            <div>
+                <label>אימונים</label>
+                <div class="sub-label">יעד שבועי</div>
+                <div class="goal-target" x-show="goals.workouts" x-transition @click.stop>
+                    <input class="form-input" type="number" name="workouts_target"
+                           x-model="targets.workouts" placeholder="3" min="1" max="14">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn--primary btn--full" style="margin-top: 1rem;">שמור שינויים</button>
+</form>
+
+<script>
+function goalsForm() {
+    return {
+        goals: {
+            calories: {{ 'true' if user.get('goals', {}).get('calories', {}).get('enabled') else 'false' }},
+            protein: {{ 'true' if user.get('goals', {}).get('protein', {}).get('enabled') else 'false' }},
+            sleep: {{ 'true' if user.get('goals', {}).get('sleep', {}).get('enabled') else 'false' }},
+            coffee: {{ 'true' if user.get('goals', {}).get('coffee', {}).get('enabled') else 'false' }},
+            workouts: {{ 'true' if user.get('goals', {}).get('workouts', {}).get('enabled') else 'false' }},
+        },
+        targets: {
+            calories: {{ user.get('goals', {}).get('calories', {}).get('target', 2000) }},
+            protein: {{ user.get('goals', {}).get('protein', {}).get('target', 150) }},
+            sleep: '{{ user.get('goals', {}).get('sleep', {}).get('target_time', '23:00') }}',
+            coffee: {{ user.get('goals', {}).get('coffee', {}).get('target', 3) }},
+            workouts: {{ user.get('goals', {}).get('workouts', {}).get('weekly_target', 3) }},
+        },
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}דוגרי — לוח בקרה{% endblock %}
+
+{% block body %}
+<div class="dashboard-layout">
+    <nav class="dashboard-nav">
+        <a href="{{ url_for('dashboard_views.goals') }}"
+           class="dashboard-nav-item {% if active_tab == 'goals' %}dashboard-nav-item--active{% endif %}">
+            הגדרת יעדים
+        </a>
+        <a href="{{ url_for('dashboard_views.subscription') }}"
+           class="dashboard-nav-item {% if active_tab == 'subscription' %}dashboard-nav-item--active{% endif %}">
+            מנוי
+        </a>
+        <a href="{{ url_for('auth.logout') }}"
+           class="dashboard-nav-item dashboard-nav-item--danger">
+            התנתקות
+        </a>
+    </nav>
+
+    <main class="dashboard-content">
+        {% block dashboard_content %}{% endblock %}
+    </main>
+</div>
+{% endblock %}

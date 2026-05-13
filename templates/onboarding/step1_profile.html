@@ -1,0 +1,42 @@
+{% extends "onboarding/base_step.html" %}
+
+{% block step_content %}
+<h2>קצת עליך</h2>
+<p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">
+    הנתונים האלה עוזרים לנו להציע לך יעדים מותאמים אישית. לא חובה למלא.
+</p>
+
+<form method="POST" action="{{ url_for('onboarding.step_post', step_num=1) }}">
+    <div class="form-group">
+        <label class="form-label" for="birth_year">שנת לידה</label>
+        <input class="form-input" type="number" id="birth_year" name="birth_year"
+               placeholder="לדוגמה: 1990"
+               value="{{ user.get('birth_year', '') or '' }}"
+               min="1930" max="2010">
+    </div>
+
+    <div class="form-group">
+        <label class="form-label" for="weight_kg">משקל (ק"ג)</label>
+        <input class="form-input" type="number" id="weight_kg" name="weight_kg"
+               placeholder="לדוגמה: 80"
+               value="{{ user.get('weight_kg', '') or '' }}"
+               min="30" max="300">
+    </div>
+
+    <div class="form-group">
+        <label class="form-label" for="height_cm">גובה (ס"מ)</label>
+        <input class="form-input" type="number" id="height_cm" name="height_cm"
+               placeholder="לדוגמה: 175"
+               value="{{ user.get('height_cm', '') or '' }}"
+               min="100" max="250">
+    </div>
+
+    <p class="form-warning" style="text-align: center;">
+        דילוג על שדות מגביל חלק מהפיצ'רים של הבוט, אבל אפשר תמיד לעדכן אחר כך.
+    </p>
+
+    <div class="step-nav">
+        <button type="submit" class="btn btn--primary btn--full">המשך</button>
+    </div>
+</form>
+{% endblock %}

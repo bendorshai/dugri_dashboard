@@ -1,0 +1,19 @@
+{
+    "flask": {
+        "secret_key": "change-me-to-a-random-string",
+        "debug": true
+    },
+    "google_oauth": {
+        "client_id": "",
+        "client_secret": ""
+    },
+    "openai": {
+        "api_key": ""
+    },
+    "mongodb": {
+        "uri": "mongodb://localhost:27017",
+        "db_name": "health_tracker"
+    },
+    "bot_key_salt": "change-me-to-a-fixed-secret",
+    "telegram_bot_url": "https://t.me/YOUR_BOT_USERNAME"
+}
