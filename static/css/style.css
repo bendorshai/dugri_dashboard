@@ -241,7 +241,7 @@ a:hover {
 
 /* About */
 .about-section {
-    padding: 3rem 0;
+    padding: 3rem 1.5rem;
     max-width: 720px;
     margin: 0 auto;
 }

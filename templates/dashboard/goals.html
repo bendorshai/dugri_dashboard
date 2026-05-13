@@ -37,6 +37,31 @@
             </div>
         </div>
 
+        <!-- Eating Window -->
+        <div class="checkbox-group" :class="{'checkbox-group--checked': goals.eating_window}"
+             @click="goals.eating_window = !goals.eating_window">
+            <input type="checkbox" name="eating_window_enabled" value="1"
+                   x-model="goals.eating_window" @click.stop>
+            <div>
+                <label>חלון אכילה</label>
+                <div class="sub-label">באילו שעות אתה אוכל?</div>
+                <div class="goal-target" x-show="goals.eating_window" x-transition @click.stop>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <div>
+                            <div class="form-hint">מ-</div>
+                            <input class="form-input" type="time" name="eating_window_start"
+                                   x-model="targets.eating_window_start">
+                        </div>
+                        <div>
+                            <div class="form-hint">עד-</div>
+                            <input class="form-input" type="time" name="eating_window_end"
+                                   x-model="targets.eating_window_end">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Sleep -->
         <div class="checkbox-group" :class="{'checkbox-group--checked': goals.sleep}"
              @click="goals.sleep = !goals.sleep">
@@ -92,6 +117,7 @@ function goalsForm() {
         goals: {
             calories: {{ 'true' if user.get('goals', {}).get('calories', {}).get('enabled') else 'false' }},
             protein: {{ 'true' if user.get('goals', {}).get('protein', {}).get('enabled') else 'false' }},
+            eating_window: {{ 'true' if user.get('goals', {}).get('eating_window', {}).get('enabled') else 'false' }},
             sleep: {{ 'true' if user.get('goals', {}).get('sleep', {}).get('enabled') else 'false' }},
             coffee: {{ 'true' if user.get('goals', {}).get('coffee', {}).get('enabled') else 'false' }},
             workouts: {{ 'true' if user.get('goals', {}).get('workouts', {}).get('enabled') else 'false' }},
@@ -99,6 +125,8 @@ function goalsForm() {
         targets: {
             calories: {{ user.get('goals', {}).get('calories', {}).get('target', 2000) }},
             protein: {{ user.get('goals', {}).get('protein', {}).get('target', 150) }},
+            eating_window_start: '{{ user.get('goals', {}).get('eating_window', {}).get('start', '08:00') }}',
+            eating_window_end: '{{ user.get('goals', {}).get('eating_window', {}).get('end', '20:00') }}',
             sleep: '{{ user.get('goals', {}).get('sleep', {}).get('target_time', '23:00') }}',
             coffee: {{ user.get('goals', {}).get('coffee', {}).get('target', 3) }},
             workouts: {{ user.get('goals', {}).get('workouts', {}).get('weekly_target', 3) }},

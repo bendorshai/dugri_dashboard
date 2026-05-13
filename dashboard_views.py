@@ -19,7 +19,18 @@ def _get_storage() -> DashboardStorage:
 @dashboard_bp.route("/")
 @login_required
 def index():
-    return redirect(url_for("dashboard_views.goals"))
+    return redirect(url_for("dashboard_views.home"))
+
+
+@dashboard_bp.route("/home")
+@login_required
+def home():
+    cfg = current_app.config["APP_CONFIG"]
+    telegram_bot_url = cfg.get("telegram_bot_url", "")
+    return render_template(
+        "dashboard/home.html", active_tab="home",
+        telegram_bot_url=telegram_bot_url,
+    )
 
 
 @dashboard_bp.route("/goals", methods=["GET"])
@@ -47,6 +58,12 @@ def goals_post():
         goals["protein"] = {
             "enabled": True,
             "target": int(request.form.get("protein_target", 150)),
+        }
+    if request.form.get("eating_window_enabled"):
+        goals["eating_window"] = {
+            "enabled": True,
+            "start": request.form.get("eating_window_start", "08:00"),
+            "end": request.form.get("eating_window_end", "20:00"),
         }
     if request.form.get("sleep_enabled"):
         goals["sleep"] = {

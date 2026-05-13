@@ -93,6 +93,12 @@ def step_post(step_num: int):
                 "enabled": True,
                 "target": int(request.form.get("protein_target", 150)),
             }
+        if request.form.get("eating_window_enabled"):
+            goals["eating_window"] = {
+                "enabled": True,
+                "start": request.form.get("eating_window_start", "08:00"),
+                "end": request.form.get("eating_window_end", "20:00"),
+            }
         if request.form.get("sleep_enabled"):
             goals["sleep"] = {
                 "enabled": True,

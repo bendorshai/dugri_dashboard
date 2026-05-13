@@ -1,0 +1,222 @@
+{% extends "dashboard/layout.html" %}
+
+{% block dashboard_content %}
+<h1>דבר דוגרי</h1>
+
+<!-- Bot link card -->
+<div class="card" style="text-align: center; background: var(--primary); color: var(--white);">
+    <h2 style="color: var(--white); margin-bottom: 0.5rem;">הבוט שלך מחכה</h2>
+    <p style="opacity: 0.9; margin-bottom: 1.5rem;">לחץ כדי לפתוח את דוגרי בטלגרם ולהתחיל לתעד</p>
+    <a href="{{ telegram_bot_url }}" target="_blank"
+       class="btn" style="background: var(--white); color: var(--primary); font-size: 1.25rem; padding: 1rem 2.5rem;">
+        פתח את דוגרי בטלגרם
+    </a>
+</div>
+
+<!-- How it works -->
+<div class="card">
+    <h2 style="margin-bottom: 1.5rem;">איך זה עובד? פשוט מאוד.</h2>
+
+    <!-- Step 1: Log food -->
+    <div class="guide-step">
+        <div class="guide-step__icon">1</div>
+        <div class="guide-step__content">
+            <h3>תאר מה אכלת</h3>
+            <p>כתוב בעברית רגילה, בדיוק כמו שהיית אומר לחבר. דוגרי מבין הכול.</p>
+            <div class="chat-mockup">
+                <div class="chat-bubble chat-bubble--user">אכלתי שניצל עם אורז ולסט ירקות</div>
+                <div class="chat-bubble chat-bubble--bot">
+                    <strong>שניצל עם אורז וסלט ירקות</strong><br>
+                    🔥 580 קלוריות &nbsp; 💪 42 גרם חלבון<br>
+                    <span style="color: var(--text-muted); font-size: 0.85rem;">📊 סה"כ היום: 1,240/2,000 קלוריות</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Photos -->
+    <div class="guide-step">
+        <div class="guide-step__icon">2</div>
+        <div class="guide-step__content">
+            <h3>או פשוט צלם תמונה</h3>
+            <p>שלח תמונה של הארוחה ודוגרי יזהה מה יש בצלחת. אפשר גם להוסיף טקסט לדיוק.</p>
+            <div class="chat-mockup">
+                <div class="chat-bubble chat-bubble--user">
+                    <div class="photo-placeholder">📸 תמונה של הארוחה</div>
+                    עם טחינה
+                </div>
+                <div class="chat-bubble chat-bubble--bot">
+                    <strong>חומוס עם טחינה ופיתה</strong><br>
+                    🔥 420 קלוריות &nbsp; 💪 15 גרם חלבון
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Fix -->
+    <div class="guide-step">
+        <div class="guide-step__icon">3</div>
+        <div class="guide-step__content">
+            <h3>טעות? תקן בשנייה</h3>
+            <p>אם דוגרי טעה או שכחת משהו, פשוט כתוב את התיקון ודוגרי יעדכן.</p>
+            <div class="chat-mockup">
+                <div class="chat-bubble chat-bubble--user">רגע, היה גם המבורגר</div>
+                <div class="chat-bubble chat-bubble--bot">
+                    <strong>עודכן!</strong> הוספתי המבורגר<br>
+                    🔥 +350 קלוריות &nbsp; 💪 +28 גרם חלבון
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 4: Daily summary -->
+    <div class="guide-step">
+        <div class="guide-step__icon">4</div>
+        <div class="guide-step__content">
+            <h3>סיכום יומי בלחיצה</h3>
+            <p>לחץ על "סיכום יומי" בתפריט ותקבל תמונה מלאה של מה אכלת היום, כמה קלוריות וחלבון צרכת, וכמה נשאר.</p>
+            <div class="chat-mockup">
+                <div class="chat-bubble chat-bubble--bot">
+                    📊 <strong>סיכום יומי:</strong><br>
+                    ✅ קלוריות: 1,650/2,000 (82%, נותרו: 350)<br>
+                    ⚠️ חלבון: 95/150 (63%, נותרו: 55)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 5: Weekly feedback -->
+    <div class="guide-step">
+        <div class="guide-step__icon">5</div>
+        <div class="guide-step__content">
+            <h3>סיכום שבועי שמגיע אליך</h3>
+            <p>כל שבוע דוגרי שולח לך משוב אישי — מה הלך טוב, מה אפשר לשפר, והצעות להמשך. בלי שיפוטיות, עם הרבה עידוד.</p>
+        </div>
+    </div>
+
+    <!-- Step 6: Meals -->
+    <div class="guide-step">
+        <div class="guide-step__icon">6</div>
+        <div class="guide-step__content">
+            <h3>צריך רעיון לארוחה?</h3>
+            <p>לחץ "הצעות ארוחה" ודוגרי יציע שלוש ארוחות שמתאימות ליתרת הקלוריות והחלבון שנשארה לך היום.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Tips card -->
+<div class="card" style="border-right: 4px solid var(--highlight);">
+    <h3 style="margin-bottom: 1rem;">טיפים להתחלה מוצלחת</h3>
+    <ul style="padding-right: 1.25rem; color: var(--text-muted);">
+        <li style="margin-bottom: 0.5rem;">אל תחכה לארוחה מושלמת — תעד גם חטיף קטן. ככל שתתעד יותר, התמונה תהיה מדויקת יותר.</li>
+        <li style="margin-bottom: 0.5rem;">לא צריך לדייק — "כוס אורז" מספיק, לא צריך "127 גרם אורז בסמטי מבושל".</li>
+        <li style="margin-bottom: 0.5rem;">דוגרי מכיר אוכל ישראלי — "שקשוקה", "סביח", "קציצות של אמא". פשוט תכתוב כמו שאתה מדבר.</li>
+        <li>שלח תמונה כשאתה לא בטוח — דוגרי מזהה מנות מתמונה ומעריך כמויות.</li>
+    </ul>
+</div>
+
+<!-- Bottom CTA -->
+<div style="text-align: center; margin: 2rem 0;">
+    <a href="{{ telegram_bot_url }}" target="_blank"
+       class="btn btn--primary" style="font-size: 1.125rem; padding: 1rem 2.5rem;">
+        קדימה, תתחיל לתעד
+    </a>
+</div>
+
+<style>
+.guide-step {
+    display: flex;
+    gap: 1.25rem;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.guide-step:last-child {
+    border-bottom: none;
+}
+
+.guide-step__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.guide-step__content {
+    flex: 1;
+}
+
+.guide-step__content h3 {
+    margin-bottom: 0.5rem;
+    color: var(--text);
+}
+
+.guide-step__content p {
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+}
+
+/* Chat mockup */
+.chat-mockup {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin-top: 0.5rem;
+}
+
+.chat-bubble {
+    max-width: 85%;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    margin-bottom: 0.5rem;
+    font-size: 0.925rem;
+    line-height: 1.5;
+}
+
+.chat-bubble:last-child {
+    margin-bottom: 0;
+}
+
+.chat-bubble--user {
+    background: var(--primary);
+    color: var(--white);
+    margin-left: auto;
+    border-bottom-left: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+.chat-bubble--bot {
+    background: var(--white);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+}
+
+.photo-placeholder {
+    background: rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .guide-step {
+        gap: 1rem;
+    }
+
+    .chat-bubble {
+        max-width: 95%;
+    }
+}
+</style>
+{% endblock %}

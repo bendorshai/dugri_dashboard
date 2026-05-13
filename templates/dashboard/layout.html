@@ -5,6 +5,10 @@
 {% block body %}
 <div class="dashboard-layout">
     <nav class="dashboard-nav">
+        <a href="{{ url_for('dashboard_views.home') }}"
+           class="dashboard-nav-item {% if active_tab == 'home' %}dashboard-nav-item--active{% endif %}">
+            דבר דוגרי
+        </a>
         <a href="{{ url_for('dashboard_views.goals') }}"
            class="dashboard-nav-item {% if active_tab == 'goals' %}dashboard-nav-item--active{% endif %}">
             הגדרת יעדים
