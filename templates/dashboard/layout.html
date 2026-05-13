@@ -7,23 +7,33 @@
     <nav class="dashboard-nav">
         <a href="{{ url_for('dashboard_views.home') }}"
            class="dashboard-nav-item {% if active_tab == 'home' %}dashboard-nav-item--active{% endif %}">
-            דבר דוגרי
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>דבר דוגרי</span>
         </a>
         <a href="{{ url_for('dashboard_views.goals') }}"
            class="dashboard-nav-item {% if active_tab == 'goals' %}dashboard-nav-item--active{% endif %}">
-            הגדרת יעדים
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <span>יעדים</span>
+        </a>
+        <a href="{{ url_for('dashboard_views.profile') }}"
+           class="dashboard-nav-item {% if active_tab == 'profile' %}dashboard-nav-item--active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>פרטים אישיים</span>
         </a>
         <a href="{{ url_for('dashboard_views.subscription') }}"
            class="dashboard-nav-item {% if active_tab == 'subscription' %}dashboard-nav-item--active{% endif %}">
-            מנוי
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+            <span>מנוי</span>
         </a>
         <a href="https://t.me/DoorCore" target="_blank"
            class="dashboard-nav-item">
-            צריך עזרה?
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg>
+            <span>עזרה</span>
         </a>
         <a href="{{ url_for('auth.logout') }}"
            class="dashboard-nav-item dashboard-nav-item--danger">
-            התנתקות
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>התנתקות</span>
         </a>
     </nav>
 

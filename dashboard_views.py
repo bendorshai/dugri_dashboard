@@ -85,6 +85,42 @@ def goals_post():
     return redirect(url_for("dashboard_views.goals"))
 
 
+@dashboard_bp.route("/profile", methods=["GET"])
+@login_required
+def profile():
+    storage = _get_storage()
+    user = storage.get_user(session["user_email"])
+    return render_template("dashboard/profile.html", user=user, active_tab="profile")
+
+
+@dashboard_bp.route("/profile", methods=["POST"])
+@login_required
+def profile_post():
+    storage = _get_storage()
+    email = session["user_email"]
+
+    profile_data = {}
+    birth_year = request.form.get("birth_year", "").strip()
+    weight_kg = request.form.get("weight_kg", "").strip()
+    height_cm = request.form.get("height_cm", "").strip()
+
+    if birth_year:
+        profile_data["birth_year"] = int(birth_year)
+    else:
+        profile_data["birth_year"] = None
+    if weight_kg:
+        profile_data["weight_kg"] = int(weight_kg)
+    else:
+        profile_data["weight_kg"] = None
+    if height_cm:
+        profile_data["height_cm"] = int(height_cm)
+    else:
+        profile_data["height_cm"] = None
+
+    storage.update_user_profile(email, profile_data)
+    return redirect(url_for("dashboard_views.profile"))
+
+
 @dashboard_bp.route("/subscription")
 @login_required
 def subscription():
