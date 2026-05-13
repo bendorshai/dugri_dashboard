@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.7.0"
-VERSION_NOTES = "סיכום יומי מפורט + עריכה חכמה עם היסטוריית תיקונים"
+VERSION = "0.7.1"
+VERSION_NOTES = "כפתור 'עוד פעם' לשכפול רשומת אוכל"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

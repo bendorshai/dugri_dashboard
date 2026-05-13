@@ -18,7 +18,7 @@ from keyboards import (
     make_profile_keyboard, make_settings_keyboard,
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
-    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
+    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
 )
 from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, safe_answer
 
@@ -831,6 +831,45 @@ class HealthHandlers:
         except Exception:
             logger.exception("Failed to read entry for edit, row %s", row_str)
             await query.edit_message_text("❌ שגיאה בקריאת הרשומה.", reply_markup=make_daily_summary_keyboard())
+
+    async def handle_food_again_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        row_str = query.data.removeprefix(CB_FOOD_AGAIN)
+        try:
+            row_number = int(row_str)
+            entry_data = self.sheets.get_entry_data(row_number)
+            description = entry_data.get("תיאור", "")
+            calories = int(entry_data.get("קלוריות", 0) or 0)
+            protein = int(entry_data.get("חלבון", 0) or 0)
+
+            profile = self._get_profile()
+            today_str = self._get_today_str(profile)
+            time_str = self._get_time_str(profile)
+            within_window = self._is_within_window(profile)
+
+            new_row = self.sheets.append_food_entry(
+                date_str=today_str,
+                time_str=time_str,
+                description=description,
+                calories=calories,
+                protein=protein,
+                within_window=within_window,
+            )
+
+            stats_date = self._get_stats_date(profile)
+            new_daily_cal, new_daily_prot = self._get_eating_day_totals(stats_date, profile)
+
+            items_text = f"🔁 {description}: {calories} קל׳ | {protein} גרם חלבון"
+            response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
+
+            await query.edit_message_text(response, reply_markup=make_food_entry_keyboard(new_row))
+        except Exception:
+            logger.exception("Failed to duplicate food entry row %s", row_str)
+            await query.edit_message_text("❌ שגיאה בשכפול הרשומה.", reply_markup=make_daily_summary_keyboard())
 
     async def handle_bulk_fix_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query

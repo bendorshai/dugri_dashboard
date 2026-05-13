@@ -13,6 +13,7 @@ CB_SUGGEST = "suggest_"
 CB_ASK = "ask_"
 CB_FOOD_EDIT = "fedit_"
 CB_FOOD_DELETE = "fdel_"
+CB_FOOD_AGAIN = "fagain_"
 CB_BULK_FIX = "bfix_"
 CB_WEEKLY = "weekly_"
 CB_DAILY = "daily_"
@@ -80,11 +81,14 @@ def make_food_edit_keyboard(row_number: int) -> InlineKeyboardMarkup:
 
 
 def make_food_entry_keyboard(row_number: int) -> InlineKeyboardMarkup:
-    """Keyboard shown after logging food: edit/delete only."""
+    """Keyboard shown after logging food: edit, delete, and duplicate."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_FOOD_EDIT}{row_number}"),
             InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{row_number}"),
+        ],
+        [
+            InlineKeyboardButton("🔁 עוד פעם", callback_data=f"{CB_FOOD_AGAIN}{row_number}"),
         ],
     ])
 

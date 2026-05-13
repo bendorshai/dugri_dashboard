@@ -390,3 +390,66 @@ class TestCorrectionHistory:
         assert call_kwargs[1]["correction_history"] == ["ההמבורגר הוא 300 גרם"]
         # After correction, history should include the new correction too
         assert "הצ'יפס היה מנה גדולה" in context.chat_data["correction_histories"][5]
+
+
+class TestFoodAgainCallback:
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        h.chat_id = 123
+        h.mongo = MagicMock()
+        h.sheets = MagicMock()
+        h.analyzer = MagicMock()
+        return h
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_answer", new_callable=AsyncMock)
+    async def test_again_duplicates_entry(self, mock_answer, mock_now, mock_kb):
+        from datetime import datetime as dt
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 13, 15, 30, tzinfo=tz)
+
+        h = self._make_handler()
+        h.mongo.get_user_profile.return_value = {
+            "target_calories": 2000,
+            "target_protein": 150,
+            "eating_window_start": "08:00",
+            "eating_window_end": "20:00",
+            "timezone": "Asia/Jerusalem",
+        }
+        h.sheets.get_entry_data.return_value = {
+            "תיאור": "חזה עוף 200 גרם",
+            "קלוריות": "350",
+            "חלבון": "45",
+        }
+        h.sheets.append_food_entry.return_value = 10
+        h.sheets.get_entries_for_eating_day.return_value = [
+            {"קלוריות": 700, "חלבון": 90},
+        ]
+
+        query = AsyncMock()
+        query.data = "fagain_5"
+        update = MagicMock()
+        update.callback_query = query
+        context = MagicMock()
+        context.chat_data = {}
+
+        await h.handle_food_again_callback(update, context)
+
+        h.sheets.get_entry_data.assert_called_once_with(5)
+        h.sheets.append_food_entry.assert_called_once_with(
+            date_str="13/05/2026",
+            time_str="15:30",
+            description="חזה עוף 200 גרם",
+            calories=350,
+            protein=45,
+            within_window=True,
+        )
+        mock_kb.assert_called_with(10)
+        query.edit_message_text.assert_called_once()
+        call_text = query.edit_message_text.call_args[0][0]
+        assert "חזה עוף 200 גרם" in call_text
+        assert "350" in call_text
