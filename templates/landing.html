@@ -243,11 +243,45 @@
         line-height: 1.7;
     }
 
+    .section-panel--alt {
+        background: rgba(23, 33, 27, 0.03);
+        border-top: 1px solid rgba(23, 33, 27, 0.06);
+        border-bottom: 1px solid rgba(23, 33, 27, 0.06);
+    }
+
+    .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 3rem;
+        align-items: center;
+    }
+
     .block {
         max-width: 780px;
     }
 
     .block p {
+        margin-bottom: 1rem;
+    }
+
+    .pain-list {
+        list-style: none;
+        display: grid;
+        gap: 0.9rem;
+    }
+
+    .pain-list li {
+        padding: 1.1rem 1.2rem;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid rgba(23, 33, 27, 0.08);
+        box-shadow: 0 6px 20px rgba(23, 33, 27, 0.05);
+        font-weight: 700;
+        color: #39453c;
+        line-height: 1.55;
+    }
+
+    .solution-text p {
         margin-bottom: 1rem;
     }
 
@@ -270,20 +304,23 @@
     .features-list {
         list-style: none;
         display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: 1.2rem;
         margin-top: 1.5rem;
     }
 
     .features-list li {
-        padding: 1.1rem 1.2rem;
+        padding: 1.3rem 1.4rem;
         border-radius: 12px;
-        background: rgba(255, 255, 255, 0.78);
+        background: rgba(255, 255, 255, 0.82);
         border: 1px solid rgba(23, 33, 27, 0.08);
         box-shadow: 0 8px 24px rgba(23, 33, 27, 0.06);
         line-height: 1.6;
     }
 
     .features-list li strong {
+        display: block;
+        margin-bottom: 0.3rem;
         color: var(--ink);
     }
 
@@ -317,13 +354,6 @@
     .cta-band .btn:hover {
         background: #ffd26d;
         color: #17211b;
-    }
-
-    .cta-note {
-        margin-top: 1.2rem;
-        color: rgba(255, 255, 255, 0.55);
-        font-weight: 700;
-        font-size: 0.95rem;
     }
 
     .tagline {
@@ -368,12 +398,17 @@
             padding-top: 2.5rem;
         }
 
-        .hero-grid {
+        .hero-grid,
+        .split {
             grid-template-columns: 1fr;
         }
 
         .phone-shell {
             max-width: 390px;
+        }
+
+        .features-list {
+            grid-template-columns: 1fr;
         }
     }
 
@@ -423,7 +458,7 @@
             <div>
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
                 <h1>דוגרי. מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</h1>
-                <p class="hero-lede">חמישה הרגלים שמשנים את היום שלך — תיעוד בשיחה, לא בטופס.</p>
+                <p class="hero-lede">שישה הרגלים שמשנים את היום שלך — תיעוד בשיחה, לא בטופס.</p>
                 <div class="hero-actions">
                     <a href="{{ url_for('auth.login') }}" class="btn btn--primary">התחבר עם גוגל וקבל חודש חינם</a>
                 </div>
@@ -460,37 +495,45 @@
 
     <!-- Problem -->
     <section class="section-panel">
-        <div class="container block">
-            <h2>אתה יודע שאתה צריך לעקוב. פשוט אין לך כוח.</h2>
-            <p>פתחת קבוצת וואטסאפ עם עצמך. תיעדת שם שלושה ימים. עכשיו זה ערימה של הודעות בלי שום סדר, ואתה לא יודע מה אכלת ביום שלישי.</p>
-            <p>הורדת אפליקציה שאמורה לעזור לך בזה. אבל לא הסתדרת איתה...</p>
-            <p>הבטחת לעצמך שתהיה על זה, אבל לא מצאת פתרון פשוט וזורם.</p>
-            <p>הבעיה היא לא שאתה עצלן. הבעיה היא שכל הכלים הקיימים בנויים סביב מסכים, תפריטים, חיפושים ועוד תפריטים. כל ארוחה היא פרויקט קטן.</p>
+        <div class="container split">
+            <div>
+                <h2>אתה יודע שאתה צריך לעקוב. פשוט אין לך כוח.</h2>
+                <p>הבעיה היא לא שאתה עצלן. הבעיה היא שכל הכלים הקיימים בנויים סביב מסכים, תפריטים, חיפושים ועוד תפריטים. כל ארוחה היא פרויקט קטן.</p>
+            </div>
+            <ul class="pain-list">
+                <li>פתחת קבוצת וואטסאפ עם עצמך. תיעדת שם שלושה ימים. עכשיו זה ערימה של הודעות בלי שום סדר.</li>
+                <li>הורדת אפליקציה שאמורה לעזור לך בזה. אבל לא הסתדרת איתה...</li>
+                <li>הבטחת לעצמך שתהיה על זה, אבל לא מצאת פתרון פשוט וזורם.</li>
+            </ul>
         </div>
     </section>
 
     <!-- Solution -->
-    <section class="section-panel">
-        <div class="container block">
-            <h2>דוגרי הוא בוט בטלגרם. אתה כותב, הוא מבין.</h2>
-            <p>אתה כותב "אכלתי פיתה עם חומוס וסלט". דוגרי עונה: "395 קלוריות, 14 גרם חלבון. רוצה לעדכן?".</p>
-            <p>אתה כותב "+1" כשאתה שותה כוס מים. אתה שולח "00:30" כשאתה הולך לישון. זהו. אין מסכים, אין תפריטים, אין הורדה של אפליקציה נוספת — דוגרי יושב בצ'אט שכבר פתוח אצלך כל היום.</p>
-            <p>חמישה הרגלים, לא חמישים:</p>
-            <ul class="habits-list">
-                <li>קלוריות</li>
-                <li>חלבון</li>
-                <li>חלון אכילה</li>
-                <li>שעת שינה</li>
-                <li>כוסות קפה</li>
-                <li>אימונים</li>
-            </ul>
-            <p>זה הבסיס שמשנה את הבריאות היומיומית. כל השאר זה רעש.</p>
+    <section class="section-panel section-panel--alt">
+        <div class="container split">
+            <div class="solution-text">
+                <h2>דוגרי הוא בוט בטלגרם. אתה כותב, הוא מבין.</h2>
+                <p>אתה כותב "אכלתי פיתה עם חומוס וסלט". דוגרי עונה: "395 קלוריות, 14 גרם חלבון. רוצה לעדכן?".</p>
+                <p>אתה כותב "+1" כשאתה שותה כוס מים. אתה שולח "00:30" כשאתה הולך לישון. זהו. אין מסכים, אין תפריטים, אין הורדה של אפליקציה נוספת — דוגרי יושב בצ'אט שכבר פתוח אצלך כל היום.</p>
+            </div>
+            <div>
+                <p>שישה הרגלים, לא חמישים:</p>
+                <ul class="habits-list">
+                    <li>קלוריות</li>
+                    <li>חלבון</li>
+                    <li>חלון אכילה</li>
+                    <li>שעת שינה</li>
+                    <li>כוסות קפה</li>
+                    <li>אימונים</li>
+                </ul>
+                <p>זה הבסיס שמשנה את הבריאות היומיומית. כל השאר זה רעש.</p>
+            </div>
         </div>
     </section>
 
     <!-- Why it works -->
     <section class="section-panel">
-        <div class="container block">
+        <div class="container">
             <h2>דוגרי בנוי לעצלנים מוטיבציוניים.</h2>
             <ul class="features-list">
                 <li><strong>מבין עברית באמת.</strong> "שווארמה בלאפה", "שניצל ביתי של אמא", "סלט עם הרבה טחינה" — דוגרי מכיר את האוכל שאתה באמת אוכל, לא רק broccoli ו-grilled chicken.</li>
@@ -507,9 +550,8 @@
         <div class="container">
             <h2>תוך חמש דקות יש לך את דוגרי בטלגרם.</h2>
             <p class="tagline">המעקב הכי טוב הוא זה שאתה באמת עושה.</p>
-            <p>חודש שלם בחינם, בלי כרטיס אשראי. תתחבר עם חשבון גוגל, תעבור מדריך התקנה קצר, ותתחיל לתעד את הארוחה הבאה שלך.</p>
+            <p>חודש שלם בחינם, בלי כרטיס אשראי. תתחבר עם חשבון גוגל, תבחר יעדים אם בא לך, ותתחיל לתעד את הארוחה הבאה שלך.</p>
             <a href="{{ url_for('auth.login') }}" class="btn btn--primary">התחבר עם גוגל</a>
-            <p class="cta-note">ההתחברות לוקחת 30 שניות. ההתקנה לוקחת חמש דקות. הביטול לוקח לחיצה אחת.</p>
         </div>
     </section>
 
