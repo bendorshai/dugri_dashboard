@@ -47,9 +47,11 @@ def login():
     state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
 
+    redirect_uri = url_for("auth.callback", _external=True, _scheme="https")
+
     params = {
         "client_id": oauth_cfg["client_id"],
-        "redirect_uri": url_for("auth.callback", _external=True),
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
@@ -81,7 +83,7 @@ def callback():
         "code": code,
         "client_id": oauth_cfg["client_id"],
         "client_secret": oauth_cfg["client_secret"],
-        "redirect_uri": url_for("auth.callback", _external=True),
+        "redirect_uri": url_for("auth.callback", _external=True, _scheme="https"),
         "grant_type": "authorization_code",
     }, timeout=10)
 
