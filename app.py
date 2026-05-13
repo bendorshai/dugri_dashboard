@@ -38,7 +38,10 @@ def load_config() -> dict:
     env_json = os.environ.get("DASHBOARD_CONFIG_JSON")
     if env_json:
         logger.info("Loading config from environment variable")
-        return _parse_last_json(env_json)
+        result = _parse_last_json(env_json)
+        if isinstance(result, str):
+            result = json.loads(result)
+        return result
     if not CONFIG_PATH.exists():
         logger.error("Config file not found: %s", CONFIG_PATH)
         sys.exit(1)
