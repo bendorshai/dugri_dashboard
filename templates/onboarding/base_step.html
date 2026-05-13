@@ -2,17 +2,504 @@
 
 {% block title %}דוגרי — הגדרה{% endblock %}
 
+{% block head %}
+<style>
+    .onboarding-page {
+        min-height: 100vh;
+        padding: 2rem 1.25rem;
+        align-items: center;
+        background:
+            radial-gradient(circle at 10% 10%, rgba(242, 184, 75, 0.24), transparent 28rem),
+            radial-gradient(circle at 88% 18%, rgba(42, 136, 200, 0.16), transparent 30rem),
+            linear-gradient(180deg, #fffaf1 0%, #f3efe4 54%, #f7fbf4 100%);
+    }
+
+    .onboarding-shell {
+        width: min(1040px, 100%);
+        display: grid;
+        grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1fr);
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .onboarding-aside,
+    .onboarding-card {
+        border: 1px solid rgba(23, 33, 27, 0.08);
+        box-shadow: 0 22px 70px rgba(23, 33, 27, 0.11);
+    }
+
+    .onboarding-aside {
+        position: relative;
+        overflow: hidden;
+        border-radius: 18px;
+        padding: 2rem;
+        background: #17211b;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 620px;
+    }
+
+    .onboarding-aside::after {
+        content: "";
+        position: absolute;
+        inset: auto -20% -18% -20%;
+        height: 290px;
+        background:
+            radial-gradient(circle at 30% 25%, rgba(242, 184, 75, 0.44), transparent 8rem),
+            radial-gradient(circle at 72% 40%, rgba(47, 125, 89, 0.56), transparent 10rem);
+        opacity: 0.9;
+        pointer-events: none;
+    }
+
+    .onboarding-brand {
+        position: relative;
+        z-index: 1;
+    }
+
+    .brand-mark {
+        width: 54px;
+        height: 54px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: #f2b84b;
+        color: #17211b;
+        font-size: 1.55rem;
+        font-weight: 900;
+        margin-bottom: 1.35rem;
+    }
+
+    .onboarding-aside h1 {
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        line-height: 1.08;
+        margin-bottom: 1rem;
+        letter-spacing: 0;
+    }
+
+    .onboarding-aside p {
+        color: rgba(255, 255, 255, 0.76);
+        font-size: 1.08rem;
+        margin: 0;
+    }
+
+    .aside-proof {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 0.7rem;
+        margin-top: 2rem;
+    }
+
+    .aside-proof span {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.75rem 0.85rem;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.08);
+        color: rgba(255, 255, 255, 0.88);
+        font-weight: 800;
+    }
+
+    .aside-proof span::before {
+        content: "";
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #f2b84b;
+        flex: 0 0 auto;
+    }
+
+    .onboarding-card {
+        width: 100%;
+        max-width: none;
+        border-radius: 18px;
+        padding: 2rem;
+        background: rgba(255, 255, 255, 0.86);
+        backdrop-filter: blur(14px);
+    }
+
+    .progress-wrap {
+        margin-bottom: 1.6rem;
+    }
+
+    .progress-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        color: #647067;
+        font-weight: 800;
+        font-size: 0.92rem;
+        margin-bottom: 0.7rem;
+    }
+
+    .progress-bar {
+        height: 10px;
+        gap: 0.45rem;
+        margin-bottom: 0;
+    }
+
+    .progress-step {
+        height: 10px;
+        border-radius: 999px;
+        background: #e1ddd2;
+    }
+
+    .progress-step--active,
+    .progress-step--done {
+        background: #1f7a54;
+    }
+
+    .progress-step--active {
+        box-shadow: 0 0 0 4px rgba(31, 122, 84, 0.12);
+    }
+
+    .step-heading {
+        margin-bottom: 1.75rem;
+    }
+
+    .step-kicker {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+        background: #e4f6e8;
+        color: #1f7a54;
+        font-weight: 900;
+        margin-bottom: 0.85rem;
+    }
+
+    .onboarding-card h2 {
+        text-align: right;
+        color: #17211b;
+        font-size: clamp(1.85rem, 4vw, 2.65rem);
+        line-height: 1.13;
+        margin-bottom: 0.65rem;
+        letter-spacing: 0;
+    }
+
+    .step-lede {
+        color: #59655d;
+        font-size: 1.08rem;
+        margin: 0;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.85rem;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-label {
+        color: #26332b;
+        font-weight: 900;
+    }
+
+    .form-input {
+        min-height: 50px;
+        border: 1px solid #d8d3c7;
+        background: rgba(255, 255, 255, 0.88);
+        border-radius: 12px;
+        box-shadow: 0 1px 0 rgba(23, 33, 27, 0.04);
+    }
+
+    .form-input:focus {
+        border-color: #1f7a54;
+        box-shadow: 0 0 0 4px rgba(31, 122, 84, 0.12);
+    }
+
+    .soft-note,
+    .privacy-note {
+        padding: 1rem 1.1rem;
+        border-radius: 12px;
+        background: #fff7e6;
+        color: #765528;
+        font-weight: 800;
+        margin: 0 0 1.4rem;
+    }
+
+    .goals-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem;
+    }
+
+    .checkbox-group {
+        position: relative;
+        align-items: flex-start;
+        gap: 0.85rem;
+        min-height: 104px;
+        padding: 1rem;
+        border: 1px solid #d8d3c7;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 8px 24px rgba(23, 33, 27, 0.05);
+    }
+
+    .checkbox-group:hover {
+        border-color: rgba(31, 122, 84, 0.46);
+        transform: translateY(-1px);
+    }
+
+    .checkbox-group--checked {
+        border-color: #1f7a54;
+        background: #f1fbf2;
+        box-shadow: 0 12px 28px rgba(31, 122, 84, 0.12);
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+        margin-top: 0.15rem;
+    }
+
+    .checkbox-group label {
+        color: #17211b;
+        font-size: 1.08rem;
+        font-weight: 900;
+    }
+
+    .checkbox-group .sub-label {
+        color: #66726a;
+        font-size: 0.92rem;
+        line-height: 1.45;
+    }
+
+    .goal-target {
+        margin-top: 0.9rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid rgba(23, 33, 27, 0.08);
+    }
+
+    .goal-target .form-input {
+        max-width: 180px;
+    }
+
+    .time-pair {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .suggested-target {
+        color: #1f7a54;
+        font-weight: 900;
+    }
+
+    .terms-list {
+        display: grid;
+        gap: 0.85rem;
+    }
+
+    .key-display {
+        position: relative;
+        margin: 1rem 0 1.25rem;
+        padding: 1.35rem 1rem;
+        border: 1px dashed #1f7a54;
+        border-radius: 16px;
+        background: #f1fbf2;
+        color: #17211b;
+        box-shadow: inset 0 0 0 4px rgba(31, 122, 84, 0.05);
+    }
+
+    .instructions-list {
+        display: grid;
+        gap: 0.7rem;
+        margin: 1.25rem 0 0;
+    }
+
+    .instructions-list li {
+        border: 1px solid rgba(23, 33, 27, 0.08);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.78);
+        padding: 0.95rem 3.1rem 0.95rem 1rem;
+    }
+
+    .instructions-list li::before {
+        right: 0.85rem;
+        top: 0.85rem;
+        border-radius: 10px;
+        background: #1f7a54;
+    }
+
+    .step-nav {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        display: flex;
+        gap: 0.8rem;
+        margin-top: 1.6rem;
+        padding-top: 1rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.96) 28%);
+    }
+
+    .step-nav .btn {
+        border-radius: 12px;
+        min-height: 52px;
+        font-weight: 900;
+    }
+
+    .step-nav .btn--primary {
+        background: #1f7a54;
+    }
+
+    .step-nav .btn--primary:hover {
+        background: #176342;
+    }
+
+    .step-nav .btn--secondary {
+        background: #fff;
+        border: 1px solid #cfd7cf;
+        color: #26332b;
+    }
+
+    .step-nav .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+        transform: none;
+        box-shadow: none;
+    }
+
+    @media (max-width: 860px) {
+        .onboarding-page {
+            padding: 1rem;
+            justify-content: flex-start;
+        }
+
+        .onboarding-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .onboarding-aside {
+            min-height: auto;
+            padding: 1.4rem;
+        }
+
+        .aside-proof {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .onboarding-card {
+            padding: 1.35rem;
+        }
+
+        .form-grid,
+        .goals-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .onboarding-page {
+            padding: 0;
+            background: #fffaf1;
+        }
+
+        .onboarding-shell {
+            gap: 0;
+        }
+
+        .onboarding-aside,
+        .onboarding-card {
+            border-radius: 0;
+            border-left: 0;
+            border-right: 0;
+            box-shadow: none;
+        }
+
+        .onboarding-aside {
+            padding: 1.25rem 1rem;
+        }
+
+        .brand-mark {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            margin-bottom: 0.9rem;
+        }
+
+        .onboarding-aside h1 {
+            font-size: 1.9rem;
+        }
+
+        .aside-proof {
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+        }
+
+        .aside-proof span {
+            padding: 0.58rem 0.7rem;
+        }
+
+        .onboarding-card {
+            padding: 1.1rem 1rem 1.35rem;
+            background: #fffaf1;
+        }
+
+        .progress-meta {
+            font-size: 0.84rem;
+        }
+
+        .step-nav {
+            flex-direction: column-reverse;
+            margin-left: -1rem;
+            margin-right: -1rem;
+            padding: 1rem;
+            border-top: 1px solid rgba(23, 33, 27, 0.08);
+        }
+
+        .time-pair {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+
+        .goal-target .form-input {
+            max-width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="onboarding-page">
-    <div class="onboarding-card">
-        <!-- Progress bar -->
-        <div class="progress-bar">
-            {% for i in range(1, total + 1) %}
-            <div class="progress-step {% if i < step %}progress-step--done{% elif i == step %}progress-step--active{% endif %}"></div>
-            {% endfor %}
-        </div>
+    <div class="onboarding-shell">
+        <aside class="onboarding-aside">
+            <div class="onboarding-brand">
+                <div class="brand-mark">ד</div>
+                <h1>עוד רגע דוגרי עובד בשבילך.</h1>
+                <p>כמה בחירות קצרות, ואז אפשר להתחיל לתעד בצ'אט בלי להסתבך עם טפסים ותפריטים.</p>
+            </div>
+            <div class="aside-proof" aria-label="מה מקבלים בסיום">
+                <span>יעדים שמתאימים לשגרה שלך</span>
+                <span>חיבור מהיר לטלגרם</span>
+                <span>מעקב שאפשר להתמיד בו</span>
+            </div>
+        </aside>
 
-        {% block step_content %}{% endblock %}
+        <div class="onboarding-card">
+            <div class="progress-wrap">
+                <div class="progress-meta">
+                    <span>שלב {{ step }} מתוך {{ total }}</span>
+                    <span>{% if step == total %}סיום{% else %}נשארו {{ total - step }}{% endif %}</span>
+                </div>
+                <div class="progress-bar" aria-label="התקדמות בהגדרה">
+                    {% for i in range(1, total + 1) %}
+                    <div class="progress-step {% if i < step %}progress-step--done{% elif i == step %}progress-step--active{% endif %}"></div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% block step_content %}{% endblock %}
+        </div>
     </div>
 </div>
 {% endblock %}

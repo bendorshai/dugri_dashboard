@@ -1,31 +1,36 @@
 {% extends "onboarding/base_step.html" %}
 
 {% block step_content %}
-<h2>תנאים ופרטיות</h2>
-<p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">
-    כמעט סיימנו. רק צריך לאשר כמה דברים.
-</p>
+<div class="step-heading">
+    <div class="step-kicker">אישור קצר</div>
+    <h2>לפני שמחברים את הבוט, נאשר את הבסיס.</h2>
+    <p class="step-lede">דוגרי עובד עם מידע אישי על הרגלים ותזונה, אז חשוב שהאישור יהיה ברור ולא חבוי באותיות קטנות.</p>
+</div>
 
 <form method="POST" action="{{ url_for('onboarding.step_post', step_num=3) }}"
       x-data="{ terms: false, privacy: false }">
 
-    <div class="checkbox-group" :class="{'checkbox-group--checked': terms}"
-         @click="terms = !terms">
-        <input type="checkbox" x-model="terms" @click.stop>
-        <div>
-            <label>אני מאשר/ת את תנאי השימוש</label>
-            <div class="sub-label">תנאי השימוש המלאים יפורסמו בקרוב</div>
+    <div class="terms-list">
+        <div class="checkbox-group" :class="{'checkbox-group--checked': terms}"
+             @click="terms = !terms">
+            <input type="checkbox" x-model="terms" @click.stop>
+            <div>
+                <label>אני מאשר/ת את תנאי השימוש</label>
+                <div class="sub-label">השימוש בדוגרי מיועד למעקב אישי ואינו מחליף ייעוץ רפואי או תזונתי.</div>
+            </div>
+        </div>
+
+        <div class="checkbox-group" :class="{'checkbox-group--checked': privacy}"
+             @click="privacy = !privacy">
+            <input type="checkbox" x-model="privacy" @click.stop>
+            <div>
+                <label>אני מאשר/ת את מדיניות הפרטיות</label>
+                <div class="sub-label">הנתונים שלך משמשים כדי להפעיל את המעקב, להציג סיכומים ולאפשר ייצוא.</div>
+            </div>
         </div>
     </div>
 
-    <div class="checkbox-group" :class="{'checkbox-group--checked': privacy}"
-         @click="privacy = !privacy">
-        <input type="checkbox" x-model="privacy" @click.stop>
-        <div>
-            <label>אני מאשר/ת את מדיניות הפרטיות</label>
-            <div class="sub-label">מדיניות הפרטיות המלאה תפורסם בקרוב</div>
-        </div>
-    </div>
+    <p class="privacy-note">אפשר למחוק או לייצא נתונים בהמשך מתוך הדשבורד. המטרה היא לתת לך שליטה, לא לנעול אותך.</p>
 
     <div class="step-nav">
         <a href="{{ url_for('onboarding.step', step_num=2) }}" class="btn btn--secondary">חזרה</a>
