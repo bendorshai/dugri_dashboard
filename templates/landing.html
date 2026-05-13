@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}דוגרי - מעקב תזונה והרגלים בעברית, בתוך טלגרם{% endblock %}
+{% block title %}דוגרי — מעקב הרגלים בעברית, בטלגרם, בלי בולשיט{% endblock %}
 
 {% block head %}
 <style>
@@ -229,19 +229,6 @@
         padding: 5rem 0;
     }
 
-    .split {
-        display: grid;
-        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-        gap: 3rem;
-        align-items: center;
-    }
-
-    .kicker {
-        color: #1f7a54;
-        font-weight: 900;
-        margin-bottom: 0.6rem;
-    }
-
     .section-panel h2,
     .cta-band h2 {
         font-size: clamp(2rem, 4vw, 3.4rem);
@@ -253,74 +240,26 @@
     .section-panel p {
         color: #4c584f;
         font-size: 1.12rem;
+        line-height: 1.7;
     }
 
-    .pain-list,
-    .feature-grid,
-    .steps {
-        list-style: none;
+    .block {
+        max-width: 780px;
     }
 
-    .pain-list {
-        display: grid;
-        gap: 0.9rem;
-    }
-
-    .pain-list li {
-        padding: 1rem 1.1rem;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.78);
-        border: 1px solid rgba(23, 33, 27, 0.08);
-        font-weight: 800;
-        color: #39453c;
-    }
-
-    .feature-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-        margin-top: 2rem;
-    }
-
-    .feature-card {
-        min-height: 190px;
-        padding: 1.35rem;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid rgba(23, 33, 27, 0.08);
-        box-shadow: 0 10px 30px rgba(23, 33, 27, 0.06);
-    }
-
-    .feature-card .icon {
-        display: grid;
-        place-items: center;
-        width: 42px;
-        height: 42px;
-        border-radius: 10px;
+    .block p {
         margin-bottom: 1rem;
-        background: var(--mint);
-        color: #176342;
-        font-size: 1.35rem;
     }
 
-    .feature-card h3 {
-        margin-bottom: 0.55rem;
-        color: var(--ink);
-    }
-
-    .feature-card p {
-        margin: 0;
-        font-size: 1rem;
-    }
-
-    .habit-strip {
+    .habits-list {
+        list-style: none;
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
-        margin-top: 1.5rem;
+        margin: 1.5rem 0;
     }
 
-    .habit-strip span {
+    .habits-list li {
         padding: 0.58rem 0.95rem;
         border-radius: 999px;
         background: #17211b;
@@ -328,63 +267,24 @@
         font-weight: 800;
     }
 
-    .steps {
-        counter-reset: step;
+    .features-list {
+        list-style: none;
         display: grid;
-        gap: 1rem;
+        gap: 1.2rem;
+        margin-top: 1.5rem;
     }
 
-    .steps li {
-        counter-increment: step;
-        position: relative;
-        padding: 1.1rem 4.4rem 1.1rem 1.1rem;
+    .features-list li {
+        padding: 1.1rem 1.2rem;
         border-radius: 12px;
-        background: #fff;
+        background: rgba(255, 255, 255, 0.78);
         border: 1px solid rgba(23, 33, 27, 0.08);
         box-shadow: 0 8px 24px rgba(23, 33, 27, 0.06);
+        line-height: 1.6;
     }
 
-    .steps li::before {
-        content: counter(step);
-        position: absolute;
-        right: 1rem;
-        top: 1.05rem;
-        display: grid;
-        place-items: center;
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        background: #1f7a54;
-        color: white;
-        font-weight: 900;
-    }
-
-    .steps strong {
-        display: block;
-        margin-bottom: 0.25rem;
-        font-size: 1.08rem;
-    }
-
-    .steps span {
-        color: var(--muted);
-        font-weight: 600;
-    }
-
-    .quote-panel {
-        padding: 2rem;
-        border-radius: 16px;
-        background: #17211b;
-        color: white;
-        box-shadow: 0 24px 60px rgba(23, 33, 27, 0.22);
-    }
-
-    .quote-panel p {
-        color: rgba(255, 255, 255, 0.86);
-        font-size: 1.15rem;
-    }
-
-    .quote-panel strong {
-        color: #f2d184;
+    .features-list li strong {
+        color: var(--ink);
     }
 
     .cta-band {
@@ -419,13 +319,27 @@
         color: #17211b;
     }
 
-    .founder {
+    .cta-note {
+        margin-top: 1.2rem;
+        color: rgba(255, 255, 255, 0.55);
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+
+    .tagline {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--mint-strong);
+        margin-bottom: 0.5rem;
+    }
+
+    .about-section {
         max-width: 860px;
         margin: 0 auto;
         text-align: center;
     }
 
-    .founder p {
+    .about-section p {
         font-size: 1.12rem;
         color: #4c584f;
     }
@@ -454,17 +368,12 @@
             padding-top: 2.5rem;
         }
 
-        .hero-grid,
-        .split {
+        .hero-grid {
             grid-template-columns: 1fr;
         }
 
         .phone-shell {
             max-width: 390px;
-        }
-
-        .feature-grid {
-            grid-template-columns: 1fr;
         }
     }
 
@@ -498,7 +407,7 @@
         }
 
         .trust-row span,
-        .habit-strip span {
+        .habits-list li {
             flex: 1 1 auto;
             justify-content: center;
         }
@@ -508,21 +417,15 @@
 
 {% block body %}
 <main class="landing-page">
+    <!-- Hero -->
     <section class="landing-hero">
         <div class="container hero-grid">
             <div>
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
-                <h1>דוגרי עוזר לך לעקוב אחרי תזונה והרגלים בלי לפתוח עוד אפליקציה.</h1>
-                <p class="hero-lede">כותבים בצ'אט מה אכלת, מתי ישנת, כמה קפה שתית או איזה אימון עשית. דוגרי הופך את זה למספרים, מגמות וסיכום שבועי שמגיע אליך לבד.</p>
+                <h1>דוגרי. מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</h1>
+                <p class="hero-lede">חמישה הרגלים שמשנים את היום שלך — תיעוד בשיחה, לא בטופס.</p>
                 <div class="hero-actions">
                     <a href="{{ url_for('auth.login') }}" class="btn btn--primary">התחבר עם גוגל וקבל חודש חינם</a>
-                    <p class="microcopy">בלי כרטיס אשראי. התקנה של חמש דקות.</p>
-                </div>
-                <div class="trust-row" aria-label="יתרונות מרכזיים">
-                    <span>עברית יומיומית</span>
-                    <span>תיעוד ב-5 שניות</span>
-                    <span>סיכום שבועי</span>
-                    <span>הנתונים שלך</span>
                 </div>
             </div>
 
@@ -555,119 +458,73 @@
         </div>
     </section>
 
+    <!-- Problem -->
     <section class="section-panel">
-        <div class="container split">
-            <div>
-                <div class="kicker">הבעיה האמיתית</div>
-                <h2>רוב כלי המעקב נכשלים ברגע שהחיים נהיים רגילים.</h2>
-                <p>לא כי חסרה לך מוטיבציה. כי כל ארוחה הופכת לחיפוש, כל עדכון דורש מסך, וכל פספוס קטן גורם לך לעזוב את הכל.</p>
-            </div>
-            <ul class="pain-list">
-                <li>וואטסאפ עם עצמך נהיה ערימה של הודעות בלי סדר.</li>
-                <li>אפליקציות תזונה מבקשות ממך להתעסק במקום פשוט לתעד.</li>
-                <li>אחרי שבוע אין תמונה ברורה של מה באמת קרה.</li>
-                <li>הכלים באנגלית לא מבינים שווארמה, פתיתים וטחינה כמו שצריך.</li>
+        <div class="container block">
+            <h2>אתה יודע שאתה צריך לעקוב. פשוט אין לך כוח.</h2>
+            <p>פתחת קבוצת וואטסאפ עם עצמך. תיעדת שם שלושה ימים. עכשיו זה ערימה של הודעות בלי שום סדר, ואתה לא יודע מה אכלת ביום שלישי.</p>
+            <p>הורדת אפליקציה שאמורה לעזור לך בזה. אבל לא הסתדרת איתה...</p>
+            <p>הבטחת לעצמך שתהיה על זה, אבל לא מצאת פתרון פשוט וזורם.</p>
+            <p>הבעיה היא לא שאתה עצלן. הבעיה היא שכל הכלים הקיימים בנויים סביב מסכים, תפריטים, חיפושים ועוד תפריטים. כל ארוחה היא פרויקט קטן.</p>
+        </div>
+    </section>
+
+    <!-- Solution -->
+    <section class="section-panel">
+        <div class="container block">
+            <h2>דוגרי הוא בוט בטלגרם. אתה כותב, הוא מבין.</h2>
+            <p>אתה כותב "אכלתי פיתה עם חומוס וסלט". דוגרי עונה: "395 קלוריות, 14 גרם חלבון. רוצה לעדכן?".</p>
+            <p>אתה כותב "+1" כשאתה שותה כוס מים. אתה שולח "00:30" כשאתה הולך לישון. זהו. אין מסכים, אין תפריטים, אין הורדה של אפליקציה נוספת — דוגרי יושב בצ'אט שכבר פתוח אצלך כל היום.</p>
+            <p>חמישה הרגלים, לא חמישים:</p>
+            <ul class="habits-list">
+                <li>קלוריות</li>
+                <li>חלבון</li>
+                <li>חלון אכילה</li>
+                <li>שעת שינה</li>
+                <li>כוסות קפה</li>
+                <li>אימונים</li>
+            </ul>
+            <p>זה הבסיס שמשנה את הבריאות היומיומית. כל השאר זה רעש.</p>
+        </div>
+    </section>
+
+    <!-- Why it works -->
+    <section class="section-panel">
+        <div class="container block">
+            <h2>דוגרי בנוי לעצלנים מוטיבציוניים.</h2>
+            <ul class="features-list">
+                <li><strong>מבין עברית באמת.</strong> "שווארמה בלאפה", "שניצל ביתי של אמא", "סלט עם הרבה טחינה" — דוגרי מכיר את האוכל שאתה באמת אוכל, לא רק broccoli ו-grilled chicken.</li>
+                <li><strong>שיחה, לא טפסים.</strong> אתה כותב משפט אחד וזהו. תיעוד ארוחה לוקח חמש שניות, לא חמש דקות.</li>
+                <li><strong>אין אפליקציה להתקין.</strong> כבר יש לך טלגרם. דוגרי שם.</li>
+                <li><strong>סיכום שבועי שמגיע אליך.</strong> כל יום ראשון בבוקר — תמונה של השבוע שעבר. לא צריך לפתוח כלום.</li>
+                <li><strong>ייצוא לאקסל בלחיצה.</strong> הנתונים שלך — שלך.</li>
             </ul>
         </div>
     </section>
 
-    <section class="section-panel">
-        <div class="container">
-            <div class="kicker">מה דוגרי עושה אחרת</div>
-            <h2>שיחה קצרה הופכת למעקב שמחזיק.</h2>
-            <p>דוגרי מתמקד בהרגלים שמספיק חשובים כדי לשנות את היום, ומספיק פשוטים כדי באמת לעקוב אחריהם.</p>
-            <div class="habit-strip" aria-label="הרגלים שניתן לעקוב אחריהם">
-                <span>קלוריות</span>
-                <span>חלבון</span>
-                <span>חלון אכילה</span>
-                <span>שעת שינה</span>
-                <span>קפה</span>
-                <span>אימונים</span>
-            </div>
-
-            <div class="feature-grid">
-                <article class="feature-card">
-                    <div class="icon">א</div>
-                    <h3>מבין אוכל ישראלי</h3>
-                    <p>שניצל ביתי, לאפה, סלט עם מלא טחינה וארוחת שישי. כותבים טבעי, בלי לתרגם את החיים לאנגלית.</p>
-                </article>
-                <article class="feature-card">
-                    <div class="icon">5</div>
-                    <h3>מהיר מספיק ליום עמוס</h3>
-                    <p>משפט אחד בצ'אט, ודוגרי עושה את עבודת הסידור. פחות התעסקות, יותר רצף.</p>
-                </article>
-                <article class="feature-card">
-                    <div class="icon">↗</div>
-                    <h3>תמונה שבועית ברורה</h3>
-                    <p>במקום לנחש אם השבוע היה טוב, מקבלים סיכום שמראה מגמות, פספוסים והתקדמות.</p>
-                </article>
-                <article class="feature-card">
-                    <div class="icon">🔒</div>
-                    <h3>הנתונים נשארים שלך</h3>
-                    <p>אפשר לייצא לאקסל, לבדוק אחורה, ולשמור שליטה על המידע שלך בלי נעילה מיותרת.</p>
-                </article>
-                <article class="feature-card">
-                    <div class="icon">✓</div>
-                    <h3>בלי אפליקציה חדשה</h3>
-                    <p>טלגרם כבר פתוח אצלך. דוגרי נכנס לשגרה במקום להוסיף עוד מקום לזכור להיכנס אליו.</p>
-                </article>
-                <article class="feature-card">
-                    <div class="icon">💬</div>
-                    <h3>פידבק שעוזר להתמיד</h3>
-                    <p>לא הרצאות ולא אשמה. רק מידע קצר, כנה ושימושי שמחזיר אותך למסלול.</p>
-                </article>
-            </div>
-        </div>
-    </section>
-
-    <section class="section-panel">
-        <div class="container split">
-            <div>
-                <div class="kicker">איך מתחילים</div>
-                <h2>חמש דקות, ואז הארוחה הבאה כבר נכנסת למעקב.</h2>
-            </div>
-            <ol class="steps">
-                <li><strong>מתחברים עם גוגל</strong><span>חודש ניסיון בחינם, בלי כרטיס אשראי.</span></li>
-                <li><strong>מקבלים קוד קצר</strong><span>מחברים את החשבון לבוט בטלגרם בצורה פשוטה.</span></li>
-                <li><strong>כותבים לדוגרי</strong><span>מתחילים ממשפט אחד: מה אכלת, כמה קפה, שעת שינה או אימון.</span></li>
-            </ol>
-        </div>
-    </section>
-
-    <section class="section-panel">
-        <div class="container split">
-            <div class="quote-panel">
-                <p><strong>למי זה מתאים?</strong></p>
-                <p>לאנשים שרוצים להיות יותר מודעים לגוף שלהם, אבל לא רוצים להפוך את התזונה לפרויקט. אם ניסית לעקוב בעבר ועזבת כי זה היה מסורבל, דוגרי נבנה בדיוק לנקודה הזאת.</p>
-            </div>
-            <div>
-                <div class="kicker">הסיבה שזה עובד</div>
-                <h2>המעקב הכי טוב הוא זה שאתה באמת עושה.</h2>
-                <p>כשכל עדכון קורה בשיחה שכבר נמצאת בכיס שלך, אין כמעט חיכוך. מצטברים ימים, נוצרת תמונה, ופתאום אפשר לשנות הרגלים מתוך מידע אמיתי ולא מתוך תחושת בטן.</p>
-            </div>
-        </div>
-    </section>
-
+    <!-- CTA -->
     <section class="cta-band">
         <div class="container">
-            <h2>תן לדוגרי שבוע אחד ותראה מה הגוף שלך מנסה לספר לך.</h2>
-            <p>חודש שלם בחינם. בלי כרטיס אשראי. מתחברים, מחברים את טלגרם, ומתחילים לתעד בשיחה.</p>
+            <h2>תוך חמש דקות יש לך את דוגרי בטלגרם.</h2>
+            <p class="tagline">המעקב הכי טוב הוא זה שאתה באמת עושה.</p>
+            <p>חודש שלם בחינם, בלי כרטיס אשראי. תתחבר עם חשבון גוגל, תעבור מדריך התקנה קצר, ותתחיל לתעד את הארוחה הבאה שלך.</p>
             <a href="{{ url_for('auth.login') }}" class="btn btn--primary">התחבר עם גוגל</a>
+            <p class="cta-note">ההתחברות לוקחת 30 שניות. ההתקנה לוקחת חמש דקות. הביטול לוקח לחיצה אחת.</p>
         </div>
     </section>
 
+    <!-- About -->
     <section class="section-panel">
-        <div class="container founder">
-            <div class="kicker">מאחורי דוגרי</div>
-            <h2>נבנה מתוך ניסיון אישי, לא מתוך תיאוריה.</h2>
-            <p>קוראים לי שי, אני יוצר רב תחומי ומטפל. אחרי שנים של ניסיונות לרזות, להתחזק ולהרגיש חיוני יותר, הבנתי שאני לא צריך עוד תוכנית נוצצת. הייתי צריך פידבק פשוט, כנה ועקבי על ההרגלים שלי. דוגרי נולד משם: כלי שמחזיר מודעות ושליטה בלי להעמיס על החיים.</p>
+        <div class="container about-section">
+            <h2>מי אני?</h2>
+            <p>קוראים לי שי, אני יוצר רב תחומי ומטפל. לא באתי מעולם הכושר והתזונה אבל במשך שנים ממש ניסיתי לרזות ולהגביר את רמת החיוניות בגוף שלי. כי בסופו של יום זה עשה אותי שמח. ניסיתי המון תוכניות כולל אבא חטוב, דיאטניות וכולי... ובסופו של דבר דוגרי מאוד עזר לי. כי בפעם הראשונה בחיים קיבלתי פידבק אמיתי, כנה וישיר שעזר לי להגביר את המודעות להרגלי התזונה שלי. זה היה גם כיף וגם ממש מעצים לקבל שליטה בחזרה על הגוף שלי. ראיתי את הקסם והחלטתי שלא בריא לי לשמור אותו רק לעצמי.</p>
         </div>
     </section>
 </main>
 
 <footer class="landing-footer">
     <div class="container">
-        <p>דוגרי - מעקב הרגלים בעברית, בטלגרם, בלי דרמה.</p>
+        <p>דוגרי — מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</p>
         <div>
             <a href="#">תנאי שימוש</a>
             <a href="#">מדיניות פרטיות</a>
