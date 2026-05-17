@@ -153,15 +153,12 @@ async def _window_close_callback(context):
         week_csv = "\n".join(csv_lines)
 
         past_fb = [f.get("feedback_text", "") for f in mongo.get_recent_feedbacks(chat_id, limit=7)]
-        insights = [i.get("insight_text", "") for i in mongo.get_recent_insights(chat_id, limit=5)]
 
         targets = {"calories": target_cal, "protein": target_prot}
-        feedback_result = analyzer.generate_weekly_feedback(week_csv, targets, past_fb, insights)
+        feedback_result = analyzer.generate_weekly_feedback(week_csv, targets, past_fb)
 
         if feedback_result:
             feedback_text = feedback_result.get("feedback_text", "")
-            insight = feedback_result.get("insight", "")
-            insight_category = feedback_result.get("insight_category", "")
 
             if feedback_text:
                 feedback_text = f"\n\n💬 משוב יומי:\n{feedback_text}"
@@ -171,13 +168,6 @@ async def _window_close_callback(context):
                     feedback_text=feedback_text,
                     week_summary={"total_cal": total_cal, "total_prot": total_prot},
                 )
-                if insight:
-                    mongo.save_gpt_insight(
-                        chat_id=chat_id,
-                        insight_type=insight_category or "feedback_effectiveness",
-                        insight_text=insight,
-                        context={"feedback_given": feedback_text},
-                    )
 
     try:
         await context.bot.send_message(chat_id=chat_id, text=summary + feedback_text)

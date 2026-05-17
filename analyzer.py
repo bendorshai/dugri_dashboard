@@ -48,8 +48,6 @@ class BulkCorrectionResult(BaseModel):
 
 class WeeklyFeedbackResult(BaseModel):
     feedback_text: str
-    insight: str
-    insight_category: str
 
 
 PARSE_MESSAGE_SYSTEM_PROMPT = (
@@ -61,7 +59,8 @@ PARSE_MESSAGE_SYSTEM_PROMPT = (
     "- אם המשתמש ציין כמות (גרמים), חשב לפי הכמות המדויקת.\n"
     "- אם לא ציין כמות, העריך מנה סטנדרטית.\n"
     "- היה מדויק ככל האפשר.\n"
-    "- שמור על התיאור בעברית כפי שהמשתמש כתב.\n\n"
+    "- שמור על התיאור בעברית כפי שהמשתמש כתב.\n"
+    "- כל התיאורים חייבים להיות בעברית בלבד.\n\n"
     "כללי תיקון:\n"
     "- אם המשתמש מתקן (משנה כמות, מוסיף פריט, מתקן טעות) — החזר type=correction.\n"
     "- בתיקון, החזר את התיאור המעודכן המלא (כולל חלקים שלא השתנו), ואת הקלוריות והחלבון המעודכנים.\n"
@@ -76,6 +75,7 @@ FOOD_TEXT_SYSTEM_PROMPT = (
     "- אם יש מספר מאכלים, פרט כל אחד בנפרד.\n"
     "- היה מדויק ככל האפשר אך העדף הערכה על פני שגיאה.\n"
     "- שמור על התיאור בעברית כפי שהמשתמש כתב.\n"
+    "- כל התיאורים חייבים להיות בעברית בלבד.\n"
     "- החזר JSON מובנה עם items (רשימה), total_calories, total_protein.\n"
 )
 
@@ -85,16 +85,19 @@ FOOD_PHOTO_SYSTEM_PROMPT = (
     "- זהה כל מאכל בנפרד.\n"
     "- העריך גודל מנה מהתמונה.\n"
     "- אם יש כיתוב נוסף מהמשתמש, השתמש בו לדיוק.\n"
-    "- ענה בעברית.\n"
+    "- תאר כל מאכל בעברית עם כמויות מוערכות. למשל: 'חביתה מ-2 ביצים', 'סלט ירקות ~200 גרם', 'פרוסת לחם מחיטה מלאה'.\n"
+    "- ציין את הכמות שאתה מזהה בתמונה — כמה ביצים, כמה פרוסות, גודל משוער בגרמים.\n"
+    "- כל התיאורים חייבים להיות בעברית בלבד.\n"
 )
 
 WEEKLY_FEEDBACK_SYSTEM_PROMPT = (
-    "אתה מאמן תזונה חיובי ומעודד. תפקידך לתת משוב קצר (שורה אחת) על היום.\n\n"
+    "אתה מאמן תזונה ישיר וכנה. תפקידך לתת משוב קצר על היום.\n\n"
     "כללים:\n"
-    "- המשוב חייב להיות בעברית, עליז ומכבד.\n"
-    "- שורה אחת בלבד.\n"
-    "- עודד שינוי חיובי.\n"
-    "- נתח את המשובים הקודמים שלך ואת תגובת המשתמש כדי לבחור את סגנון המשוב היעיל ביותר.\n"
+    "- דבר בגובה העיניים, בפשטות ובכנות.\n"
+    "- היה חיובי אבל לא מתחנף — אם היום לא היה טוב, תגיד את זה ישירות אבל בצורה תומכת.\n"
+    "- 2-3 משפטים מקסימום.\n"
+    "- התייחס למגמה בשבוע האחרון — האם יש שיפור בעמידה ביעדים? ירידה? יציבות?\n"
+    "- המשוב בעברית בלבד.\n"
 )
 
 MEAL_SUGGESTION_SYSTEM_PROMPT = (
@@ -273,16 +276,13 @@ class FoodAnalyzer:
         week_csv: str,
         targets: dict,
         past_feedbacks: list[str],
-        user_insights: list[str],
     ) -> dict | None:
         feedbacks_block = "\n".join(f"- {f}" for f in past_feedbacks) if past_feedbacks else "(אין משובים קודמים)"
-        insights_block = "\n".join(f"- {i}" for i in user_insights) if user_insights else "(אין תובנות קודמות)"
 
         user_msg = (
             f"היסטוריית אכילה של 7 ימים:\n{week_csv}\n\n"
             f"יעדים: {targets.get('calories', 0)} קלוריות, {targets.get('protein', 0)}g חלבון\n\n"
-            f"המשובים האחרונים שלך:\n{feedbacks_block}\n\n"
-            f"תובנות על תגובת המשתמש:\n{insights_block}"
+            f"המשובים האחרונים שלך:\n{feedbacks_block}"
         )
 
         try:
@@ -301,8 +301,6 @@ class FoodAnalyzer:
                 return None
             return {
                 "feedback_text": result.feedback_text,
-                "insight": result.insight,
-                "insight_category": result.insight_category,
             }
         except Exception:
             logger.exception("GPT weekly feedback failed")

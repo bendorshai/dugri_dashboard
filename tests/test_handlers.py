@@ -432,9 +432,11 @@ class TestFoodAgainCallback:
 
         query = AsyncMock()
         query.data = "fagain_5"
+        query.message.chat_id = 12345
         update = MagicMock()
         update.callback_query = query
         context = MagicMock()
+        context.bot.send_message = AsyncMock()
         context.chat_data = {}
 
         await h.handle_food_again_callback(update, context)
@@ -449,7 +451,7 @@ class TestFoodAgainCallback:
             within_window=True,
         )
         mock_kb.assert_called_with(10)
-        query.edit_message_text.assert_called_once()
-        call_text = query.edit_message_text.call_args[0][0]
+        context.bot.send_message.assert_called_once()
+        call_text = context.bot.send_message.call_args[1]["text"]
         assert "חזה עוף 200 גרם" in call_text
         assert "350" in call_text

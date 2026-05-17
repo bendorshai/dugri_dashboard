@@ -19,6 +19,7 @@ from keyboards import (
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
+    CB_FEEDBACK,
 )
 from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, safe_answer
 
@@ -866,10 +867,18 @@ class HealthHandlers:
             items_text = f"🔁 {description}: {calories} קל׳ | {protein} גרם חלבון"
             response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
 
-            await query.edit_message_text(response, reply_markup=make_food_entry_keyboard(new_row))
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=response,
+                reply_markup=make_food_entry_keyboard(new_row),
+            )
         except Exception:
             logger.exception("Failed to duplicate food entry row %s", row_str)
-            await query.edit_message_text("❌ שגיאה בשכפול הרשומה.", reply_markup=make_daily_summary_keyboard())
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="❌ שגיאה בשכפול הרשומה.",
+                reply_markup=make_daily_summary_keyboard(),
+            )
 
     async def handle_bulk_fix_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -1008,7 +1017,74 @@ class HealthHandlers:
             profile.get("target_calories", 2000),
             profile.get("target_protein", 150),
         )
-        await query.edit_message_text(
-            f"📋 תפריט ראשי{status}",
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=f"📋 תפריט ראשי{status}",
             reply_markup=make_main_menu_keyboard(),
         )
+
+    async def handle_feedback_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="🤔 מכין משוב...",
+        )
+
+        try:
+            profile = self._get_profile()
+            tz_str = profile.get("timezone", "Asia/Jerusalem")
+            import pytz
+            today = datetime.now(pytz.timezone(tz_str)).date()
+            today_str = today.strftime("%d/%m/%Y")
+
+            # Build week's data
+            dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
+            week_entries = self.sheets.get_entries_by_dates(dates)
+
+            if not week_entries:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="אין נתונים מהשבוע האחרון לתת עליהם משוב.",
+                    reply_markup=make_main_menu_keyboard(),
+                )
+                return
+
+            csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
+            for e in week_entries:
+                csv_lines.append(
+                    f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
+                )
+            week_csv = "\n".join(csv_lines)
+
+            target_cal = profile.get("target_calories", 2000)
+            target_prot = profile.get("target_protein", 150)
+            targets = {"calories": target_cal, "protein": target_prot}
+
+            past_fb = [f.get("feedback_text", "") for f in self.mongo.get_recent_feedbacks(self.chat_id, limit=7)]
+
+            feedback_result = self.analyzer.generate_weekly_feedback(week_csv, targets, past_fb)
+
+            if feedback_result and feedback_result.get("feedback_text"):
+                feedback_text = feedback_result["feedback_text"]
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"💬 משוב על התזונה:\n{feedback_text}",
+                    reply_markup=make_main_menu_keyboard(),
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="לא הצלחתי לייצר משוב כרגע. נסה שוב מאוחר יותר.",
+                    reply_markup=make_main_menu_keyboard(),
+                )
+        except Exception:
+            logger.exception("Failed to generate feedback")
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="❌ שגיאה ביצירת משוב.",
+                reply_markup=make_main_menu_keyboard(),
+            )

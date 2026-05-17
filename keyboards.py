@@ -18,6 +18,7 @@ CB_BULK_FIX = "bfix_"
 CB_WEEKLY = "weekly_"
 CB_DAILY = "daily_"
 CB_BACK = "back_"
+CB_FEEDBACK = "feedback_"
 
 
 def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
@@ -38,6 +39,7 @@ def make_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📋 סיכום יומי", callback_data=f"{CB_DAILY}summary")],
         [InlineKeyboardButton("📅 סיכום שבועי", callback_data=f"{CB_WEEKLY}summary")],
+        [InlineKeyboardButton("💬 משוב על התזונה", callback_data=f"{CB_FEEDBACK}daily")],
         [InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals")],
         [InlineKeyboardButton("❓ שאל שאלה על תזונה", callback_data=f"{CB_ASK}question")],
         [InlineKeyboardButton("🔧 תיקון כללי", callback_data=f"{CB_BULK_FIX}start")],
@@ -88,7 +90,10 @@ def make_food_entry_keyboard(row_number: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{row_number}"),
         ],
         [
-            InlineKeyboardButton("🔁 עוד פעם", callback_data=f"{CB_FOOD_AGAIN}{row_number}"),
+            InlineKeyboardButton("🔁 עוד אחד", callback_data=f"{CB_FOOD_AGAIN}{row_number}"),
+        ],
+        [
+            InlineKeyboardButton("📋 תפריט", callback_data=f"{CB_BACK}main"),
         ],
     ])
 
@@ -107,7 +112,7 @@ def format_daily_status(
     prot_pct = round(total_protein / target_protein * 100) if target_protein else 0
 
     lines = [
-        "\n📊 סיכום יומי:",
+        "\n\n📊 סיכום יומי:",
         f"{cal_icon} קלוריות: {total_cal}/{target_cal} ({cal_pct}%, נותרו: {cal_remaining})",
         f"{prot_icon} גרם חלבון: {total_protein}/{target_protein} ({prot_pct}%, נותרו: {prot_remaining})",
     ]

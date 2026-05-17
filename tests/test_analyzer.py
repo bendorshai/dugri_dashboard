@@ -146,8 +146,6 @@ class TestWeeklyFeedback:
         fa, mock_client = analyzer
         expected = WeeklyFeedbackResult(
             feedback_text="כל הכבוד!",
-            insight="חיובי עובד",
-            insight_category="positive",
         )
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -158,7 +156,6 @@ class TestWeeklyFeedback:
             week_csv="date,food,cal,prot,window\n05/05,שניצל,400,30,כן",
             targets={"calories": 2000, "protein": 150},
             past_feedbacks=["יפה מאוד!"],
-            user_insights=["מגיב טוב לחיובי"],
         )
 
         call_args = mock_client.beta.chat.completions.parse.call_args
@@ -175,7 +172,6 @@ class TestWeeklyFeedback:
             week_csv="data",
             targets={"calories": 2000, "protein": 150},
             past_feedbacks=[],
-            user_insights=[],
         )
         assert result is None
 
@@ -190,7 +186,6 @@ class TestWeeklyFeedback:
             week_csv="data",
             targets={"calories": 2000, "protein": 150},
             past_feedbacks=[],
-            user_insights=[],
         )
         assert result is None
 
