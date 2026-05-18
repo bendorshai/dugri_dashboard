@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.7.1"
-VERSION_NOTES = "כפתור 'עוד פעם' לשכפול רשומת אוכל"
+VERSION = "0.7.2"
+VERSION_NOTES = "תיקון: מספר+מאכל (כמו '10 אוכמניות') מוחזר כפריט אחד"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
