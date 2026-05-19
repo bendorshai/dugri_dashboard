@@ -185,10 +185,10 @@ a:hover {
     align-items: center;
     gap: 0.5rem;
     padding: 0.45rem 0.8rem;
-    border: 1px solid rgba(166, 116, 72, 0.22);
+    border: 1px solid rgba(91, 168, 196, 0.3);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.72);
-    color: var(--cinnamon);
+    background: rgba(91, 168, 196, 0.08);
+    color: var(--blue);
     font-weight: 800;
     font-size: 0.95rem;
     margin-bottom: 1.25rem;
@@ -259,14 +259,14 @@ a:hover {
     margin-inline: auto;
     border-radius: 34px;
     padding: 0.85rem;
-    background: #3D3428;
-    box-shadow: 0 28px 80px rgba(90, 85, 77, 0.28);
+    background: #1E3A4A;
+    box-shadow: 0 28px 80px rgba(30, 58, 74, 0.35);
 }
 
 .phone-screen {
     border-radius: 26px;
     overflow: hidden;
-    background: #F5F0E8;
+    background: #EDF5F8;
     border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
@@ -275,7 +275,7 @@ a:hover {
     align-items: center;
     gap: 0.75rem;
     padding: 1rem;
-    background: var(--cinnamon);
+    background: var(--blue);
     color: white;
     font-weight: 800;
 }
@@ -287,7 +287,7 @@ a:hover {
     height: 40px;
     border-radius: 50%;
     background: #fff;
-    color: var(--cinnamon);
+    color: var(--blue);
     font-size: 1.25rem;
 }
 
@@ -295,8 +295,8 @@ a:hover {
     min-height: 510px;
     padding: 1.1rem;
     background:
-        linear-gradient(rgba(245, 240, 232, 0.88), rgba(245, 240, 232, 0.88)),
-        repeating-linear-gradient(45deg, transparent 0 18px, rgba(166, 116, 72, 0.04) 18px 19px);
+        linear-gradient(rgba(237, 245, 248, 0.88), rgba(237, 245, 248, 0.88)),
+        repeating-linear-gradient(45deg, transparent 0 18px, rgba(91, 168, 196, 0.05) 18px 19px);
 }
 
 .bubble {
@@ -306,12 +306,12 @@ a:hover {
     padding: 0.75rem 0.9rem;
     border-radius: 14px;
     line-height: 1.45;
-    box-shadow: 0 2px 8px rgba(90, 85, 77, 0.08);
+    box-shadow: 0 2px 8px rgba(30, 58, 74, 0.08);
 }
 
 .bubble--user {
     margin-right: auto;
-    background: #E8DCC4;
+    background: #D4EAF2;
 }
 
 .bubble--bot {
@@ -320,7 +320,7 @@ a:hover {
 }
 
 .bubble strong {
-    color: var(--cinnamon-dark);
+    color: #3A8BA8;
 }
 
 .chat-metrics {
@@ -333,14 +333,14 @@ a:hover {
 .metric {
     padding: 0.7rem;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.78);
-    border: 1px solid rgba(90, 85, 77, 0.07);
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(91, 168, 196, 0.15);
 }
 
 .metric b {
     display: block;
     font-size: 1.25rem;
-    color: var(--cinnamon-dark);
+    color: #3A8BA8;
     line-height: 1.2;
 }
 
@@ -382,9 +382,9 @@ a:hover {
 }
 
 .section-panel--alt {
-    background: rgba(166, 116, 72, 0.04);
-    border-top: 1px solid rgba(166, 116, 72, 0.08);
-    border-bottom: 1px solid rgba(166, 116, 72, 0.08);
+    background: rgba(91, 168, 196, 0.04);
+    border-top: 1px solid rgba(91, 168, 196, 0.1);
+    border-bottom: 1px solid rgba(91, 168, 196, 0.1);
 }
 
 .split {
@@ -413,6 +413,7 @@ a:hover {
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.82);
     border: 1px solid rgba(90, 85, 77, 0.08);
+    border-right: 3px solid var(--blue);
     box-shadow: 0 6px 20px rgba(90, 85, 77, 0.05);
     font-weight: 700;
     color: var(--ink);
@@ -451,7 +452,7 @@ a:hover {
     padding: 1.3rem 1.4rem;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.82);
-    border: 1px solid rgba(90, 85, 77, 0.08);
+    border: 1px solid rgba(91, 168, 196, 0.1);
     box-shadow: 0 8px 24px rgba(90, 85, 77, 0.06);
     line-height: 1.6;
 }
@@ -459,7 +460,7 @@ a:hover {
 .features-list li strong {
     display: block;
     margin-bottom: 0.3rem;
-    color: var(--cinnamon-dark);
+    color: var(--blue);
 }
 
 /* CTA band */
@@ -576,8 +577,8 @@ a:hover {
 }
 
 .consent-badge--required {
-    background: rgba(201, 122, 107, 0.15);
-    color: var(--error);
+    background: rgba(91, 168, 196, 0.15);
+    color: var(--blue);
 }
 
 .consent-badge--optional {
@@ -760,6 +761,11 @@ a:hover {
     gap: 0.5rem;
     margin-bottom: 2rem;
     font-weight: 600;
+    color: var(--accent);
+}
+
+.legal-page .back-link:hover {
+    color: var(--accent-dark);
 }
 
 /* === Onboarding (legacy, kept for existing dashboard) === */
