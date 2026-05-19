@@ -73,8 +73,45 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.route("/")
     def landing():
+        from flask import render_template, request, session
+        import hebrew_strings as hs
+
+        post_signup = request.args.get("post_signup") == "1" and "user_email" in session
+        bot_username = config.get("dugri_bot_username", "")
+        contact_email = config.get("contact_email", "")
+        signup_token = session.get("signup_session_token", "")
+        user_name = session.get("user_name", "")
+        deep_link = f"https://t.me/{bot_username}?start={signup_token}" if signup_token else ""
+
+        return render_template(
+            "landing.html",
+            post_signup=post_signup,
+            deep_link=deep_link,
+            user_name=user_name,
+            contact_email=contact_email,
+            bot_username=bot_username,
+            hs=hs,
+        )
+
+    @app.route("/terms")
+    def terms():
         from flask import render_template
-        return render_template("landing.html")
+        import hebrew_strings as hs
+        contact_email = config.get("contact_email", "")
+        return render_template("terms.html", hs=hs, contact_email=contact_email)
+
+    @app.route("/privacy")
+    def privacy():
+        from flask import render_template
+        import hebrew_strings as hs
+        contact_email = config.get("contact_email", "")
+        return render_template("privacy.html", hs=hs, contact_email=contact_email)
+
+    @app.route("/about")
+    def about():
+        from flask import render_template
+        import hebrew_strings as hs
+        return render_template("about.html", hs=hs)
 
     return app
 

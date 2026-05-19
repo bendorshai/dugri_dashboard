@@ -13,6 +13,8 @@ SAMPLE_CONFIG = {
     "mongodb": {"uri": "mongodb://localhost:27017", "db_name": "test_health_tracker"},
     "bot_key_salt": "test-salt",
     "telegram_bot_url": "https://t.me/test_bot",
+    "dugri_bot_username": "TestDugriBot",
+    "contact_email": "test@dugri.co",
 }
 
 

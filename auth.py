@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import urlencode
 
@@ -11,7 +12,7 @@ from flask import (
 )
 
 from storage import DashboardStorage
-from key_generator import generate_bot_key
+from hebrew_strings import ERROR_MISSING_CONSENT, ERROR_OAUTH_FAILED
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,42 @@ def _get_oauth_config() -> dict:
     return current_app.config["APP_CONFIG"]["google_oauth"]
 
 
+def _build_consents() -> dict:
+    """Build a consents dict from session-stored pending consents."""
+    now = datetime.now(timezone.utc).isoformat()
+    pending = session.get("pending_consents", {})
+    marketing = pending.get("marketing", False)
+    return {
+        "terms_accepted_at": now,
+        "privacy_accepted_at": now,
+        "medical_disclaimer_accepted_at": now,
+        "marketing_opt_in": marketing,
+        "marketing_opt_in_at": now if marketing else None,
+        "consent_version": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    }
+
+
 @auth_bp.route("/login")
 def login():
+    # Read consent params from the signup form
+    terms = request.args.get("terms")
+    medical = request.args.get("medical")
+    marketing = request.args.get("marketing")
+
+    # For returning users who are already logged in, skip consent check
+    is_returning = "user_email" in session
+
+    if not is_returning:
+        if not terms or not medical:
+            flash(ERROR_MISSING_CONSENT, "error")
+            return redirect(url_for("landing"))
+
+        session["pending_consents"] = {
+            "terms": True,
+            "medical": True,
+            "marketing": marketing == "1",
+        }
+
     oauth_cfg = _get_oauth_config()
     state = secrets.token_urlsafe(32)
     session["oauth_state"] = state
@@ -66,14 +101,14 @@ def callback():
     error = request.args.get("error")
     if error:
         logger.warning("OAuth error: %s", error)
-        flash("ההתחברות נכשלה. נסה שוב.", "error")
+        flash(ERROR_OAUTH_FAILED, "error")
         return redirect(url_for("landing"))
 
     code = request.args.get("code")
     state = request.args.get("state")
 
     if not code or state != session.pop("oauth_state", None):
-        flash("ההתחברות נכשלה. נסה שוב.", "error")
+        flash(ERROR_OAUTH_FAILED, "error")
         return redirect(url_for("landing"))
 
     oauth_cfg = _get_oauth_config()
@@ -89,7 +124,7 @@ def callback():
 
     if token_resp.status_code != 200:
         logger.error("Token exchange failed: %s", token_resp.text)
-        flash("ההתחברות נכשלה. נסה שוב.", "error")
+        flash(ERROR_OAUTH_FAILED, "error")
         return redirect(url_for("landing"))
 
     access_token = token_resp.json().get("access_token")
@@ -103,29 +138,43 @@ def callback():
 
     if userinfo_resp.status_code != 200:
         logger.error("Userinfo fetch failed: %s", userinfo_resp.text)
-        flash("ההתחברות נכשלה. נסה שוב.", "error")
+        flash(ERROR_OAUTH_FAILED, "error")
         return redirect(url_for("landing"))
 
     userinfo = userinfo_resp.json()
     email = userinfo["email"]
     name = userinfo.get("name", "")
+    photo_url = userinfo.get("picture")
 
-    # Create or get user
     storage = _get_storage()
     user = storage.get_user(email)
+
     if user is None:
-        cfg = current_app.config["APP_CONFIG"]
-        bot_key = generate_bot_key(email, cfg["bot_key_salt"])
-        user = storage.create_user(email, name)
-        storage.update_user_profile(email, {"bot_key": bot_key})
+        # New user — consents required
+        pending = session.pop("pending_consents", None)
+        if not pending or not pending.get("terms") or not pending.get("medical"):
+            flash(ERROR_MISSING_CONSENT, "error")
+            return redirect(url_for("landing"))
+
+        consents = _build_consents()
+        user = storage.create_user(email, name, photo_url=photo_url, consents=consents)
+    else:
+        # Returning user — update photo if we got a new one
+        if photo_url and photo_url != user.get("photo_url"):
+            storage.update_user_profile(email, {"photo_url": photo_url})
 
     session["user_email"] = email
     session["user_name"] = name
 
-    if not user.get("onboarding_complete"):
-        return redirect(url_for("onboarding.step", step_num=1))
+    # Returning user with telegram linked → dashboard
+    if user.get("telegram_user_id"):
+        return redirect(url_for("dashboard_views.goals"))
 
-    return redirect(url_for("dashboard_views.goals"))
+    # Generate fresh signup session token for Telegram deep link
+    token = storage.regenerate_signup_session_token(email)
+    session["signup_session_token"] = token
+
+    return redirect(url_for("landing", post_signup="1"))
 
 
 @auth_bp.route("/logout")

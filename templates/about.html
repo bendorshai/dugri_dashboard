@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}{{ hs.ABOUT_HEADLINE }} — דוגרי{% endblock %}
+
+{% block body %}
+<div class="container legal-page">
+    <a href="{{ url_for('landing') }}" class="back-link">← חזרה לדף הבית</a>
+    <h1>{{ hs.ABOUT_HEADLINE }}</h1>
+    <p>{{ hs.ABOUT_BODY }}</p>
+</div>
+{% endblock %}

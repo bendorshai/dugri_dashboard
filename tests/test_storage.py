@@ -42,9 +42,41 @@ class TestCreateUser:
         doc = storage._users.insert_one.call_args[0][0]
         assert doc["_id"] == "a@b.com"
         assert doc["name"] == "Test User"
-        assert doc["onboarding_complete"] is False
+        assert doc["onboarding_complete"] is True
         assert "created_at" in doc
         assert "goals" in doc
+
+    def test_inserts_with_photo_url(self, storage):
+        storage.create_user("a@b.com", "Test", photo_url="https://photo.url/pic.jpg")
+        doc = storage._users.insert_one.call_args[0][0]
+        assert doc["photo_url"] == "https://photo.url/pic.jpg"
+
+    def test_inserts_without_photo_url_defaults_to_none(self, storage):
+        storage.create_user("a@b.com", "Test")
+        doc = storage._users.insert_one.call_args[0][0]
+        assert doc["photo_url"] is None
+
+    def test_inserts_with_consents(self, storage):
+        consents = {
+            "terms_accepted_at": "2026-05-19T00:00:00",
+            "privacy_accepted_at": "2026-05-19T00:00:00",
+            "medical_disclaimer_accepted_at": "2026-05-19T00:00:00",
+            "marketing_opt_in": True,
+            "marketing_opt_in_at": "2026-05-19T00:00:00",
+            "consent_version": "2026-05-19",
+        }
+        storage.create_user("a@b.com", "Test", consents=consents)
+        doc = storage._users.insert_one.call_args[0][0]
+        assert doc["consents"] == consents
+        assert doc["consents"]["marketing_opt_in"] is True
+
+    def test_new_user_has_trial_pending_status(self, storage):
+        storage.create_user("a@b.com", "Test")
+        doc = storage._users.insert_one.call_args[0][0]
+        assert doc["subscription_status"] == "trial_pending"
+        assert doc["trial_started_at"] is None
+        assert doc["telegram_user_id"] is None
+        assert doc["signup_session_token"] is None
 
 
 class TestUpdateUserProfile:
@@ -73,3 +105,41 @@ class TestCompleteOnboarding:
         storage._users.update_one.assert_called_once()
         set_data = storage._users.update_one.call_args[0][1]["$set"]
         assert set_data["onboarding_complete"] is True
+
+
+class TestSetSignupSessionToken:
+    def test_sets_token_and_expiry(self, storage):
+        storage.set_signup_session_token("a@b.com", "tok123", "2026-05-20T00:00:00")
+        storage._users.update_one.assert_called_once()
+        set_data = storage._users.update_one.call_args[0][1]["$set"]
+        assert set_data["signup_session_token"] == "tok123"
+        assert set_data["signup_session_token_expires_at"] == "2026-05-20T00:00:00"
+        assert "updated_at" in set_data
+
+
+class TestRegenerateSignupSessionToken:
+    def test_returns_token_string(self, storage):
+        token = storage.regenerate_signup_session_token("a@b.com")
+        assert isinstance(token, str)
+        assert len(token) > 0
+
+    def test_stores_token_in_db(self, storage):
+        storage.regenerate_signup_session_token("a@b.com")
+        storage._users.update_one.assert_called_once()
+        set_data = storage._users.update_one.call_args[0][1]["$set"]
+        assert set_data["signup_session_token"] is not None
+        assert set_data["signup_session_token_expires_at"] is not None
+
+
+class TestGetUserBySessionToken:
+    def test_queries_with_token_and_expiry(self, storage):
+        storage._users.find_one.return_value = {"_id": "a@b.com"}
+        result = storage.get_user_by_session_token("tok123")
+        assert result is not None
+        query = storage._users.find_one.call_args[0][0]
+        assert query["signup_session_token"] == "tok123"
+        assert "$gt" in query["signup_session_token_expires_at"]
+
+    def test_returns_none_when_no_match(self, storage):
+        storage._users.find_one.return_value = None
+        assert storage.get_user_by_session_token("bad-token") is None

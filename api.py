@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, session
 
 from auth import login_required
 from analyzer import DashboardAnalyzer
+from storage import DashboardStorage
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+
+def _get_storage() -> DashboardStorage:
+    cfg = current_app.config["APP_CONFIG"]
+    mongo_cfg = cfg["mongodb"]
+    return DashboardStorage(uri=mongo_cfg["uri"], db_name=mongo_cfg["db_name"])
 
 
 @api_bp.route("/suggest-targets", methods=["POST"])
@@ -37,3 +44,18 @@ def suggest_targets():
         return jsonify({"error": "suggestion failed"}), 500
 
     return jsonify(result)
+
+
+@api_bp.route("/regenerate-bot-link", methods=["POST"])
+@login_required
+def regenerate_bot_link():
+    email = session["user_email"]
+    storage = _get_storage()
+    token = storage.regenerate_signup_session_token(email)
+    session["signup_session_token"] = token
+
+    cfg = current_app.config["APP_CONFIG"]
+    bot_username = cfg.get("dugri_bot_username", "")
+    deep_link = f"https://t.me/{bot_username}?start={token}"
+
+    return jsonify({"deep_link": deep_link, "token": token})

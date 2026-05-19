@@ -2,465 +2,45 @@
 
 {% block title %}דוגרי — מעקב הרגלים בעברית, בטלגרם, בלי בולשיט{% endblock %}
 
-{% block head %}
-<style>
-    .landing-page {
-        --ink: #17211b;
-        --muted: #647067;
-        --paper: #fffaf1;
-        --mint: #e4f6e8;
-        --mint-strong: #2f7d59;
-        --blue: #2a88c8;
-        --sun: #f2b84b;
-        --rose: #de7d68;
-        background:
-            radial-gradient(circle at 12% 8%, rgba(242, 184, 75, 0.28), transparent 28rem),
-            radial-gradient(circle at 86% 18%, rgba(42, 136, 200, 0.18), transparent 30rem),
-            linear-gradient(180deg, #fffaf1 0%, #f6f0e5 44%, #f8fbf5 100%);
-        color: var(--ink);
-        overflow: hidden;
-    }
-
-    .landing-page .container {
-        max-width: 1160px;
-    }
-
-    .landing-hero {
-        min-height: 92vh;
-        padding: 2rem 0 3rem;
-        display: flex;
-        align-items: center;
-    }
-
-    .hero-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
-        gap: 3rem;
-        align-items: center;
-    }
-
-    .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.45rem 0.8rem;
-        border: 1px solid rgba(47, 125, 89, 0.22);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.72);
-        color: var(--mint-strong);
-        font-weight: 800;
-        font-size: 0.95rem;
-        margin-bottom: 1.25rem;
-    }
-
-    .landing-hero h1 {
-        max-width: 760px;
-        font-size: clamp(2.35rem, 6vw, 5rem);
-        line-height: 1.03;
-        margin-bottom: 1.35rem;
-        letter-spacing: 0;
-    }
-
-    .hero-lede {
-        max-width: 640px;
-        font-size: clamp(1.15rem, 2vw, 1.45rem);
-        color: #3f4b43;
-        line-height: 1.65;
-        margin-bottom: 2rem;
-    }
-
-    .hero-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.9rem;
-        align-items: center;
-        margin-bottom: 1.5rem;
-    }
-
-    .landing-page .btn {
-        border-radius: 10px;
-        box-shadow: 0 12px 28px rgba(47, 125, 89, 0.18);
-    }
-
-    .landing-page .btn--primary {
-        background: #1f7a54;
-    }
-
-    .landing-page .btn--primary:hover {
-        background: #176342;
-    }
-
-    .microcopy {
-        color: var(--muted);
-        font-weight: 700;
-        margin: 0;
-    }
-
-    .trust-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.7rem;
-        margin-top: 1.75rem;
-    }
-
-    .trust-row span {
-        display: inline-flex;
-        align-items: center;
-        min-height: 36px;
-        padding: 0.35rem 0.8rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.76);
-        border: 1px solid rgba(23, 33, 27, 0.08);
-        color: #425044;
-        font-weight: 700;
-        font-size: 0.95rem;
-    }
-
-    .phone-shell {
-        position: relative;
-        max-width: 420px;
-        margin-inline: auto;
-        border-radius: 34px;
-        padding: 0.85rem;
-        background: #18231d;
-        box-shadow: 0 28px 80px rgba(23, 33, 27, 0.28);
-    }
-
-    .phone-screen {
-        border-radius: 26px;
-        overflow: hidden;
-        background: #eef5ed;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-    }
-
-    .chat-top {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 1rem;
-        background: #2a88c8;
-        color: white;
-        font-weight: 800;
-    }
-
-    .bot-avatar {
-        display: grid;
-        place-items: center;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: #fff;
-        color: #2a88c8;
-        font-size: 1.25rem;
-    }
-
-    .chat-body {
-        min-height: 510px;
-        padding: 1.1rem;
-        background:
-            linear-gradient(rgba(238, 245, 237, 0.88), rgba(238, 245, 237, 0.88)),
-            repeating-linear-gradient(45deg, transparent 0 18px, rgba(47, 125, 89, 0.04) 18px 19px);
-    }
-
-    .bubble {
-        width: fit-content;
-        max-width: 92%;
-        margin-bottom: 0.8rem;
-        padding: 0.75rem 0.9rem;
-        border-radius: 14px;
-        line-height: 1.45;
-        box-shadow: 0 2px 8px rgba(23, 33, 27, 0.08);
-    }
-
-    .bubble--user {
-        margin-right: auto;
-        background: #dff6c8;
-    }
-
-    .bubble--bot {
-        margin-left: auto;
-        background: #fff;
-    }
-
-    .bubble strong {
-        color: #176342;
-    }
-
-    .chat-metrics {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 0.55rem;
-        margin: 1rem 0;
-    }
-
-    .metric {
-        padding: 0.7rem;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.78);
-        border: 1px solid rgba(23, 33, 27, 0.07);
-    }
-
-    .metric b {
-        display: block;
-        font-size: 1.25rem;
-        color: #176342;
-        line-height: 1.2;
-    }
-
-    .metric span {
-        color: var(--muted);
-        font-size: 0.86rem;
-        font-weight: 700;
-    }
-
-    .chat-input {
-        display: flex;
-        align-items: center;
-        gap: 0.55rem;
-        margin-top: 1.2rem;
-        padding: 0.65rem 0.8rem;
-        border-radius: 999px;
-        background: white;
-        color: #7a867d;
-        font-weight: 700;
-    }
-
-    .section-panel {
-        padding: 5rem 0;
-    }
-
-    .section-panel h2,
-    .cta-band h2 {
-        font-size: clamp(2rem, 4vw, 3.4rem);
-        line-height: 1.12;
-        margin-bottom: 1.2rem;
-        color: var(--ink);
-    }
-
-    .section-panel p {
-        color: #4c584f;
-        font-size: 1.12rem;
-        line-height: 1.7;
-    }
-
-    .section-panel--alt {
-        background: rgba(23, 33, 27, 0.03);
-        border-top: 1px solid rgba(23, 33, 27, 0.06);
-        border-bottom: 1px solid rgba(23, 33, 27, 0.06);
-    }
-
-    .split {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 3rem;
-        align-items: center;
-    }
-
-    .block {
-        max-width: 780px;
-    }
-
-    .block p {
-        margin-bottom: 1rem;
-    }
-
-    .pain-list {
-        list-style: none;
-        display: grid;
-        gap: 0.9rem;
-    }
-
-    .pain-list li {
-        padding: 1.1rem 1.2rem;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid rgba(23, 33, 27, 0.08);
-        box-shadow: 0 6px 20px rgba(23, 33, 27, 0.05);
-        font-weight: 700;
-        color: #39453c;
-        line-height: 1.55;
-    }
-
-    .solution-text p {
-        margin-bottom: 1rem;
-    }
-
-    .habits-list {
-        list-style: none;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin: 1.5rem 0;
-    }
-
-    .habits-list li {
-        padding: 0.58rem 0.95rem;
-        border-radius: 999px;
-        background: #17211b;
-        color: white;
-        font-weight: 800;
-    }
-
-    .features-list {
-        list-style: none;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 1.2rem;
-        margin-top: 1.5rem;
-    }
-
-    .features-list li {
-        padding: 1.3rem 1.4rem;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.82);
-        border: 1px solid rgba(23, 33, 27, 0.08);
-        box-shadow: 0 8px 24px rgba(23, 33, 27, 0.06);
-        line-height: 1.6;
-    }
-
-    .features-list li strong {
-        display: block;
-        margin-bottom: 0.3rem;
-        color: var(--ink);
-    }
-
-    .cta-band {
-        padding: 5rem 0;
-        background: #17211b;
-        color: white;
-        text-align: center;
-    }
-
-    .cta-band h2 {
-        color: white;
-        max-width: 780px;
-        margin-inline: auto;
-    }
-
-    .cta-band p {
-        max-width: 650px;
-        margin-inline: auto;
-        color: rgba(255, 255, 255, 0.76);
-        font-size: 1.15rem;
-    }
-
-    .cta-band .btn {
-        margin-top: 1rem;
-        background: #f2b84b;
-        color: #17211b;
-        box-shadow: none;
-    }
-
-    .cta-band .btn:hover {
-        background: #ffd26d;
-        color: #17211b;
-    }
-
-    .tagline {
-        font-size: 1.25rem;
-        font-weight: 800;
-        color: var(--mint-strong);
-        margin-bottom: 0.5rem;
-    }
-
-    .about-section {
-        max-width: 860px;
-        margin: 0 auto;
-        text-align: center;
-    }
-
-    .about-section p {
-        font-size: 1.12rem;
-        color: #4c584f;
-    }
-
-    .landing-footer {
-        padding: 2rem 0;
-        background: #fffaf1;
-        border-top: 1px solid rgba(23, 33, 27, 0.08);
-        color: var(--muted);
-        text-align: center;
-    }
-
-    .landing-footer p {
-        margin-bottom: 0.6rem;
-    }
-
-    .landing-footer a {
-        color: #526157;
-        margin: 0 0.65rem;
-        font-weight: 700;
-    }
-
-    @media (max-width: 900px) {
-        .landing-hero {
-            min-height: auto;
-            padding-top: 2.5rem;
-        }
-
-        .hero-grid,
-        .split {
-            grid-template-columns: 1fr;
-        }
-
-        .phone-shell {
-            max-width: 390px;
-        }
-
-        .features-list {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    @media (max-width: 540px) {
-        .landing-page .container {
-            padding: 0 1rem;
-        }
-
-        .landing-hero h1 {
-            font-size: 2.45rem;
-        }
-
-        .hero-actions,
-        .hero-actions .btn {
-            width: 100%;
-        }
-
-        .phone-shell {
-            border-radius: 26px;
-            padding: 0.55rem;
-        }
-
-        .chat-body {
-            min-height: 430px;
-            padding: 0.85rem;
-        }
-
-        .section-panel,
-        .cta-band {
-            padding: 3.5rem 0;
-        }
-
-        .trust-row span,
-        .habits-list li {
-            flex: 1 1 auto;
-            justify-content: center;
-        }
-    }
-</style>
-{% endblock %}
-
 {% block body %}
-<main class="landing-page">
+<main class="landing-page" x-data="{
+    postSignup: {{ 'true' if post_signup else 'false' }},
+    terms: false,
+    medical: false,
+    marketing: false,
+    get canSubmit() { return this.terms && this.medical },
+    copied: false,
+    copyLink() {
+        navigator.clipboard.writeText('{{ deep_link }}').then(() => {
+            this.copied = true;
+            setTimeout(() => this.copied = false, 2000);
+        });
+    }
+}">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div style="padding-top: 1rem;">
+        {% for category, message in messages %}
+        <div class="flash flash--{{ category }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
     <!-- Hero -->
     <section class="landing-hero">
         <div class="container hero-grid">
             <div>
+                <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="hero-logo">
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
                 <h1>דוגרי. מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</h1>
                 <p class="hero-lede">שישה הרגלים שמשנים את היום שלך — תיעוד בשיחה, לא בטופס.</p>
-                <div class="hero-actions">
-                    <a href="{{ url_for('auth.login') }}" class="btn btn--primary">התחבר עם גוגל וקבל חודש חינם</a>
+                <div class="hero-actions" x-show="!postSignup">
+                    <a href="#signup" class="btn btn--primary">התחבר עם גוגל וקבל חודש חינם</a>
+                </div>
+                <div class="hero-actions" x-show="postSignup" x-cloak>
+                    <a href="{{ deep_link }}" target="_blank" rel="noopener" class="btn btn--primary">{{ hs.POST_SIGNUP_CTA }}</a>
                 </div>
             </div>
 
@@ -526,7 +106,7 @@
                     <li>כוסות קפה</li>
                     <li>אימונים</li>
                 </ul>
-                <p>זה הבסיס שמשנה את הבריאות היומיומית. כל השאר זה רעש.</p>
+                <p>זה הבסיס שמשנים את הבריאות היומיומית. כל השאר זה רעש.</p>
             </div>
         </div>
     </section>
@@ -545,13 +125,73 @@
         </div>
     </section>
 
-    <!-- CTA -->
-    <section class="cta-band">
+    <!-- CTA band -->
+    <section class="cta-band" x-show="!postSignup">
         <div class="container">
             <h2>תוך חמש דקות יש לך את דוגרי בטלגרם.</h2>
             <p class="tagline">המעקב הכי טוב הוא זה שאתה באמת עושה.</p>
-            <p>חודש שלם בחינם, בלי כרטיס אשראי. תתחבר עם חשבון גוגל, תבחר יעדים אם בא לך, ותתחיל לתעד את הארוחה הבאה שלך.</p>
-            <a href="{{ url_for('auth.login') }}" class="btn btn--primary">התחבר עם גוגל</a>
+            <p>חודש שלם בחינם, בלי כרטיס אשראי. תתחבר עם חשבון גוגל, תאשר את התנאים, ותתחיל לתעד את הארוחה הבאה שלך.</p>
+            <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
+        </div>
+    </section>
+
+    <!-- Post-signup zone (shown after successful OAuth) -->
+    <section class="post-signup-zone" x-show="postSignup" x-cloak id="post-signup">
+        <div class="container">
+            <div class="post-signup-card">
+                <h2>{{ hs.POST_SIGNUP_WELCOME.format(name=user_name or '') }}</h2>
+                <a href="{{ deep_link }}" target="_blank" rel="noopener" class="btn btn--primary btn--full">
+                    {{ hs.POST_SIGNUP_CTA }}
+                </a>
+                <p class="post-signup-fallback">
+                    <span x-show="copied" class="copy-toast">הקישור הועתק!</span>
+                    {{ hs.POST_SIGNUP_FALLBACK.split(',')[0] }},
+                    <button @click="copyLink()">לחץ כאן להעתקת הקישור</button>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Consent & Signup section (hidden after signup) -->
+    <section class="consent-section" x-show="!postSignup" id="signup">
+        <div class="container">
+            <div class="consent-card">
+                <h2>בואו נתחיל</h2>
+
+                <div class="consent-checkbox" :class="{ 'consent-checkbox--checked': terms }">
+                    <input type="checkbox" id="consent-terms" x-model="terms">
+                    <label for="consent-terms">
+                        <span class="consent-badge consent-badge--required">{{ hs.CONSENT_REQUIRED_LABEL }}</span>
+                        {{ hs.CONSENT_TERMS | safe }}
+                    </label>
+                </div>
+
+                <div class="consent-checkbox" :class="{ 'consent-checkbox--checked': medical }">
+                    <input type="checkbox" id="consent-medical" x-model="medical">
+                    <label for="consent-medical">
+                        <span class="consent-badge consent-badge--required">{{ hs.CONSENT_REQUIRED_LABEL }}</span>
+                        {{ hs.CONSENT_MEDICAL }}
+                    </label>
+                </div>
+
+                <div class="consent-checkbox" :class="{ 'consent-checkbox--checked': marketing }">
+                    <input type="checkbox" id="consent-marketing" x-model="marketing">
+                    <label for="consent-marketing">
+                        <span class="consent-badge consent-badge--optional">{{ hs.CONSENT_OPTIONAL_LABEL }}</span>
+                        {{ hs.CONSENT_MARKETING }}
+                    </label>
+                </div>
+
+                <div class="consent-actions">
+                    <a :href="canSubmit ? '{{ url_for('auth.login') }}?terms=1&medical=1&marketing=' + (marketing ? '1' : '0') : '#'"
+                       class="btn btn--primary btn--full"
+                       :disabled="!canSubmit"
+                       :class="{ 'btn--disabled': !canSubmit }"
+                       @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1&marketing=' + (marketing ? '1' : '0')">
+                        התחבר עם Google
+                    </a>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -568,9 +208,12 @@
     <div class="container">
         <p>דוגרי — מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</p>
         <div>
-            <a href="#">תנאי שימוש</a>
-            <a href="#">מדיניות פרטיות</a>
-            <a href="#">יצירת קשר</a>
+            <a href="{{ url_for('terms') }}">{{ hs.FOOTER_TERMS_LINK }}</a>
+            <a href="{{ url_for('privacy') }}">{{ hs.FOOTER_PRIVACY_LINK }}</a>
+            <a href="{{ url_for('about') }}">{{ hs.FOOTER_ABOUT_LINK }}</a>
+            {% if contact_email %}
+            <a href="mailto:{{ contact_email }}">{{ hs.FOOTER_CONTACT_LINK }}</a>
+            {% endif %}
         </div>
     </div>
 </footer>

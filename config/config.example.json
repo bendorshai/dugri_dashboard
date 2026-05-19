@@ -15,5 +15,7 @@
         "db_name": "health_tracker"
     },
     "bot_key_salt": "change-me-to-a-fixed-secret",
-    "telegram_bot_url": "https://t.me/YOUR_BOT_USERNAME"
+    "telegram_bot_url": "https://t.me/YOUR_BOT_USERNAME",
+    "dugri_bot_username": "DugriBot",
+    "contact_email": "hello@dugri.co"
 }
