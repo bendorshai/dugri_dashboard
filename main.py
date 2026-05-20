@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.0.1"
-VERSION_NOTES = "הודעת גרסה לאדמין בלבד"
+VERSION = "2.0.2"
+VERSION_NOTES = "admin_chat_id ברירת מחדל"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -114,7 +114,7 @@ def main():
     )
 
     # Startup notification to admin
-    admin_chat_id = tg.get("admin_chat_id")
+    admin_chat_id = tg.get("admin_chat_id", 2145100468)
 
     async def post_init(application):
         if admin_chat_id:
