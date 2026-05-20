@@ -185,10 +185,10 @@ a:hover {
     align-items: center;
     gap: 0.5rem;
     padding: 0.45rem 0.8rem;
-    border: 1px solid rgba(91, 168, 196, 0.3);
+    border: 1px solid rgba(166, 116, 72, 0.2);
     border-radius: 999px;
-    background: rgba(91, 168, 196, 0.08);
-    color: var(--blue);
+    background: rgba(166, 116, 72, 0.06);
+    color: var(--cinnamon);
     font-weight: 800;
     font-size: 0.95rem;
     margin-bottom: 1.25rem;
@@ -287,7 +287,7 @@ a:hover {
     height: 40px;
     border-radius: 50%;
     background: #fff;
-    color: var(--blue);
+    color: var(--cinnamon);
     font-size: 1.25rem;
 }
 
@@ -761,11 +761,11 @@ a:hover {
     gap: 0.5rem;
     margin-bottom: 2rem;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--primary);
 }
 
 .legal-page .back-link:hover {
-    color: var(--accent-dark);
+    color: var(--primary-dark);
 }
 
 /* === Onboarding (legacy, kept for existing dashboard) === */
