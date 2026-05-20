@@ -345,6 +345,11 @@ class TestCorrectionHistory:
         ]
 
         correction_result = CorrectionResult(
+            items=[
+                FoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=750, protein=45),
+                FoodItem(description="צ'יפס", estimated_grams=150, calories=150, protein=3),
+                FoodItem(description="סלט", estimated_grams=200, calories=50, protein=7),
+            ],
             corrected_description="המבורגר 300 גרם, צ'יפס, סלט",
             corrected_calories=950,
             corrected_protein=55,
@@ -399,6 +404,11 @@ class TestCorrectionHistory:
         ]
 
         correction_result = CorrectionResult(
+            items=[
+                FoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=750, protein=45),
+                FoodItem(description="צ'יפס גדול", estimated_grams=250, calories=300, protein=4),
+                FoodItem(description="סלט", estimated_grams=200, calories=50, protein=6),
+            ],
             corrected_description="המבורגר 300 גרם, צ'יפס גדול, סלט",
             corrected_calories=1100,
             corrected_protein=55,

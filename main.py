@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.8.0"
-VERSION_NOTES = "הערכת גרמים לכל פריט, טיפי צילום חכמים מותאמים לתמונה"
+VERSION = "0.8.1"
+VERSION_NOTES = "תיקון: תגובת עריכה מציגה פירוט פריטים עם גרמים"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -353,13 +353,17 @@ class HealthHandlers:
 
         cal_diff = new_cal - old_cal
         prot_diff = new_prot - old_prot
-        diff_text = []
-        if cal_diff != 0:
-            diff_text.append(f"קלוריות: {old_cal} → {new_cal} ({'+' if cal_diff > 0 else ''}{cal_diff})")
-        if prot_diff != 0:
-            diff_text.append(f"גרם חלבון: {old_prot} → {new_prot} ({'+' if prot_diff > 0 else ''}{prot_diff})")
 
-        response = f"✏️ עודכן: {new_desc}\n" + "\n".join(diff_text)
+        items_text = self._format_items_text(correction.items, new_cal, new_prot)
+
+        diff_parts = []
+        if cal_diff != 0:
+            diff_parts.append(f"קלוריות: {old_cal} → {new_cal}")
+        if prot_diff != 0:
+            diff_parts.append(f"חלבון: {old_prot} → {new_prot}")
+        diff_line = f"\n({', '.join(diff_parts)})" if diff_parts else ""
+
+        response = f"✏️ עודכן:\n{items_text}{diff_line}"
         status = format_daily_status(
             final_cal, final_prot,
             profile.get("target_calories", 2000),

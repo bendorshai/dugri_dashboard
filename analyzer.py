@@ -31,6 +31,7 @@ class FoodPhotoResult(BaseModel):
 
 
 class CorrectionResult(BaseModel):
+    items: list[FoodItem]
     corrected_description: str
     corrected_calories: int
     corrected_protein: int
