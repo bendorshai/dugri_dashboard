@@ -75,22 +75,22 @@ def make_settings_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def make_food_edit_keyboard(row_number: int) -> InlineKeyboardMarkup:
+def make_food_edit_keyboard(entry_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{row_number}")],
+        [InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{entry_id}")],
         [InlineKeyboardButton("חזור", callback_data=f"{CB_BACK}main")],
     ])
 
 
-def make_food_entry_keyboard(row_number: int) -> InlineKeyboardMarkup:
+def make_food_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
     """Keyboard shown after logging food: edit, delete, and duplicate."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_FOOD_EDIT}{row_number}"),
-            InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{row_number}"),
+            InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_FOOD_EDIT}{entry_id}"),
+            InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_FOOD_DELETE}{entry_id}"),
         ],
         [
-            InlineKeyboardButton("🔁 עוד אחד", callback_data=f"{CB_FOOD_AGAIN}{row_number}"),
+            InlineKeyboardButton("🔁 עוד אחד", callback_data=f"{CB_FOOD_AGAIN}{entry_id}"),
         ],
         [
             InlineKeyboardButton("📋 תפריט", callback_data=f"{CB_BACK}main"),

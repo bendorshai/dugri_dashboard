@@ -59,8 +59,22 @@ class WeeklyFeedbackResult(BaseModel):
     feedback_text: str
 
 
+class MessageClassification(BaseModel):
+    type: Literal[
+        "meal", "correction", "sleep", "workout", "self_care",
+        "help", "answer_question", "feedback_request", "none",
+    ]
+    meal: FoodAnalysisResult | None = None
+    correction: CorrectionResult | None = None
+    sleep_time: str | None = None
+    workout_note: str | None = None
+    self_care_description: str | None = None
+    question_text: str | None = None
+
+
 from prompts import (
     BULK_CORRECTION_SYSTEM_PROMPT,
+    CLASSIFIER_SYSTEM_PROMPT,
     CORRECTION_SYSTEM_PROMPT,
     FOOD_PHOTO_SYSTEM_PROMPT,
     FOOD_TEXT_SYSTEM_PROMPT,
@@ -130,6 +144,40 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT parse_message failed for: %s", text[:80])
             return MessageParseResult(type="unknown")
+
+    def classify_message(
+        self, text: str, today_str: str, last_entry: dict | None = None,
+    ) -> MessageClassification:
+        """Heavy classifier: classify and process a message into one of 9 types."""
+        system = CLASSIFIER_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
+        if last_entry:
+            system += (
+                f"\nהרשומה האחרונה שנרשמה:\n"
+                f"תיאור: {last_entry.get('description', '')}\n"
+                f"קלוריות: {last_entry.get('calories', 0)}\n"
+                f"חלבון: {last_entry.get('protein', 0)}\n"
+            )
+        else:
+            system += "\nאין רשומה קודמת. תיקון → food חדש.\n"
+
+        try:
+            response = self.client.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text},
+                ],
+                response_format=MessageClassification,
+                temperature=0,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                logger.warning("GPT classifier returned None for: %s", text[:80])
+                return MessageClassification(type="none")
+            return result
+        except Exception:
+            logger.exception("GPT classifier failed for: %s", text[:80])
+            return MessageClassification(type="none")
 
     def analyze_correction(
         self,

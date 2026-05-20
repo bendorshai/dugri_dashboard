@@ -1,3 +1,11 @@
+"""
+bot.py — יצירת אפליקציית הטלגרם של דוגרי.
+
+מרכיב את כל ה-handlers, ה-error handler, ומתזמן את ה-jobs.
+
+תלוי ב: handlers, repositories, services, analyzer, scheduler.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -12,9 +20,22 @@ from telegram.ext import (
     filters,
 )
 
-from sheets import SheetsClient
 from analyzer import FoodAnalyzer
-from storage import MongoStorage
+from repositories.user_repository import UserRepository
+from repositories.food_repository import FoodRepository
+from repositories.feedback_repository import WeeklyFeedbackRepository
+from repositories.error_repository import ErrorRepository
+from services.eating_day_service import EatingDayService
+from services.linking_service import LinkingService
+from services.conversation_state_service import ConversationStateService
+from services.onboarding_service import OnboardingService
+from services.habit_service import HabitService
+from services.help_service import HelpService
+from services.qa_service import QaService
+from services.message_router_service import MessageRouterService
+from services.trial_service import TrialService
+from services.feedback_service import FeedbackService
+from handlers.start_handler import StartHandler
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
@@ -26,18 +47,18 @@ from scheduler import schedule_eating_window_jobs
 logger = logging.getLogger(__name__)
 
 
-def _make_error_handler(mongo_storage: MongoStorage):
+def _make_error_handler(error_repo: ErrorRepository):
     async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Unhandled exception while processing update:", exc_info=context.error)
 
-        chat_id = None
+        telegram_user_id = None
         message_text = ""
         update_id = None
         handler_name = ""
         if isinstance(update, Update):
             update_id = update.update_id
-            if update.effective_chat:
-                chat_id = update.effective_chat.id
+            if update.effective_user:
+                telegram_user_id = update.effective_user.id
             if update.effective_message and update.effective_message.text:
                 message_text = update.effective_message.text
             if update.callback_query and update.callback_query.data:
@@ -46,10 +67,10 @@ def _make_error_handler(mongo_storage: MongoStorage):
                 handler_name = "message"
 
         try:
-            mongo_storage.log_error(
+            error_repo.log(
                 error=context.error,
                 handler=handler_name,
-                chat_id=chat_id,
+                telegram_user_id=telegram_user_id,
                 message_text=message_text,
                 update_id=update_id,
             )
@@ -67,22 +88,58 @@ def _make_error_handler(mongo_storage: MongoStorage):
 
 def create_bot(
     token: str,
-    chat_id: int,
-    sheets_client: SheetsClient,
     analyzer: FoodAnalyzer,
-    mongo_storage: MongoStorage,
+    user_repo: UserRepository,
+    food_repo: FoodRepository,
+    feedback_repo: WeeklyFeedbackRepository,
+    error_repo: ErrorRepository,
+    eating_day_service: EatingDayService,
+    dashboard_users_collection=None,
+    sleep_repo=None,
+    workout_repo=None,
+    self_care_repo=None,
 ) -> Application:
     app = Application.builder().token(token).build()
 
-    h = HealthHandlers(
-        chat_id=chat_id,
-        sheets_client=sheets_client,
-        analyzer=analyzer,
-        mongo_storage=mongo_storage,
+    # Services
+    state_service = ConversationStateService(user_repo)
+    onboarding_service = OnboardingService(user_repo, state_service)
+
+    # Message router (if habit repos are provided)
+    message_router = None
+    if sleep_repo and workout_repo and self_care_repo:
+        habit_service = HabitService(sleep_repo, workout_repo, self_care_repo)
+        qa_service = QaService(analyzer, food_repo)
+        help_service = HelpService(analyzer)
+        message_router = MessageRouterService(habit_service, qa_service, help_service)
+
+    trial_service = TrialService(user_repo)
+    feedback_service = FeedbackService(
+        analyzer, food_repo, user_repo, feedback_repo, state_service,
     )
 
+    h = HealthHandlers(
+        analyzer=analyzer,
+        user_repo=user_repo,
+        food_repo=food_repo,
+        feedback_repo=feedback_repo,
+        eating_day_service=eating_day_service,
+        state_service=state_service,
+        onboarding_service=onboarding_service,
+        message_router=message_router,
+        trial_service=trial_service,
+        feedback_service=feedback_service,
+    )
+
+    # Start handler with linking
+    if dashboard_users_collection is not None:
+        linking_service = LinkingService(user_repo, dashboard_users_collection)
+        start_handler = StartHandler(linking_service, onboarding_service)
+        app.add_handler(CommandHandler("start", start_handler.handle_start))
+    else:
+        app.add_handler(CommandHandler("start", h.handle_start_command))
+
     # Command handlers
-    app.add_handler(CommandHandler("start", h.handle_start_command))
     app.add_handler(CommandHandler("menu", h.handle_menu_command))
 
     # Message handlers
@@ -105,14 +162,15 @@ def create_bot(
     app.add_handler(CallbackQueryHandler(h.handle_back_callback, pattern=f"^{CB_BACK}"))
 
     # Error handler
-    app.add_error_handler(_make_error_handler(mongo_storage))
+    app.add_error_handler(_make_error_handler(error_repo))
 
-    # Schedule eating window jobs
-    profile = mongo_storage.get_user_profile(chat_id)
-    if profile:
+    # Schedule eating window jobs for all existing users with eating windows
+    profiles = user_repo.find({"eating_window": {"$ne": None}})
+    for profile in profiles:
         schedule_eating_window_jobs(
-            app.job_queue, chat_id, profile,
-            mongo_storage, analyzer, sheets_client,
+            app.job_queue, profile.telegram_user_id, profile,
+            user_repo, food_repo, feedback_repo,
+            analyzer, eating_day_service,
         )
 
     return app

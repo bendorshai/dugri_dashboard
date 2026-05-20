@@ -1,3 +1,12 @@
+"""
+scheduler.py — תזמון jobs של חלון אכילה.
+
+מתזמן התרעת 30 דקות לפני סגירת חלון וסיכום בסגירת חלון.
+
+תלוי ב: repositories, services, analyzer, parsing.
+נצרך על ידי: bot.py, handlers/base.py.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -5,22 +14,32 @@ from datetime import datetime, time, timedelta
 
 import pytz
 
+from models.profile import UserProfile
 from parsing import parse_time_window
 
 logger = logging.getLogger(__name__)
 
 
-def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, analyzer, sheets):
+def schedule_eating_window_jobs(
+    job_queue,
+    telegram_user_id: int,
+    profile: UserProfile,
+    user_repo,
+    food_repo,
+    feedback_repo,
+    analyzer,
+    eating_day_service,
+):
     """Schedule eating window warning and close jobs."""
-    # Cancel existing jobs for this chat
-    for job in job_queue.get_jobs_by_name(f"window_{chat_id}_warning"):
+    for job in job_queue.get_jobs_by_name(f"window_{telegram_user_id}_warning"):
         job.schedule_removal()
-    for job in job_queue.get_jobs_by_name(f"window_{chat_id}_close"):
+    for job in job_queue.get_jobs_by_name(f"window_{telegram_user_id}_close"):
         job.schedule_removal()
 
-    tz_str = profile.get("timezone", "Asia/Jerusalem")
+    tz_str = profile.timezone
     tz = pytz.timezone(tz_str)
-    end_h, end_m = parse_time_window(profile.get("eating_window_end", "20:00"))
+    window_end = profile.eating_window.end if profile.eating_window else "20:00"
+    end_h, end_m = parse_time_window(window_end)
 
     # 30-min warning
     warning_dt = datetime(2000, 1, 1, end_h, end_m) - timedelta(minutes=30)
@@ -29,12 +48,12 @@ def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, a
     job_queue.run_daily(
         _window_warning_callback,
         time=warning_time,
-        chat_id=chat_id,
-        name=f"window_{chat_id}_warning",
+        chat_id=telegram_user_id,
+        name=f"window_{telegram_user_id}_warning",
         data={
-            "chat_id": chat_id,
-            "mongo": mongo,
-            "sheets": sheets,
+            "telegram_user_id": telegram_user_id,
+            "user_repo": user_repo,
+            "eating_day_service": eating_day_service,
         },
     )
 
@@ -43,45 +62,38 @@ def schedule_eating_window_jobs(job_queue, chat_id: int, profile: dict, mongo, a
     job_queue.run_daily(
         _window_close_callback,
         time=close_time,
-        chat_id=chat_id,
-        name=f"window_{chat_id}_close",
+        chat_id=telegram_user_id,
+        name=f"window_{telegram_user_id}_close",
         data={
-            "chat_id": chat_id,
-            "mongo": mongo,
+            "telegram_user_id": telegram_user_id,
+            "user_repo": user_repo,
+            "food_repo": food_repo,
+            "feedback_repo": feedback_repo,
             "analyzer": analyzer,
-            "sheets": sheets,
+            "eating_day_service": eating_day_service,
         },
     )
 
-    logger.info("Scheduled eating window jobs for chat %d: warning at %s, close at %s",
-                chat_id, warning_time, close_time)
-
-
-def _get_eating_day_totals(sheets, today_str, profile):
-    """Read totals for a logical eating day from Google Sheets."""
-    day = datetime.strptime(today_str, "%d/%m/%Y").date()
-    next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
-    window_start = profile.get("eating_window_start", "08:00")
-
-    entries = sheets.get_entries_for_eating_day(today_str, next_day, window_start)
-    total_cal = sum(int(e.get("קלוריות", 0) or 0) for e in entries)
-    total_prot = sum(int(e.get("חלבון", 0) or 0) for e in entries)
-    return total_cal, total_prot
+    logger.info("Scheduled eating window jobs for user %d: warning at %s, close at %s",
+                telegram_user_id, warning_time, close_time)
 
 
 async def _window_warning_callback(context):
     data = context.job.data
-    chat_id = data["chat_id"]
-    mongo = data["mongo"]
-    sheets = data["sheets"]
+    tid = data["telegram_user_id"]
+    user_repo = data["user_repo"]
+    eating_day_svc = data["eating_day_service"]
 
-    profile = mongo.get_user_profile(chat_id) or {}
-    tz_str = profile.get("timezone", "Asia/Jerusalem")
-    today_str = datetime.now(pytz.timezone(tz_str)).strftime("%d/%m/%Y")
-    total_cal, total_prot = _get_eating_day_totals(sheets, today_str, profile)
+    profile = user_repo.get(tid)
+    if profile is None:
+        return
 
-    target_cal = profile.get("target_calories", 2000)
-    target_prot = profile.get("target_protein", 150)
+    from parsing import get_user_now
+    today_str = get_user_now(profile.timezone).strftime("%d/%m/%Y")
+    total_cal, total_prot = eating_day_svc.get_eating_day_totals(profile, today_str)
+
+    target_cal = profile.targets.calories or 2000
+    target_prot = profile.targets.protein or 150
     remaining_cal = target_cal - total_cal
     remaining_prot = target_prot - total_prot
 
@@ -96,25 +108,30 @@ async def _window_warning_callback(context):
     )
 
     try:
-        await context.bot.send_message(chat_id=chat_id, text=text)
+        await context.bot.send_message(chat_id=tid, text=text)
     except Exception:
         logger.exception("Failed to send window warning")
 
 
 async def _window_close_callback(context):
     data = context.job.data
-    chat_id = data["chat_id"]
-    mongo = data["mongo"]
+    tid = data["telegram_user_id"]
+    user_repo = data["user_repo"]
+    food_repo = data["food_repo"]
+    feedback_repo = data["feedback_repo"]
     analyzer = data["analyzer"]
-    sheets = data["sheets"]
+    eating_day_svc = data["eating_day_service"]
 
-    profile = mongo.get_user_profile(chat_id) or {}
-    tz_str = profile.get("timezone", "Asia/Jerusalem")
-    today_str = datetime.now(pytz.timezone(tz_str)).strftime("%d/%m/%Y")
-    total_cal, total_prot = _get_eating_day_totals(sheets, today_str, profile)
+    profile = user_repo.get(tid)
+    if profile is None:
+        return
 
-    target_cal = profile.get("target_calories", 2000)
-    target_prot = profile.get("target_protein", 150)
+    from parsing import get_user_now
+    today_str = get_user_now(profile.timezone).strftime("%d/%m/%Y")
+    total_cal, total_prot = eating_day_svc.get_eating_day_totals(profile, today_str)
+
+    target_cal = profile.targets.calories or 2000
+    target_prot = profile.targets.protein or 150
 
     cal_delta = total_cal - target_cal
     prot_delta = total_prot - target_prot
@@ -133,43 +150,10 @@ async def _window_close_callback(context):
         f"{prot_icon} גרם חלבון: {total_prot}/{target_prot} ({prot_pct}%, {prot_text})"
     )
 
-    # Daily GPT coaching feedback (GPT analyzes the full week for context)
-    feedback_text = ""
-    day = datetime.strptime(today_str, "%d/%m/%Y").date()
-    next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
-    window_start = profile.get("eating_window_start", "08:00")
-    today_entries = sheets.get_entries_for_eating_day(today_str, next_day, window_start)
-
-    if today_entries:
-        # Build week's data
-        dates = [(day - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
-        week_entries = sheets.get_entries_by_dates(dates)
-
-        csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
-        for e in week_entries:
-            csv_lines.append(
-                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
-            )
-        week_csv = "\n".join(csv_lines)
-
-        past_fb = [f.get("feedback_text", "") for f in mongo.get_recent_feedbacks(chat_id, limit=7)]
-
-        targets = {"calories": target_cal, "protein": target_prot}
-        feedback_result = analyzer.generate_weekly_feedback(week_csv, targets, past_fb)
-
-        if feedback_result:
-            feedback_text = feedback_result.get("feedback_text", "")
-
-            if feedback_text:
-                feedback_text = f"\n\n💬 משוב יומי:\n{feedback_text}"
-                mongo.save_weekly_feedback(
-                    chat_id=chat_id,
-                    date_str=today_str,
-                    feedback_text=feedback_text,
-                    week_summary={"total_cal": total_cal, "total_prot": total_prot},
-                )
+    # No automatic GPT coaching — just the dry numeric summary.
+    # Feedback is opt-in only (via /menu button or classifier).
 
     try:
-        await context.bot.send_message(chat_id=chat_id, text=summary + feedback_text)
+        await context.bot.send_message(chat_id=tid, text=summary)
     except Exception:
         logger.exception("Failed to send window close summary")

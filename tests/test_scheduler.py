@@ -8,12 +8,23 @@ import pytest
 # Stub heavy imports
 for mod in [
     "telegram", "telegram.ext",
-    "pymongo", "openai", "gspread",
-    "google", "google.oauth2", "google.oauth2.service_account",
+    "pymongo", "openai",
 ]:
     sys.modules.setdefault(mod, MagicMock())
 
+from models.profile import UserProfile, EatingWindow, Targets
 from scheduler import schedule_eating_window_jobs
+
+
+def _make_profile(**kwargs):
+    defaults = {
+        "telegram_user_id": 123,
+        "eating_window": EatingWindow(start="08:00", end="20:00"),
+        "targets": Targets(calories=2000, protein=150),
+        "timezone": "Asia/Jerusalem",
+    }
+    defaults.update(kwargs)
+    return UserProfile(**defaults)
 
 
 class TestScheduleEatingWindowJobs:
@@ -22,15 +33,11 @@ class TestScheduleEatingWindowJobs:
         existing_job = MagicMock()
         job_queue.get_jobs_by_name.return_value = [existing_job]
 
-        profile = {
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-
+        profile = _make_profile()
         schedule_eating_window_jobs(
             job_queue, 123, profile,
             MagicMock(), MagicMock(), MagicMock(),
+            MagicMock(), MagicMock(),
         )
 
         existing_job.schedule_removal.assert_called()
@@ -39,15 +46,11 @@ class TestScheduleEatingWindowJobs:
         job_queue = MagicMock()
         job_queue.get_jobs_by_name.return_value = []
 
-        profile = {
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-
+        profile = _make_profile()
         schedule_eating_window_jobs(
             job_queue, 123, profile,
             MagicMock(), MagicMock(), MagicMock(),
+            MagicMock(), MagicMock(),
         )
 
         assert job_queue.run_daily.call_count == 2
@@ -57,22 +60,18 @@ class TestScheduleEatingWindowJobs:
         assert "window_123_warning" in names
         assert "window_123_close" in names
 
-    def test_passes_mongo_to_both_jobs(self):
+    def test_passes_user_repo_to_both_jobs(self):
         job_queue = MagicMock()
         job_queue.get_jobs_by_name.return_value = []
-        mock_mongo = MagicMock()
+        mock_user_repo = MagicMock()
 
-        profile = {
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-
+        profile = _make_profile()
         schedule_eating_window_jobs(
             job_queue, 123, profile,
-            mock_mongo, MagicMock(), MagicMock(),
+            mock_user_repo, MagicMock(), MagicMock(),
+            MagicMock(), MagicMock(),
         )
 
         calls = job_queue.run_daily.call_args_list
         for call in calls:
-            assert call[1]["data"]["mongo"] is mock_mongo
+            assert call[1]["data"]["user_repo"] is mock_user_repo

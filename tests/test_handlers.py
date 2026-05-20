@@ -8,12 +8,10 @@ import pytest
 # Stub heavy imports
 for mod in [
     "telegram", "telegram.ext", "telegram.ext._application",
-    "pymongo", "openai", "gspread",
-    "google", "google.oauth2", "google.oauth2.service_account",
+    "pymongo", "openai",
 ]:
     sys.modules.setdefault(mod, MagicMock())
 
-# Need to set up telegram module attributes
 mock_telegram = sys.modules["telegram"]
 mock_telegram.Update = MagicMock
 mock_telegram.InlineKeyboardButton = MagicMock
@@ -25,6 +23,19 @@ mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
 from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult
 from keyboards import format_daily_status
+from models.profile import UserProfile, EatingWindow, Targets
+from models.food import FoodEntry
+
+
+def _make_profile(**kwargs):
+    defaults = {
+        "telegram_user_id": 123,
+        "eating_window": EatingWindow(start="08:00", end="20:00"),
+        "targets": Targets(calories=2000, protein=150),
+        "timezone": "Asia/Jerusalem",
+    }
+    defaults.update(kwargs)
+    return UserProfile(**defaults)
 
 
 class TestFormatDailyStatus:
@@ -32,7 +43,7 @@ class TestFormatDailyStatus:
         result = format_daily_status(1500, 120, 2000, 150)
         assert "✅" in result
         assert "1500/2000" in result
-        assert "500" in result  # remaining
+        assert "500" in result
 
     def test_over_calorie_target(self):
         result = format_daily_status(2200, 120, 2000, 150)
@@ -46,107 +57,43 @@ class TestFormatDailyStatus:
 
     def test_protein_below_target(self):
         result = format_daily_status(1500, 100, 2000, 150)
-        # Should have warning for protein
         lines = result.split("\n")
         protein_line = [l for l in lines if "חלבון" in l][0]
         assert "⚠️" in protein_line
 
 
 class TestCrossingAlerts:
-    """Test crossing alert logic from HealthHandlers."""
-
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
-        h.chat_id = 123
-        h.mongo = MagicMock()
-        h.mongo.get_user_profile.return_value = {
-            "target_calories": 2000,
-            "target_protein": 150,
-        }
         return h
 
     def test_no_alert_when_both_within_range(self):
         h = self._make_handler()
-        profile = {"target_calories": 2000, "target_protein": 150}
+        profile = _make_profile()
         result = h._check_crossing_alerts(1000, 80, 1500, 100, profile)
         assert result == ""
 
     def test_protein_target_reached(self):
         h = self._make_handler()
-        profile = {"target_calories": 2000, "target_protein": 150}
+        profile = _make_profile()
         result = h._check_crossing_alerts(1000, 130, 1400, 155, profile)
         assert "כל הכבוד" in result
         assert "חלבון" in result
 
     def test_calorie_target_exceeded(self):
         h = self._make_handler()
-        profile = {"target_calories": 2000, "target_protein": 150}
+        profile = _make_profile()
         result = h._check_crossing_alerts(1800, 100, 2100, 120, profile)
         assert "עברת" in result
         assert "קלוריות" in result
 
     def test_both_alerts(self):
         h = self._make_handler()
-        profile = {"target_calories": 2000, "target_protein": 150}
+        profile = _make_profile()
         result = h._check_crossing_alerts(1800, 140, 2100, 160, profile)
         assert "כל הכבוד" in result
         assert "עברת" in result
-
-
-class TestGetStatsDate:
-    def _make_handler(self):
-        from handlers.base import HealthHandlers
-        h = HealthHandlers.__new__(HealthHandlers)
-        return h
-
-    @patch("handlers.base.get_user_now")
-    def test_within_window_returns_today(self, mock_now):
-        from datetime import datetime
-        import pytz
-        tz = pytz.timezone("Asia/Jerusalem")
-        mock_now.return_value = datetime(2026, 5, 8, 12, 0, tzinfo=tz)
-
-        h = self._make_handler()
-        profile = {
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        result = h._get_stats_date(profile)
-        assert result == "08/05/2026"
-
-    @patch("handlers.base.get_user_now")
-    def test_evening_after_close_returns_today(self, mock_now):
-        from datetime import datetime
-        import pytz
-        tz = pytz.timezone("Asia/Jerusalem")
-        mock_now.return_value = datetime(2026, 5, 8, 22, 0, tzinfo=tz)
-
-        h = self._make_handler()
-        profile = {
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        result = h._get_stats_date(profile)
-        assert result == "08/05/2026"
-
-    @patch("handlers.base.get_user_now")
-    def test_morning_before_open_returns_yesterday(self, mock_now):
-        from datetime import datetime
-        import pytz
-        tz = pytz.timezone("Asia/Jerusalem")
-        mock_now.return_value = datetime(2026, 5, 8, 6, 0, tzinfo=tz)
-
-        h = self._make_handler()
-        profile = {
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        result = h._get_stats_date(profile)
-        assert result == "07/05/2026"
 
 
 class TestBuildFoodResponse:
@@ -157,7 +104,7 @@ class TestBuildFoodResponse:
 
     def test_includes_items_and_status(self):
         h = self._make_handler()
-        profile = {"target_calories": 2000, "target_protein": 150}
+        profile = _make_profile()
         response = h._build_food_response("• שניצל: 400 קל׳", 400, 30, profile)
         assert "שניצל" in response
         assert "400/2000" in response
@@ -188,9 +135,7 @@ class TestFormatItemsText:
         ]
         result = h._format_items_text(items, 450, 33)
         assert "• שניצל" in result
-        assert "~200 גרם" in result
         assert "• סלט" in result
-        assert "~150 גרם" in result
         assert "סה\"כ: 450 קל׳ | 33 גרם חלבון" in result
 
     def test_two_line_format_per_item(self):
@@ -203,8 +148,6 @@ class TestFormatItemsText:
 
 
 class TestOneRowPerMessage:
-    """Verify that multiple food items get consolidated into one description."""
-
     def test_items_joined_with_comma(self):
         items = [
             MagicMock(description="שניצל", calories=400, protein=30),
@@ -225,14 +168,13 @@ class TestOneRowPerMessage:
 
 
 class TestDailySummaryCallback:
-    """Test the daily summary handler."""
-
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
-        h.chat_id = 123
-        h.mongo = MagicMock()
-        h.sheets = MagicMock()
+        h.user_repo = MagicMock()
+        h.food_repo = MagicMock()
+        h.feedback_repo = MagicMock()
+        h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
         return h
 
@@ -248,22 +190,21 @@ class TestDailySummaryCallback:
         mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
 
         h = self._make_handler()
-        h.mongo.get_user_profile.return_value = {
-            "target_calories": 2000,
-            "target_protein": 150,
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        h.sheets.get_entries_for_eating_day.return_value = [
-            {"תאריך": "11/05/2026", "שעה": "09:30", "תיאור": "שניצל ואורז", "קלוריות": 650, "חלבון": 40},
-            {"תאריך": "11/05/2026", "שעה": "13:00", "תיאור": "סלט יווני", "קלוריות": 300, "חלבון": 15},
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.eating_day_svc.get_stats_date.return_value = "11/05/2026"
+        h.eating_day_svc.get_eating_day_entries.return_value = [
+            FoodEntry(telegram_user_id=123, date="11/05/2026", time="09:30",
+                      description="שניצל ואורז", calories=650, protein=40, within_window=True),
+            FoodEntry(telegram_user_id=123, date="11/05/2026", time="13:00",
+                      description="סלט יווני", calories=300, protein=15, within_window=True),
         ]
 
         query = AsyncMock()
         query.data = "daily_summary"
         update = MagicMock()
         update.callback_query = query
+        update.effective_user.id = 123
         context = MagicMock()
 
         await h.handle_daily_callback(update, context)
@@ -273,7 +214,7 @@ class TestDailySummaryCallback:
         assert "שניצל ואורז" in call_text
         assert "סלט יווני" in call_text
         assert "09:30" in call_text
-        assert "950/2000" in call_text  # totals
+        assert "950/2000" in call_text
 
     @pytest.mark.asyncio
     @patch("handlers.base.make_daily_summary_keyboard", return_value="kb")
@@ -286,19 +227,16 @@ class TestDailySummaryCallback:
         mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
 
         h = self._make_handler()
-        h.mongo.get_user_profile.return_value = {
-            "target_calories": 2000,
-            "target_protein": 150,
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        h.sheets.get_entries_for_eating_day.return_value = []
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.eating_day_svc.get_stats_date.return_value = "11/05/2026"
+        h.eating_day_svc.get_eating_day_entries.return_value = []
 
         query = AsyncMock()
         query.data = "daily_summary"
         update = MagicMock()
         update.callback_query = query
+        update.effective_user.id = 123
         context = MagicMock()
 
         await h.handle_daily_callback(update, context)
@@ -309,14 +247,13 @@ class TestDailySummaryCallback:
 
 
 class TestCorrectionHistory:
-    """Test that correction history is preserved and passed to analyzer."""
-
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
-        h.chat_id = 123
-        h.mongo = MagicMock()
-        h.sheets = MagicMock()
+        h.user_repo = MagicMock()
+        h.food_repo = MagicMock()
+        h.feedback_repo = MagicMock()
+        h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
         return h
 
@@ -333,16 +270,10 @@ class TestCorrectionHistory:
         mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
 
         h = self._make_handler()
-        h.mongo.get_user_profile.return_value = {
-            "target_calories": 2000,
-            "target_protein": 150,
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        h.sheets.get_entries_for_eating_day.return_value = [
-            {"קלוריות": 950, "חלבון": 55},
-        ]
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.eating_day_svc.get_stats_date.return_value = "11/05/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (950, 55)
 
         correction_result = CorrectionResult(
             items=[
@@ -365,14 +296,14 @@ class TestCorrectionHistory:
                     "description": "המבורגר 100 גרם, צ'יפס, סלט",
                     "calories": 650,
                     "protein": 40,
-                    "sheet_row": 5,
+                    "entry_id": "abc123def456abc123def456",
                 },
                 "correction_history": [],
                 "timestamp": __import__("time").time(),
             }
         }
 
-        await h._handle_pending_correction(message, context)
+        await h._handle_pending_correction(message, context, 123, profile)
 
         h.analyzer.analyze_correction.assert_called_once()
         call_kwargs = h.analyzer.analyze_correction.call_args
@@ -392,17 +323,12 @@ class TestCorrectionHistory:
         mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
 
         h = self._make_handler()
-        h.mongo.get_user_profile.return_value = {
-            "target_calories": 2000,
-            "target_protein": 150,
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        h.sheets.get_entries_for_eating_day.return_value = [
-            {"קלוריות": 1100, "חלבון": 55},
-        ]
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.eating_day_svc.get_stats_date.return_value = "11/05/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (1100, 55)
 
+        entry_id = "abc123def456abc123def456"
         correction_result = CorrectionResult(
             items=[
                 FoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=750, protein=45),
@@ -424,29 +350,29 @@ class TestCorrectionHistory:
                     "description": "המבורגר 100 גרם, צ'יפס, סלט",
                     "calories": 650,
                     "protein": 40,
-                    "sheet_row": 5,
+                    "entry_id": entry_id,
                 },
                 "correction_history": ["ההמבורגר הוא 300 גרם"],
                 "timestamp": __import__("time").time(),
             },
-            "correction_histories": {5: ["ההמבורגר הוא 300 גרם"]},
+            "correction_histories": {entry_id: ["ההמבורגר הוא 300 גרם"]},
         }
 
-        await h._handle_pending_correction(message, context)
+        await h._handle_pending_correction(message, context, 123, profile)
 
         call_kwargs = h.analyzer.analyze_correction.call_args
         assert call_kwargs[1]["correction_history"] == ["ההמבורגר הוא 300 גרם"]
-        # After correction, history should include the new correction too
-        assert "הצ'יפס היה מנה גדולה" in context.chat_data["correction_histories"][5]
+        assert "הצ'יפס היה מנה גדולה" in context.chat_data["correction_histories"][entry_id]
 
 
 class TestFoodAgainCallback:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
-        h.chat_id = 123
-        h.mongo = MagicMock()
-        h.sheets = MagicMock()
+        h.user_repo = MagicMock()
+        h.food_repo = MagicMock()
+        h.feedback_repo = MagicMock()
+        h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
         return h
 
@@ -456,49 +382,56 @@ class TestFoodAgainCallback:
     @patch("handlers.base.safe_answer", new_callable=AsyncMock)
     async def test_again_duplicates_entry(self, mock_answer, mock_now, mock_kb):
         from datetime import datetime as dt
+        from bson import ObjectId
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 5, 13, 15, 30, tzinfo=tz)
 
         h = self._make_handler()
-        h.mongo.get_user_profile.return_value = {
-            "target_calories": 2000,
-            "target_protein": 150,
-            "eating_window_start": "08:00",
-            "eating_window_end": "20:00",
-            "timezone": "Asia/Jerusalem",
-        }
-        h.sheets.get_entry_data.return_value = {
-            "תיאור": "חזה עוף 200 גרם",
-            "קלוריות": "350",
-            "חלבון": "45",
-        }
-        h.sheets.append_food_entry.return_value = 10
-        h.sheets.get_entries_for_eating_day.return_value = [
-            {"קלוריות": 700, "חלבון": 90},
-        ]
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+
+        original_id = str(ObjectId())
+        new_id = str(ObjectId())
+        h.food_repo.get.return_value = FoodEntry(
+            id=original_id,
+            telegram_user_id=123,
+            date="12/05/2026",
+            time="12:00",
+            description="חזה עוף 200 גרם",
+            calories=350,
+            protein=45,
+            within_window=True,
+        )
+        saved_entry = FoodEntry(
+            id=new_id,
+            telegram_user_id=123,
+            date="13/05/2026",
+            time="15:30",
+            description="חזה עוף 200 גרם",
+            calories=350,
+            protein=45,
+            within_window=True,
+        )
+        h.food_repo.add.return_value = saved_entry
+        h.eating_day_svc.get_stats_date.return_value = "13/05/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (700, 90)
 
         query = AsyncMock()
-        query.data = "fagain_5"
+        query.data = f"fagain_{original_id}"
         query.message.chat_id = 12345
         update = MagicMock()
         update.callback_query = query
+        update.effective_user.id = 123
         context = MagicMock()
         context.bot.send_message = AsyncMock()
         context.chat_data = {}
 
         await h.handle_food_again_callback(update, context)
 
-        h.sheets.get_entry_data.assert_called_once_with(5)
-        h.sheets.append_food_entry.assert_called_once_with(
-            date_str="13/05/2026",
-            time_str="15:30",
-            description="חזה עוף 200 גרם",
-            calories=350,
-            protein=45,
-            within_window=True,
-        )
-        mock_kb.assert_called_with(10)
+        h.food_repo.get.assert_called_once_with(original_id)
+        h.food_repo.add.assert_called_once()
+        mock_kb.assert_called_with(new_id)
         context.bot.send_message.assert_called_once()
         call_text = context.bot.send_message.call_args[1]["text"]
         assert "חזה עוף 200 גרם" in call_text

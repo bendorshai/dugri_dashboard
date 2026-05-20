@@ -236,6 +236,113 @@ docs/decisions/YYYY-MM-DD-short-topic.md
 
 ---
 
+---
+
+## Technical orientation
+
+### Tech stack
+
+- **Bot framework:** python-telegram-bot 21.6 (async, webhook on Railway / polling locally)
+- **AI:** OpenAI GPT-4o (photos), GPT-4o-mini (text analysis, coaching)
+- **Data log:** Google Sheets (gspread) — one row per food entry
+- **Database:** MongoDB (pymongo) — `user_profiles`, `weekly_feedback`, `error_logs`
+- **Validation:** Pydantic v2 for structured GPT response parsing
+- **Scheduling:** Built-in job queue for eating window alerts
+- **Deployment:** Docker + Railway (webhook mode via `RAILWAY_PUBLIC_DOMAIN`)
+
+### Project structure
+
+```
+health_tracker/
+├── main.py                 # Entry point: loads config, inits services, runs bot
+├── bot.py                  # Creates Application with all handlers
+├── handlers/
+│   ├── base.py             # HealthHandlers — all command/message/callback handlers (~1000 lines)
+│   └── utils.py            # Helpers: send_long_text, safe_react, safe_answer
+├── analyzer.py             # FoodAnalyzer — OpenAI wrapper for food analysis, corrections, feedback
+├── storage.py              # MongoStorage — MongoDB for profiles, feedback, errors
+├── sheets.py               # SheetsClient — Google Sheets read/write (source of truth for food log)
+├── scheduler.py            # Eating window scheduled jobs (30-min warning, window close summary)
+├── keyboards.py            # Inline keyboard definitions + formatting helpers
+├── prompts.py              # GPT system prompts (reusable building blocks)
+├── parsing.py              # Timezone, eating window logic utilities
+├── config/
+│   ├── config.json         # Runtime config (tokens, API keys, sheet ID)
+│   ├── config.example.json
+│   └── google_credentials.json
+├── start.sh                # Startup script (extracts env vars to config files)
+├── Dockerfile
+├── requirements.txt
+└── tests/
+```
+
+### Current state: single-user
+
+The bot currently has a **hardcoded `chat_id`** in config. All messages from other users are silently ignored. The grand refactor plan (see `../plans/`) will make it multi-user.
+
+### Core food logging flow
+
+1. User sends text ("שווארמה בלאפה") or photo of food
+2. `FoodAnalyzer` calls GPT → returns structured items (calories, protein per item)
+3. Bot appends row to Google Sheets (columns: date, time, description, calories, protein, in-window)
+4. Bot reads back daily totals from sheet and displays progress vs targets
+5. User can edit, delete, duplicate entries via inline buttons
+
+### Critical concept: eating day
+
+An "eating day" is **not** a calendar day — it's defined by the eating window (e.g., 08:00-20:00). A meal at 22:00 still belongs to "today's" eating day. The method `get_entries_for_eating_day()` in `sheets.py` is the source of truth for this logic.
+
+### Message handling & state
+
+`context.chat_data` stores pending states with 5-minute TTL:
+- `pending_edit` — awaiting profile field input
+- `pending_question` — awaiting Q&A
+- `pending_correction` — awaiting food edit text
+- `pending_bulk_fix` — awaiting bulk correction description
+- `correction_histories[row]` — tracks chained corrections per sheet row
+
+### Scheduled jobs
+
+- **30 min before eating window close:** Shows current daily totals vs targets
+- **At window close:** Final summary + AI coaching feedback from the full week's data
+
+### GPT integration patterns
+
+- All calls use `beta.chat.completions.parse()` with Pydantic response models
+- Temperature 0 for analysis/corrections (deterministic), 0.7 for feedback/suggestions (creative)
+- System prompts built from composable blocks in `prompts.py`
+- Photo analysis uses GPT-4o; text analysis uses GPT-4o-mini
+
+### Google Sheets schema (columns A-F)
+
+| Column | Header | Content |
+|--------|--------|---------|
+| A | תאריך | DD/MM/YYYY |
+| B | שעה | HH:MM |
+| C | תיאור | Food description in Hebrew |
+| D | קלוריות | Calories (integer) |
+| E | חלבון | Protein in grams (integer) |
+| F | בחלון אכילה | "כן" or "לא" |
+
+### Config format (`config/config.json`)
+
+```json
+{
+  "telegram": { "bot_token": "...", "chat_id": 2145100468 },
+  "openai": { "api_key": "..." },
+  "google_sheets": { "credentials_file": "config/google_credentials.json", "sheet_id": "...", "tab_name": "Sheet1" },
+  "mongodb": { "uri": "mongodb://...", "db_name": "health_tracker" }
+}
+```
+
+On Railway: injected via `CONFIG2_JSON` and `GOOGLE_CREDENTIALS_JSON` env vars, extracted by `start.sh`.
+
+### Interaction with dashboard
+
+Bot reads `dashboard_users` collection to link Telegram users via `signup_session_token`. When a user sends `/start {token}`, the bot looks up the token, retrieves the email, and stores `telegram_user_id` on the dashboard user record.
+
+---
+
 ## עדכון אחרון
 
-20.05.2026
+21.05.2026

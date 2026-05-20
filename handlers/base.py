@@ -1,3 +1,12 @@
+"""
+base.py — handlers ראשיים של דוגרי.
+
+שכבה דקה שמתרגמת בין Update של טלגרם לבין קריאות ל-services ו-repositories.
+אין כאן לוגיקה עסקית — היא ב-services.
+
+תלוי ב: repositories, services, analyzer, keyboards.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -8,10 +17,19 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from sheets import SheetsClient
 from analyzer import FoodAnalyzer
-from storage import MongoStorage
-from parsing import get_user_now, israel_today, is_within_eating_window
+from models.food import FoodEntry
+from models.profile import UserProfile
+from parsing import get_user_now, is_within_eating_window
+from repositories.food_repository import FoodRepository
+from repositories.user_repository import UserRepository
+from repositories.feedback_repository import WeeklyFeedbackRepository
+from services.eating_day_service import EatingDayService
+from services.conversation_state_service import ConversationStateService
+from services.onboarding_service import OnboardingService
+from services.message_router_service import MessageRouterService
+from services.trial_service import TrialService
+from services.feedback_service import FeedbackService
 from keyboards import (
     THUMBS_UP, OK_HAND,
     make_daily_summary_keyboard, make_main_menu_keyboard,
@@ -25,17 +43,6 @@ from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, safe_a
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PROFILE = {
-    "age": 30,
-    "height_cm": 175,
-    "weight_kg": 80,
-    "target_calories": 2000,
-    "target_protein": 150,
-    "eating_window_start": "08:00",
-    "eating_window_end": "20:00",
-    "timezone": "Asia/Jerusalem",
-}
-
 FIELD_LABELS = {
     "age": "גיל",
     "height_cm": "גובה (ס\"מ)",
@@ -46,111 +53,66 @@ FIELD_LABELS = {
     "timezone": "אזור זמן",
 }
 
+SIGNUP_URL = "https://dugri.co.il"
+
 
 class HealthHandlers:
     def __init__(
         self,
-        chat_id: int,
-        sheets_client: SheetsClient,
         analyzer: FoodAnalyzer,
-        mongo_storage: MongoStorage,
+        user_repo: UserRepository,
+        food_repo: FoodRepository,
+        feedback_repo: WeeklyFeedbackRepository,
+        eating_day_service: EatingDayService,
+        state_service: ConversationStateService | None = None,
+        onboarding_service: OnboardingService | None = None,
+        message_router: MessageRouterService | None = None,
+        trial_service: TrialService | None = None,
+        feedback_service: FeedbackService | None = None,
     ):
-        self.chat_id = chat_id
-        self.sheets = sheets_client
         self.analyzer = analyzer
-        self.mongo = mongo_storage
+        self.user_repo = user_repo
+        self.food_repo = food_repo
+        self.feedback_repo = feedback_repo
+        self.eating_day_svc = eating_day_service
+        self.state_service = state_service
+        self.onboarding_service = onboarding_service
+        self.message_router = message_router
+        self.trial_service = trial_service
+        self.feedback_service = feedback_service
 
-    def _get_profile(self) -> dict:
-        profile = self.mongo.get_user_profile(self.chat_id)
-        if profile is None:
-            self.mongo.save_user_profile(self.chat_id, DEFAULT_PROFILE.copy())
-            return DEFAULT_PROFILE.copy()
-        return profile
+    # ------------------------------------------------------------------
+    # Profile helpers
+    # ------------------------------------------------------------------
 
-    def _get_today_str(self, profile: dict) -> str:
-        tz = profile.get("timezone", "Asia/Jerusalem")
-        now = get_user_now(tz)
+    def _get_profile(self, telegram_user_id: int) -> UserProfile | None:
+        return self.user_repo.get(telegram_user_id)
+
+    def _get_today_str(self, profile: UserProfile) -> str:
+        now = get_user_now(profile.timezone)
         return now.strftime("%d/%m/%Y")
 
-    def _get_time_str(self, profile: dict) -> str:
-        tz = profile.get("timezone", "Asia/Jerusalem")
-        now = get_user_now(tz)
+    def _get_time_str(self, profile: UserProfile) -> str:
+        now = get_user_now(profile.timezone)
         return now.strftime("%H:%M")
 
-    def _is_within_window(self, profile: dict) -> bool:
-        tz = profile.get("timezone", "Asia/Jerusalem")
-        now = get_user_now(tz)
-        return is_within_eating_window(
-            now,
-            profile.get("eating_window_start", "08:00"),
-            profile.get("eating_window_end", "20:00"),
-        )
+    def _is_within_window(self, profile: UserProfile) -> bool:
+        now = get_user_now(profile.timezone)
+        ws = profile.eating_window.start if profile.eating_window else "08:00"
+        we = profile.eating_window.end if profile.eating_window else "20:00"
+        return is_within_eating_window(now, ws, we)
 
-    def _get_stats_date(self, profile: dict) -> str:
-        """Return the date string whose stats should be displayed.
+    def _target_cal(self, profile: UserProfile) -> int:
+        return profile.targets.calories or 2000
 
-        Inside the eating window → today.
-        Outside the window (evening, after close) → today (completed day).
-        Outside the window (morning, before open) → yesterday.
-        """
-        tz = profile.get("timezone", "Asia/Jerusalem")
-        now = get_user_now(tz)
-        window_start = profile.get("eating_window_start", "08:00")
-        window_end = profile.get("eating_window_end", "20:00")
-
-        if is_within_eating_window(now, window_start, window_end):
-            return now.strftime("%d/%m/%Y")
-
-        current_minutes = now.hour * 60 + now.minute
-        start_h, start_m = int(window_start.split(":")[0]), int(window_start.split(":")[1])
-        start_minutes = start_h * 60 + start_m
-
-        if current_minutes < start_minutes:
-            yesterday = now - timedelta(days=1)
-            return yesterday.strftime("%d/%m/%Y")
-        return now.strftime("%d/%m/%Y")
-
-    def _get_eating_day_entries(self, date_str: str, profile: dict) -> list[dict[str, str]]:
-        """Return entries for a logical eating day. Single source of truth for daily views."""
-        day = datetime.strptime(date_str, "%d/%m/%Y").date()
-        next_day = (day + timedelta(days=1)).strftime("%d/%m/%Y")
-        window_start = profile.get("eating_window_start", "08:00")
-        return self.sheets.get_entries_for_eating_day(date_str, next_day, window_start)
-
-    def _get_eating_day_totals(self, date_str: str, profile: dict) -> tuple[int, int]:
-        """Read totals for a logical eating day from Google Sheets.
-
-        Uses eating-day-aware filtering — the single source of truth for daily totals.
-        """
-        try:
-            entries = self._get_eating_day_entries(date_str, profile)
-            total_cal = 0
-            total_prot = 0
-            for entry in entries:
-                try:
-                    total_cal += int(entry.get("קלוריות", 0) or 0)
-                except (ValueError, TypeError):
-                    pass
-                try:
-                    total_prot += int(entry.get("חלבון", 0) or 0)
-                except (ValueError, TypeError):
-                    pass
-            return total_cal, total_prot
-        except Exception:
-            logger.exception("Failed to read eating day totals from sheet")
-            return 0, 0
+    def _target_prot(self, profile: UserProfile) -> int:
+        return profile.targets.protein or 150
 
     def _build_food_response(
-        self,
-        items_text: str,
-        total_cal: int,
-        total_protein: int,
-        profile: dict,
+        self, items_text: str, total_cal: int, total_protein: int, profile: UserProfile,
     ) -> str:
         status = format_daily_status(
-            total_cal, total_protein,
-            profile.get("target_calories", 2000),
-            profile.get("target_protein", 150),
+            total_cal, total_protein, self._target_cal(profile), self._target_prot(profile),
         )
         return f"{items_text}{status}"
 
@@ -166,16 +128,11 @@ class HealthHandlers:
         return text
 
     def _check_crossing_alerts(
-        self,
-        prev_cal: int,
-        prev_protein: int,
-        new_cal: int,
-        new_protein: int,
-        profile: dict,
+        self, prev_cal: int, prev_protein: int, new_cal: int, new_protein: int, profile: UserProfile,
     ) -> str:
         alerts = []
-        target_cal = profile.get("target_calories", 2000)
-        target_prot = profile.get("target_protein", 150)
+        target_cal = self._target_cal(profile)
+        target_prot = self._target_prot(profile)
 
         if prev_protein < target_prot <= new_protein:
             alerts.append("🎉 כל הכבוד! הגעת ליעד גרם החלבון היומי!")
@@ -183,6 +140,97 @@ class HealthHandlers:
             alerts.append("⚠️ שים לב — עברת את יעד הקלוריות היומי.")
 
         return "\n".join(alerts)
+
+    # ------------------------------------------------------------------
+    # Dispatched state handler (profile-based pending states)
+    # ------------------------------------------------------------------
+
+    async def _handle_dispatched_state(
+        self, message, context, tid: int, profile: UserProfile,
+    ) -> bool:
+        if self.state_service is None:
+            return False
+        dispatch = self.state_service.dispatch(profile, message.text)
+        if dispatch is None:
+            return False
+
+        kind = dispatch.kind
+
+        if kind == "awaiting_name" and self.onboarding_service:
+            response = self.onboarding_service.handle_name_response(tid, message.text.strip())
+            await message.reply_text(response)
+            return True
+
+        consent_kinds = {
+            "awaiting_calorie_target_consent",
+            "awaiting_eating_window_consent",
+            "awaiting_sleep_consent",
+            "awaiting_workouts_consent",
+            "awaiting_self_care_consent",
+        }
+        if kind in consent_kinds and self.onboarding_service:
+            text = message.text.strip().lower()
+            accepted = text in ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
+            response = self.onboarding_service.handle_consent_response(tid, kind, accepted)
+            if response:
+                await message.reply_text(response)
+            return True
+
+        if kind == "awaiting_body_stats" and self.onboarding_service:
+            parts = [p.strip() for p in message.text.split(",")]
+            if len(parts) == 3:
+                try:
+                    height, weight, age = int(parts[0]), int(parts[1]), int(parts[2])
+                    self.user_repo.update_fields(tid, {
+                        "height_cm": height,
+                        "weight_kg": weight,
+                        "age": age,
+                    })
+                    suggestion = self.analyzer.suggest_targets(height, weight, age)
+                    if suggestion:
+                        cal = suggestion.get("target_calories", 2000)
+                        prot = suggestion.get("target_protein", 150)
+                        self.user_repo.update_fields(tid, {
+                            "targets.calories": cal,
+                            "targets.protein": prot,
+                        })
+                        self.state_service.clear_pending(tid)
+                        await message.reply_text(
+                            f"יעדים מומלצים:\nקלוריות: {cal}\nחלבון: {prot} גרם\n\n"
+                            "עודכן. בוא נמשיך — מה אכלת?"
+                        )
+                    else:
+                        self.state_service.clear_pending(tid)
+                        await message.reply_text("לא הצלחתי לחשב יעדים. שלח ארוחה ונמשיך.")
+                except ValueError:
+                    await message.reply_text("פורמט לא תקין. שלח: גובה, משקל, גיל (מספרים מופרדים בפסיקים)")
+            else:
+                await message.reply_text("שלח: גובה, משקל, גיל (מופרדים בפסיקים, למשל: 175, 80, 30)")
+            return True
+
+        if kind == "awaiting_feedback_reaction" and self.feedback_service:
+            profile_fresh = self._get_profile(tid)
+            steering = profile_fresh.feedback_steering_prompt if profile_fresh else None
+            response = self.feedback_service.process_reaction(tid, message.text.strip(), steering)
+            await message.reply_text(response)
+            return True
+
+        if kind == "awaiting_eating_window":
+            parts = message.text.strip().split("-")
+            if len(parts) == 2:
+                self.user_repo.update_fields(tid, {
+                    "eating_window.start": parts[0].strip(),
+                    "eating_window.end": parts[1].strip(),
+                })
+                self.state_service.clear_pending(tid)
+                await message.reply_text("חלון אכילה עודכן.")
+            else:
+                await message.reply_text("פורמט: HH:MM-HH:MM (למשל: 08:00-20:00)")
+            return True
+
+        # Unknown dispatched state — clear and fall through
+        self.state_service.clear_pending(tid)
+        return False
 
     # ------------------------------------------------------------------
     # Command handlers
@@ -193,15 +241,22 @@ class HealthHandlers:
         if not message:
             return
 
-        profile = self._get_profile()
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            await message.reply_text(
+                f"כדי להתחיל, הירשם כאן: {SIGNUP_URL}"
+            )
+            return
+
         text = (
             "שלום! 👋\n"
             "אני הבוט שלך למעקב תזונה.\n\n"
             "שלח לי תיאור של מה שאכלת (טקסט או תמונה) ואני אחשב קלוריות וגרם חלבון.\n\n"
             f"📊 היעדים שלך:\n"
-            f"  קלוריות: {profile.get('target_calories', 2000)}\n"
-            f"  גרם חלבון: {profile.get('target_protein', 150)}\n"
-            f"  חלון אכילה: {profile.get('eating_window_start', '08:00')}-{profile.get('eating_window_end', '20:00')}\n\n"
+            f"  קלוריות: {self._target_cal(profile)}\n"
+            f"  גרם חלבון: {self._target_prot(profile)}\n"
+            f"  חלון אכילה: {profile.eating_window.start if profile.eating_window else '08:00'}-{profile.eating_window.end if profile.eating_window else '20:00'}\n\n"
             "אפשר לשנות הגדרות דרך התפריט למטה."
         )
         await message.reply_text(text, reply_markup=make_main_menu_keyboard())
@@ -211,14 +266,17 @@ class HealthHandlers:
         if not message:
             return
 
-        profile = self._get_profile()
-        stats_date = self._get_stats_date(profile)
-        total_cal, total_protein = self._get_eating_day_totals(stats_date, profile)
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            await message.reply_text(f"צריך להירשם קודם: {SIGNUP_URL}")
+            return
+
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        total_cal, total_protein = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
 
         status = format_daily_status(
-            total_cal, total_protein,
-            profile.get("target_calories", 2000),
-            profile.get("target_protein", 150),
+            total_cal, total_protein, self._target_cal(profile), self._target_prot(profile),
         )
         await message.reply_text(
             f"📋 תפריט ראשי{status}",
@@ -233,100 +291,161 @@ class HealthHandlers:
         message = update.effective_message
         if not message or not message.text:
             return
-        if message.chat_id != self.chat_id:
+
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            await message.reply_text(f"צריך להירשם קודם: {SIGNUP_URL}")
             return
 
-        # Check for pending profile edit
-        if await self._handle_pending_edit(message, context):
+        # Trial gating: check expiry on every message, block if ended
+        if self.trial_service:
+            just_expired = self.trial_service.check_and_expire(
+                profile, get_user_now(profile.timezone),
+            )
+            if just_expired:
+                await message.reply_text(self.trial_service.get_expiry_message())
+                return
+            if self.trial_service.is_blocked(profile):
+                await message.reply_text(self.trial_service.get_blocked_message())
+                return
+
+        # Check profile-based pending state (dispatcher) first
+        if await self._handle_dispatched_state(message, context, tid, profile):
             return
 
-        # Check for pending question
-        if await self._handle_pending_question(message, context):
+        # Check context-based pending states (legacy, will migrate in future)
+        if await self._handle_pending_edit(message, context, tid, profile):
             return
 
-        # Check for pending food correction (from edit button)
-        if await self._handle_pending_correction(message, context):
+        if await self._handle_pending_question(message, context, tid, profile):
             return
 
-        # Check for pending bulk fix
-        if await self._handle_pending_bulk_fix(message, context):
+        if await self._handle_pending_correction(message, context, tid, profile):
             return
 
-        await safe_react(message, THUMBS_UP)
+        if await self._handle_pending_bulk_fix(message, context, tid, profile):
+            return
 
-        profile = self._get_profile()
         today_str = self._get_today_str(profile)
         time_str = self._get_time_str(profile)
         within_window = self._is_within_window(profile)
 
-        # Get last entry context for correction detection
         last_entry = context.chat_data.get("last_entry")
 
-        # Parse message: food or correction?
-        parse_result = self.analyzer.parse_message(message.text, today_str, last_entry)
+        # Heavy classifier (9 types) or fallback to old parse_message
+        classification = self.analyzer.classify_message(message.text, today_str, last_entry)
 
-        if parse_result.type == "correction" and parse_result.correction and last_entry:
-            await self._handle_correction(message, context, parse_result.correction, last_entry, profile, today_str)
+        # Route non-food types through MessageRouterService
+        if classification.type == "correction" and classification.correction and last_entry:
+            await self._handle_correction(message, context, classification.correction, last_entry, profile, today_str, tid)
             return
 
-        # Treat as new food (use parsed food result, or fall back to analyze_food_text)
-        if parse_result.type == "food" and parse_result.food and parse_result.food.items:
-            result = parse_result.food
-        else:
-            result = self.analyzer.analyze_food_text(message.text, today_str)
+        if classification.type == "sleep" and self.message_router:
+            result = self.message_router.route_sleep(tid, classification.sleep_time or time_str, today_str)
+            await message.reply_text(result.response_text)
+            return
 
-        if result is None or not result.items:
+        if classification.type == "workout" and self.message_router:
+            result = self.message_router.route_workout(tid, today_str, classification.workout_note)
+            await message.reply_text(result.response_text)
+            return
+
+        if classification.type == "self_care" and self.message_router:
+            from datetime import datetime as dt
+            week_id = dt.strptime(today_str, "%d/%m/%Y").strftime("%G-W%V")
+            result = self.message_router.route_self_care(tid, classification.self_care_description or message.text, week_id)
+            await message.reply_text(result.response_text)
+            return
+
+        if classification.type == "help" and self.message_router:
+            result = self.message_router.route_help(classification.question_text or message.text)
+            await send_long_text(message, result.response_text, reply_markup=make_daily_summary_keyboard())
+            return
+
+        if classification.type == "answer_question" and self.message_router:
+            result = self.message_router.route_answer_question(
+                tid, classification.question_text or message.text,
+                today_str, self._target_cal(profile), self._target_prot(profile),
+            )
+            await send_long_text(message, result.response_text, reply_markup=make_daily_summary_keyboard())
+            return
+
+        if classification.type == "feedback_request":
+            if self.feedback_service:
+                is_first = self.feedback_service.is_first_feedback(tid)
+                feedback_text = self.feedback_service.give_feedback(
+                    tid, today_str,
+                    self._target_cal(profile),
+                    self._target_prot(profile),
+                    profile.feedback_steering_prompt,
+                    is_first,
+                )
+                await send_long_text(message, feedback_text, reply_markup=make_main_menu_keyboard())
+            elif self.message_router:
+                result = self.message_router.route_feedback_request()
+                await message.reply_text(result.response_text, reply_markup=make_main_menu_keyboard())
+            return
+
+        if classification.type == "none" and self.message_router:
+            result = self.message_router.route_none()
+            await message.reply_text(result.response_text)
+            return
+
+        # Default: treat as food (meal type or fallback)
+        if classification.type == "meal" and classification.meal and classification.meal.items:
+            food_result = classification.meal
+        else:
+            food_result = self.analyzer.analyze_food_text(message.text, today_str)
+
+        if food_result is None or not food_result.items:
             await message.reply_text("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?")
             return
 
-        # One row per message: consolidate all items
-        combined_desc = ", ".join(item.description for item in result.items)
-        total_cal = result.total_calories
-        total_prot = result.total_protein
+        combined_desc = ", ".join(item.description for item in food_result.items)
+        total_cal = food_result.total_calories
+        total_prot = food_result.total_protein
 
-        row_number = self.sheets.append_food_entry(
-            date_str=today_str,
-            time_str=time_str,
+        entry = FoodEntry(
+            telegram_user_id=tid,
+            date=today_str,
+            time=time_str,
             description=combined_desc,
             calories=total_cal,
             protein=total_prot,
             within_window=within_window,
         )
+        saved = self.food_repo.add(entry)
 
-        # Read totals from sheet after appending (source of truth)
-        stats_date = self._get_stats_date(profile)
-        new_daily_cal, new_daily_prot = self._get_eating_day_totals(stats_date, profile)
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        new_daily_cal, new_daily_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
         prev_cal = new_daily_cal - total_cal
         prev_protein = new_daily_prot - total_prot
-        logger.info("Recorded: %s (%d cal, %dg protein) -> row %d",
-                    combined_desc, total_cal, total_prot, row_number)
+        logger.info("Recorded: %s (%d cal, %dg protein) -> id %s",
+                    combined_desc, total_cal, total_prot, saved.id)
 
-        # Store last entry for correction context
         context.chat_data["last_entry"] = {
             "description": combined_desc,
             "calories": total_cal,
             "protein": total_prot,
-            "sheet_row": row_number,
+            "entry_id": saved.id,
         }
 
-        # Build response with item breakdown
-        items_text = self._format_items_text(result.items, total_cal, total_prot)
-
-        # Check crossing alerts
+        items_text = self._format_items_text(food_result.items, total_cal, total_prot)
         alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
 
         response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
         if alerts:
             response = f"{alerts}\n\n{response}"
 
-        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(row_number))
+        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
 
     async def _handle_correction(
-        self, message, context, correction, last_entry: dict, profile: dict, today_str: str,
+        self, message, context, correction, last_entry: dict,
+        profile: UserProfile, today_str: str, tid: int,
     ):
-        """Handle a correction to the last food entry."""
-        sheet_row = last_entry["sheet_row"]
+        entry_id = last_entry["entry_id"]
         old_cal = last_entry["calories"]
         old_prot = last_entry["protein"]
 
@@ -334,22 +453,21 @@ class HealthHandlers:
         new_cal = correction.corrected_calories
         new_prot = correction.corrected_protein
 
-        # Update Google Sheets
-        self.sheets.update_cell_by_name(sheet_row, "תיאור", new_desc)
-        self.sheets.update_cell_by_name(sheet_row, "קלוריות", str(new_cal))
-        self.sheets.update_cell_by_name(sheet_row, "חלבון", str(new_prot))
+        self.food_repo.update(entry_id, {
+            "description": new_desc,
+            "calories": new_cal,
+            "protein": new_prot,
+        })
 
-        # Update last_entry context
         context.chat_data["last_entry"] = {
             "description": new_desc,
             "calories": new_cal,
             "protein": new_prot,
-            "sheet_row": sheet_row,
+            "entry_id": entry_id,
         }
 
-        # Re-read totals from sheet after correction
-        stats_date = self._get_stats_date(profile)
-        final_cal, final_prot = self._get_eating_day_totals(stats_date, profile)
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        final_cal, final_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
 
         cal_diff = new_cal - old_cal
         prot_diff = new_prot - old_prot
@@ -365,13 +483,11 @@ class HealthHandlers:
 
         response = f"✏️ עודכן:\n{items_text}{diff_line}"
         status = format_daily_status(
-            final_cal, final_prot,
-            profile.get("target_calories", 2000),
-            profile.get("target_protein", 150),
+            final_cal, final_prot, self._target_cal(profile), self._target_prot(profile),
         )
         response += status
 
-        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(sheet_row))
+        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(entry_id))
         await safe_react(message, OK_HAND)
 
     # ------------------------------------------------------------------
@@ -382,18 +498,18 @@ class HealthHandlers:
         message = update.effective_message
         if not message or not message.photo:
             return
-        if message.chat_id != self.chat_id:
+
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            await message.reply_text(f"צריך להירשם קודם: {SIGNUP_URL}")
             return
 
-        await safe_react(message, THUMBS_UP)
-
-        profile = self._get_profile()
         today_str = self._get_today_str(profile)
         time_str = self._get_time_str(profile)
         within_window = self._is_within_window(profile)
 
-        # Download photo
-        photo = message.photo[-1]  # Highest resolution
+        photo = message.photo[-1]
         file = await photo.get_file()
         photo_bytes = await file.download_as_bytearray()
         b64 = base64.b64encode(photo_bytes).decode("utf-8")
@@ -405,30 +521,30 @@ class HealthHandlers:
             await message.reply_text("לא הצלחתי לזהות מאכל בתמונה. נסה לתאר מה אכלת בטקסט.")
             return
 
-        # One row per message
         combined_desc = ", ".join(item.description for item in result.items)
         total_cal = result.total_calories
         total_prot = result.total_protein
 
-        row_number = self.sheets.append_food_entry(
-            date_str=today_str,
-            time_str=time_str,
+        entry = FoodEntry(
+            telegram_user_id=tid,
+            date=today_str,
+            time=time_str,
             description=combined_desc,
             calories=total_cal,
             protein=total_prot,
             within_window=within_window,
         )
-        # Store last entry for correction context
+        saved = self.food_repo.add(entry)
+
         context.chat_data["last_entry"] = {
             "description": combined_desc,
             "calories": total_cal,
             "protein": total_prot,
-            "sheet_row": row_number,
+            "entry_id": saved.id,
         }
 
-        # Read totals from sheet after appending (source of truth)
-        stats_date = self._get_stats_date(profile)
-        new_daily_cal, new_daily_prot = self._get_eating_day_totals(stats_date, profile)
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        new_daily_cal, new_daily_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
         prev_cal = new_daily_cal - total_cal
         prev_protein = new_daily_prot - total_prot
 
@@ -439,18 +555,17 @@ class HealthHandlers:
         if alerts:
             response = f"{alerts}\n\n{response}"
 
-        # Add photo tip from GPT analysis
         if result.photo_tips:
             response += f"\n\n💡 {result.photo_tips[0]}"
 
-        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(row_number))
+        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
 
     # ------------------------------------------------------------------
     # Pending edit/question state
     # ------------------------------------------------------------------
 
-    async def _handle_pending_edit(self, message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    async def _handle_pending_edit(self, message, context, tid: int, profile: UserProfile) -> bool:
         pending = context.chat_data.get("pending_edit")
         if not pending:
             return False
@@ -468,15 +583,21 @@ class HealthHandlers:
                 if len(parts) != 2:
                     await message.reply_text("פורמט לא תקין. השתמש ב: HH:MM-HH:MM")
                     return True
-                self.mongo.save_user_profile(self.chat_id, {
-                    "eating_window_start": parts[0].strip(),
-                    "eating_window_end": parts[1].strip(),
+                self.user_repo.update_fields(tid, {
+                    "eating_window.start": parts[0].strip(),
+                    "eating_window.end": parts[1].strip(),
                 })
-            elif field in ("age", "height_cm", "weight_kg", "target_calories", "target_protein"):
+            elif field == "target_calories":
                 value = int(text)
-                self.mongo.save_user_profile(self.chat_id, {field: value})
+                self.user_repo.update_fields(tid, {"targets.calories": value})
+            elif field == "target_protein":
+                value = int(text)
+                self.user_repo.update_fields(tid, {"targets.protein": value})
+            elif field in ("age", "height_cm", "weight_kg"):
+                value = int(text)
+                self.user_repo.update_fields(tid, {field: value})
             elif field == "timezone":
-                self.mongo.save_user_profile(self.chat_id, {"timezone": text})
+                self.user_repo.update_fields(tid, {"timezone": text})
             else:
                 await message.reply_text("שדה לא מוכר.")
                 return True
@@ -484,13 +605,13 @@ class HealthHandlers:
             await safe_react(message, OK_HAND)
             await message.reply_text(f"✅ {FIELD_LABELS.get(field, field)} עודכן!")
 
-            # Reschedule eating window if needed
             if field == "eating_window":
                 from scheduler import schedule_eating_window_jobs
-                profile = self._get_profile()
+                updated_profile = self._get_profile(tid)
                 schedule_eating_window_jobs(
-                    context.job_queue, self.chat_id, profile,
-                    self.mongo, self.analyzer, self.sheets,
+                    context.job_queue, tid, updated_profile,
+                    self.user_repo, self.food_repo, self.feedback_repo,
+                    self.analyzer, self.eating_day_svc,
                 )
 
         except ValueError:
@@ -501,7 +622,7 @@ class HealthHandlers:
 
         return True
 
-    async def _handle_pending_question(self, message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    async def _handle_pending_question(self, message, context, tid: int, profile: UserProfile) -> bool:
         pending = context.chat_data.get("pending_question")
         if not pending:
             return False
@@ -514,31 +635,19 @@ class HealthHandlers:
 
         await safe_react(message, THUMBS_UP)
 
-        profile = self._get_profile()
         today_str = self._get_today_str(profile)
-
-        # Get week's data
-        dates = []
-        from datetime import date
         today = datetime.strptime(today_str, "%d/%m/%Y").date()
-        for i in range(7):
-            d = today - timedelta(days=i)
-            dates.append(d.strftime("%d/%m/%Y"))
+        dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
 
-        # NOTE: using calendar-date filtering here is acceptable for the 7-day
-        # context window sent to GPT. For single-day totals, always use
-        # _get_eating_day_entries / _get_eating_day_totals instead.
-        entries = self.sheets.get_entries_by_dates(dates)
+        entries = self.food_repo.get_by_user_and_dates(tid, dates)
         csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
         for e in entries:
-            csv_lines.append(
-                f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
-            )
+            csv_lines.append(f"{e.date},{e.time},{e.description},{e.calories},{e.protein}")
         week_csv = "\n".join(csv_lines)
 
         targets = {
-            "calories": profile.get("target_calories", 2000),
-            "protein": profile.get("target_protein", 150),
+            "calories": self._target_cal(profile),
+            "protein": self._target_prot(profile),
         }
 
         answer = self.analyzer.answer_question(question, week_csv, targets)
@@ -549,7 +658,7 @@ class HealthHandlers:
 
         return True
 
-    async def _handle_pending_correction(self, message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    async def _handle_pending_correction(self, message, context, tid: int, profile: UserProfile) -> bool:
         pending = context.chat_data.get("pending_correction")
         if not pending:
             return False
@@ -562,11 +671,9 @@ class HealthHandlers:
 
         entry = pending["entry"]
         correction_history = pending.get("correction_history", [])
-        profile = self._get_profile()
         today_str = self._get_today_str(profile)
-        sheet_row = entry["sheet_row"]
+        entry_id = entry["entry_id"]
 
-        # Use analyze_correction with full history so GPT only changes mentioned items
         correction = self.analyzer.analyze_correction(
             original_description=entry["description"],
             original_calories=entry["calories"],
@@ -577,16 +684,15 @@ class HealthHandlers:
         )
 
         if correction:
-            await self._handle_correction(message, context, correction, entry, profile, today_str)
-            # Accumulate correction history for potential subsequent edits
+            await self._handle_correction(message, context, correction, entry, profile, today_str, tid)
             updated_history = correction_history + [message.text]
-            context.chat_data.setdefault("correction_histories", {})[sheet_row] = updated_history
+            context.chat_data.setdefault("correction_histories", {})[entry_id] = updated_history
         else:
             await message.reply_text("לא הצלחתי להבין את התיקון. נסה שוב.")
 
         return True
 
-    async def _handle_pending_bulk_fix(self, message, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    async def _handle_pending_bulk_fix(self, message, context, tid: int, profile: UserProfile) -> bool:
         pending = context.chat_data.get("pending_bulk_fix")
         if not pending:
             return False
@@ -599,18 +705,14 @@ class HealthHandlers:
 
         correction_text = message.text.strip()
 
-        # Read all entries from sheet
-        all_entries = self.sheets.get_all_entries()
+        all_entries = self.food_repo.get_all_for_user(tid)
         if not all_entries:
             await message.reply_text("אין רשומות לתיקון.")
             return True
 
-        # Build CSV for GPT
         csv_lines = ["row_index,תאריך,שעה,תיאור,קלוריות,חלבון"]
         for i, e in enumerate(all_entries):
-            csv_lines.append(
-                f"{i},{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות','0')},{e.get('חלבון','0')}"
-            )
+            csv_lines.append(f"{i},{e.date},{e.time},{e.description},{e.calories},{e.protein}")
         entries_csv = "\n".join(csv_lines)
 
         await message.reply_text("🔍 מחפש רשומות לתיקון...")
@@ -621,23 +723,22 @@ class HealthHandlers:
             await message.reply_text("לא מצאתי רשומות שמתאימות לתיקון.", reply_markup=make_main_menu_keyboard())
             return True
 
-        # Apply corrections — sheet rows are 1-based, header is row 1, data starts at row 2
         report_lines = []
         total_cal_diff = 0
         total_prot_diff = 0
 
         for c in corrections:
-            sheet_row = c.row_index + 2  # row_index is 0-based in data, +2 for header + 1-based
-            old_entry = all_entries[c.row_index] if c.row_index < len(all_entries) else None
-            if not old_entry:
+            if c.row_index >= len(all_entries):
                 continue
+            old_entry = all_entries[c.row_index]
+            old_cal = old_entry.calories
+            old_prot = old_entry.protein
 
-            old_cal = int(old_entry.get("קלוריות", 0) or 0)
-            old_prot = int(old_entry.get("חלבון", 0) or 0)
-
-            self.sheets.update_cell_by_name(sheet_row, "תיאור", c.corrected_description)
-            self.sheets.update_cell_by_name(sheet_row, "קלוריות", str(c.corrected_calories))
-            self.sheets.update_cell_by_name(sheet_row, "חלבון", str(c.corrected_protein))
+            self.food_repo.update(old_entry.id, {
+                "description": c.corrected_description,
+                "calories": c.corrected_calories,
+                "protein": c.corrected_protein,
+            })
 
             cal_diff = c.corrected_calories - old_cal
             prot_diff = c.corrected_protein - old_prot
@@ -670,20 +771,23 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
+        tid = update.effective_user.id
         data = query.data.removeprefix(CB_MENU)
 
         if data == "profile":
-            profile = self._get_profile()
+            profile = self._get_profile(tid)
+            if profile is None:
+                return
             text = (
                 "👤 הפרופיל שלך:\n\n"
-                f"גיל: {profile.get('age', '-')}\n"
-                f"גובה: {profile.get('height_cm', '-')} ס\"מ\n"
-                f"משקל: {profile.get('weight_kg', '-')} ק\"ג\n\n"
+                f"גיל: {getattr(profile, 'age', '-') or '-'}\n"
+                f"גובה: {getattr(profile, 'height_cm', '-') or '-'} ס\"מ\n"
+                f"משקל: {getattr(profile, 'weight_kg', '-') or '-'} ק\"ג\n\n"
                 f"🎯 יעדים:\n"
-                f"קלוריות: {profile.get('target_calories', '-')}\n"
-                f"גרם חלבון: {profile.get('target_protein', '-')}\n\n"
-                f"⏰ חלון אכילה: {profile.get('eating_window_start', '08:00')}-{profile.get('eating_window_end', '20:00')}\n"
-                f"🌍 אזור זמן: {profile.get('timezone', 'Asia/Jerusalem')}\n\n"
+                f"קלוריות: {self._target_cal(profile)}\n"
+                f"גרם חלבון: {self._target_prot(profile)}\n\n"
+                f"⏰ חלון אכילה: {profile.eating_window.start if profile.eating_window else '08:00'}-{profile.eating_window.end if profile.eating_window else '20:00'}\n"
+                f"🌍 אזור זמן: {profile.timezone}\n\n"
                 "לחץ על שדה לעריכה:"
             )
             await query.edit_message_text(text, reply_markup=make_profile_keyboard())
@@ -697,13 +801,16 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
+        tid = update.effective_user.id
         data = query.data.removeprefix(CB_PROFILE)
 
         if data == "suggest_targets":
-            profile = self._get_profile()
-            height = profile.get("height_cm", 0)
-            weight = profile.get("weight_kg", 0)
-            age = profile.get("age", 0)
+            profile = self._get_profile(tid)
+            if profile is None:
+                return
+            height = getattr(profile, "height_cm", 0) or 0
+            weight = getattr(profile, "weight_kg", 0) or 0
+            age = getattr(profile, "age", 0) or 0
 
             if not all([height, weight, age]):
                 await query.edit_message_text(
@@ -716,9 +823,9 @@ class HealthHandlers:
             if suggestion:
                 cal = suggestion.get("target_calories", 2000)
                 prot = suggestion.get("target_protein", 150)
-                self.mongo.save_user_profile(self.chat_id, {
-                    "target_calories": cal,
-                    "target_protein": prot,
+                self.user_repo.update_fields(tid, {
+                    "targets.calories": cal,
+                    "targets.protein": prot,
                 })
                 await query.edit_message_text(
                     f"🎯 יעדים מומלצים עודכנו:\n"
@@ -754,19 +861,22 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
-        profile = self._get_profile()
-        stats_date = self._get_stats_date(profile)
-        total_cal, total_protein = self._get_eating_day_totals(stats_date, profile)
-        # Must use eating-day-aware filtering to match the totals above
-        entries = self._get_eating_day_entries(stats_date, profile)
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            return
 
-        target_cal = profile.get("target_calories", 2000)
-        target_prot = profile.get("target_protein", 150)
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        total_cal, total_protein = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
+        entries = self.eating_day_svc.get_eating_day_entries(profile, stats_date)
+
+        target_cal = self._target_cal(profile)
+        target_prot = self._target_prot(profile)
         remaining_cal = max(0, target_cal - total_cal)
         remaining_prot = max(0, target_prot - total_protein)
 
         today_text = "\n".join(
-            f"- {e.get('תיאור', '')}: {e.get('קלוריות', 0)} קל׳, {e.get('חלבון', 0)} גרם חלבון"
+            f"- {e.description}: {e.calories} קל׳, {e.protein} גרם חלבון"
             for e in entries
         ) or "עדיין לא אכלת היום"
 
@@ -802,13 +912,12 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
-        row_str = query.data.removeprefix(CB_FOOD_DELETE)
+        entry_id = query.data.removeprefix(CB_FOOD_DELETE)
         try:
-            row_number = int(row_str)
-            self.sheets.delete_row(row_number)
+            self.food_repo.delete(entry_id)
             await query.edit_message_text("🗑 הרשומה נמחקה.", reply_markup=make_daily_summary_keyboard())
         except Exception:
-            logger.exception("Failed to delete food entry row %s", row_str)
+            logger.exception("Failed to delete food entry %s", entry_id)
             await query.edit_message_text("❌ שגיאה במחיקה.", reply_markup=make_daily_summary_keyboard())
 
     async def handle_food_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -817,33 +926,32 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
-        row_str = query.data.removeprefix(CB_FOOD_EDIT)
+        entry_id = query.data.removeprefix(CB_FOOD_EDIT)
         try:
-            row_number = int(row_str)
-            entry_data = self.sheets.get_entry_data(row_number)
-            description = entry_data.get("תיאור", "")
-            calories = int(entry_data.get("קלוריות", 0) or 0)
-            protein = int(entry_data.get("חלבון", 0) or 0)
+            food_entry = self.food_repo.get(entry_id)
+            if food_entry is None:
+                await query.edit_message_text("❌ הרשומה לא נמצאה.", reply_markup=make_daily_summary_keyboard())
+                return
 
-            existing_history = context.chat_data.get("correction_histories", {}).get(row_number, [])
+            existing_history = context.chat_data.get("correction_histories", {}).get(entry_id, [])
             context.chat_data["pending_correction"] = {
                 "entry": {
-                    "description": description,
-                    "calories": calories,
-                    "protein": protein,
-                    "sheet_row": row_number,
+                    "description": food_entry.description,
+                    "calories": food_entry.calories,
+                    "protein": food_entry.protein,
+                    "entry_id": entry_id,
                 },
                 "correction_history": existing_history,
                 "timestamp": time.time(),
             }
 
             await query.edit_message_text(
-                f"✏️ עריכת רשומה: {description}\n"
-                f"קלוריות: {calories} | גרם חלבון: {protein}\n\n"
+                f"✏️ עריכת רשומה: {food_entry.description}\n"
+                f"קלוריות: {food_entry.calories} | גרם חלבון: {food_entry.protein}\n\n"
                 "שלח תיאור של התיקון (למשל: 'זה היה 300 גרם לא 150'):"
             )
         except Exception:
-            logger.exception("Failed to read entry for edit, row %s", row_str)
+            logger.exception("Failed to read entry for edit, id %s", entry_id)
             await query.edit_message_text("❌ שגיאה בקריאת הרשומה.", reply_markup=make_daily_summary_keyboard())
 
     async def handle_food_again_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -852,41 +960,49 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
-        row_str = query.data.removeprefix(CB_FOOD_AGAIN)
+        tid = update.effective_user.id
+        entry_id = query.data.removeprefix(CB_FOOD_AGAIN)
         try:
-            row_number = int(row_str)
-            entry_data = self.sheets.get_entry_data(row_number)
-            description = entry_data.get("תיאור", "")
-            calories = int(entry_data.get("קלוריות", 0) or 0)
-            protein = int(entry_data.get("חלבון", 0) or 0)
+            food_entry = self.food_repo.get(entry_id)
+            if food_entry is None:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="❌ הרשומה לא נמצאה.",
+                    reply_markup=make_daily_summary_keyboard(),
+                )
+                return
 
-            profile = self._get_profile()
+            profile = self._get_profile(tid)
+            if profile is None:
+                return
             today_str = self._get_today_str(profile)
             time_str = self._get_time_str(profile)
             within_window = self._is_within_window(profile)
 
-            new_row = self.sheets.append_food_entry(
-                date_str=today_str,
-                time_str=time_str,
-                description=description,
-                calories=calories,
-                protein=protein,
+            new_entry = FoodEntry(
+                telegram_user_id=tid,
+                date=today_str,
+                time=time_str,
+                description=food_entry.description,
+                calories=food_entry.calories,
+                protein=food_entry.protein,
                 within_window=within_window,
             )
+            saved = self.food_repo.add(new_entry)
 
-            stats_date = self._get_stats_date(profile)
-            new_daily_cal, new_daily_prot = self._get_eating_day_totals(stats_date, profile)
+            stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+            new_daily_cal, new_daily_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
 
-            items_text = f"🔁 {description}: {calories} קל׳ | {protein} גרם חלבון"
+            items_text = f"🔁 {food_entry.description}: {food_entry.calories} קל׳ | {food_entry.protein} גרם חלבון"
             response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
 
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text=response,
-                reply_markup=make_food_entry_keyboard(new_row),
+                reply_markup=make_food_entry_keyboard(saved.id),
             )
         except Exception:
-            logger.exception("Failed to duplicate food entry row %s", row_str)
+            logger.exception("Failed to duplicate food entry %s", entry_id)
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="❌ שגיאה בשכפול הרשומה.",
@@ -917,14 +1033,13 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
-        profile = self._get_profile()
-        target_cal = profile.get("target_calories", 2000)
-        target_prot = profile.get("target_protein", 150)
-        window_start = profile.get("eating_window_start", "08:00")
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            return
 
-        stats_date = self._get_stats_date(profile)
-        next_date = (datetime.strptime(stats_date, "%d/%m/%Y") + timedelta(days=1)).strftime("%d/%m/%Y")
-        entries = self.sheets.get_entries_for_eating_day(stats_date, next_date, window_start)
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        entries = self.eating_day_svc.get_eating_day_entries(profile, stats_date)
 
         if not entries:
             await query.edit_message_text(
@@ -937,15 +1052,11 @@ class HealthHandlers:
         total_prot = 0
         lines = ["📋 סיכום יומי מפורט:\n"]
         for i, e in enumerate(entries, 1):
-            desc = e.get("תיאור", "")
-            cal = int(e.get("קלוריות", 0) or 0)
-            prot = int(e.get("חלבון", 0) or 0)
-            entry_time = e.get("שעה", "")
-            total_cal += cal
-            total_prot += prot
-            lines.append(f"{i}. {desc} — {cal} קל׳ | {prot} גרם חלבון ({entry_time})")
+            total_cal += e.calories
+            total_prot += e.protein
+            lines.append(f"{i}. {e.description} — {e.calories} קל׳ | {e.protein} גרם חלבון ({e.time})")
 
-        status = format_daily_status(total_cal, total_prot, target_cal, target_prot)
+        status = format_daily_status(total_cal, total_prot, self._target_cal(profile), self._target_prot(profile))
         text = "\n".join(lines) + status
 
         await send_long_text(query.message, text, reply_markup=make_daily_summary_keyboard())
@@ -956,45 +1067,37 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
-        profile = self._get_profile()
-        target_cal = profile.get("target_calories", 2000)
-        target_prot = profile.get("target_protein", 150)
-        window_start = profile.get("eating_window_start", "08:00")
-        window_end = profile.get("eating_window_end", "20:00")
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            return
 
-        tz = profile.get("timezone", "Asia/Jerusalem")
-        now = get_user_now(tz)
+        target_cal = self._target_cal(profile)
+        target_prot = self._target_prot(profile)
+        window_start = profile.eating_window.start if profile.eating_window else "08:00"
+        window_end = profile.eating_window.end if profile.eating_window else "20:00"
+
+        now = get_user_now(profile.timezone)
         today = now.date()
 
-        # Collect last 7 logical eating days
         dates = [(today - timedelta(days=i)) for i in range(7)]
 
         lines = ["📅 סיכום שבועי:\n"]
         for d in dates:
             ds = d.strftime("%d/%m/%Y")
-            next_ds = (d + timedelta(days=1)).strftime("%d/%m/%Y")
             day_label = d.strftime("%a %d/%m")
-            entries = self.sheets.get_entries_for_eating_day(ds, next_ds, window_start)
+            entries = self.eating_day_svc.get_eating_day_entries(profile, ds)
 
             if not entries:
                 lines.append(f"📆 {day_label}  —  אין נתונים")
                 continue
 
-            day_cal = 0
-            day_prot = 0
-            window_kept = True
-            for e in entries:
-                try:
-                    day_cal += int(e.get("קלוריות", 0) or 0)
-                except (ValueError, TypeError):
-                    pass
-                try:
-                    day_prot += int(e.get("חלבון", 0) or 0)
-                except (ValueError, TypeError):
-                    pass
-                entry_time = e.get("שעה", "")
-                if entry_time and not (window_start <= entry_time < window_end):
-                    window_kept = False
+            day_cal = sum(e.calories for e in entries)
+            day_prot = sum(e.protein for e in entries)
+            window_kept = all(
+                (not e.time or (window_start <= e.time < window_end))
+                for e in entries
+            )
 
             cal_pct = round(day_cal / target_cal * 100) if target_cal else 0
             prot_pct = round(day_prot / target_prot * 100) if target_prot else 0
@@ -1010,10 +1113,7 @@ class HealthHandlers:
             )
 
         text = "\n".join(lines)
-        await query.edit_message_text(
-            text,
-            reply_markup=make_main_menu_keyboard(),
-        )
+        await query.edit_message_text(text, reply_markup=make_main_menu_keyboard())
 
     async def handle_back_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -1021,14 +1121,16 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
-        profile = self._get_profile()
-        stats_date = self._get_stats_date(profile)
-        total_cal, total_protein = self._get_eating_day_totals(stats_date, profile)
+        tid = update.effective_user.id
+        profile = self._get_profile(tid)
+        if profile is None:
+            return
+
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        total_cal, total_protein = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
 
         status = format_daily_status(
-            total_cal, total_protein,
-            profile.get("target_calories", 2000),
-            profile.get("target_protein", 150),
+            total_cal, total_protein, self._target_cal(profile), self._target_prot(profile),
         )
         await context.bot.send_message(
             chat_id=query.message.chat_id,
@@ -1042,56 +1144,39 @@ class HealthHandlers:
             return
         await safe_answer(query)
 
+        tid = update.effective_user.id
+
         await context.bot.send_message(
             chat_id=query.message.chat_id,
             text="🤔 מכין משוב...",
         )
 
         try:
-            profile = self._get_profile()
-            tz_str = profile.get("timezone", "Asia/Jerusalem")
-            import pytz
-            today = datetime.now(pytz.timezone(tz_str)).date()
-            today_str = today.strftime("%d/%m/%Y")
-
-            # Build week's data
-            dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
-            week_entries = self.sheets.get_entries_by_dates(dates)
-
-            if not week_entries:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text="אין נתונים מהשבוע האחרון לתת עליהם משוב.",
-                    reply_markup=make_main_menu_keyboard(),
-                )
+            profile = self._get_profile(tid)
+            if profile is None:
                 return
 
-            csv_lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
-            for e in week_entries:
-                csv_lines.append(
-                    f"{e.get('תאריך','')},{e.get('שעה','')},{e.get('תיאור','')},{e.get('קלוריות',0)},{e.get('חלבון',0)}"
+            today_str = self._get_today_str(profile)
+
+            if self.feedback_service:
+                is_first = self.feedback_service.is_first_feedback(tid)
+                feedback_text = self.feedback_service.give_feedback(
+                    tid, today_str,
+                    self._target_cal(profile),
+                    self._target_prot(profile),
+                    profile.feedback_steering_prompt,
+                    is_first,
                 )
-            week_csv = "\n".join(csv_lines)
-
-            target_cal = profile.get("target_calories", 2000)
-            target_prot = profile.get("target_protein", 150)
-            targets = {"calories": target_cal, "protein": target_prot}
-
-            past_fb = [f.get("feedback_text", "") for f in self.mongo.get_recent_feedbacks(self.chat_id, limit=7)]
-
-            feedback_result = self.analyzer.generate_weekly_feedback(week_csv, targets, past_fb)
-
-            if feedback_result and feedback_result.get("feedback_text"):
-                feedback_text = feedback_result["feedback_text"]
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=f"💬 משוב על התזונה:\n{feedback_text}",
+                    text=feedback_text,
                     reply_markup=make_main_menu_keyboard(),
                 )
             else:
+                # Fallback without feedback service
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text="לא הצלחתי לייצר משוב כרגע. נסה שוב מאוחר יותר.",
+                    text="לא הצלחתי לייצר משוב כרגע.",
                     reply_markup=make_main_menu_keyboard(),
                 )
         except Exception:

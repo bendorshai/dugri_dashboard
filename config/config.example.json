@@ -1,26 +1,12 @@
 {
     "telegram": {
-        "bot_token": "YOUR_BOT_TOKEN",
-        "chat_id": 0
+        "bot_token": "YOUR_BOT_TOKEN"
     },
     "openai": {
         "api_key": "YOUR_OPENAI_API_KEY"
     },
-    "google_sheets": {
-        "credentials_file": "config/google_credentials.json",
-        "sheet_id": "YOUR_GOOGLE_SHEET_ID",
-        "tab_name": "food_log"
-    },
     "mongodb": {
         "uri": "mongodb://user:password@host:27017",
         "db_name": "health_tracker"
-    },
-    "table_columns": {
-        "A": "תאריך",
-        "B": "שעה",
-        "C": "תיאור",
-        "D": "קלוריות",
-        "E": "חלבון",
-        "F": "בחלון אכילה"
     }
 }

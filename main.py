@@ -1,16 +1,30 @@
+"""
+main.py — נקודת כניסה של בוט דוגרי.
+
+טוען קונפיג, מאתחל repositories ו-services, ומריץ את הבוט.
+"""
+
 import json
 import logging
 import os
 import sys
 from pathlib import Path
 
-from sheets import SheetsClient
+from pymongo import MongoClient
+
 from analyzer import FoodAnalyzer
-from storage import MongoStorage
+from repositories.user_repository import UserRepository
+from repositories.food_repository import FoodRepository
+from repositories.feedback_repository import WeeklyFeedbackRepository
+from repositories.error_repository import ErrorRepository
+from repositories.sleep_repository import SleepRepository
+from repositories.workout_repository import WorkoutRepository
+from repositories.self_care_repository import SelfCareRepository
+from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "0.8.1"
-VERSION_NOTES = "תיקון: תגובת עריכה מציגה פירוט פריטים עם גרמים"
+VERSION = "2.0.0"
+VERSION_NOTES = "רפקטור גדול: מולטי-יוזר, מונגו, 5 הרגלים, פידבק נלמד, trial"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -54,49 +68,58 @@ def main():
     cfg = load_config()
 
     tg = cfg["telegram"]
-    gs = cfg["google_sheets"]
-    columns = cfg["table_columns"]
     openai_cfg = cfg["openai"]
+    mongo_cfg = cfg["mongodb"]
 
-    sheets_client = SheetsClient(
-        credentials_file=gs["credentials_file"],
-        sheet_id=gs["sheet_id"],
-        tab_name=gs["tab_name"],
-        table_columns=columns,
-    )
-    logger.info("Google Sheets client ready (sheet: %s, tab: %s)", gs["sheet_id"], gs["tab_name"])
+    # MongoDB setup
+    mongo_uri = mongo_cfg["uri"]
+    safe_uri = mongo_uri.split("@")[-1] if "@" in mongo_uri else mongo_uri
+    logger.info("Connecting to MongoDB: %s", safe_uri)
 
+    mongo_client = MongoClient(mongo_uri)
+    db = mongo_client[mongo_cfg["db_name"]]
+
+    # Repositories
+    user_repo = UserRepository(db["user_profiles"])
+    food_repo = FoodRepository(db["food_entries"])
+    feedback_repo = WeeklyFeedbackRepository(db["weekly_feedback"])
+    error_repo = ErrorRepository(db["error_logs"])
+    sleep_repo = SleepRepository(db["sleep_logs"])
+    workout_repo = WorkoutRepository(db["workout_logs"])
+    self_care_repo = SelfCareRepository(db["self_care_logs"])
+
+    # Services
+    eating_day_service = EatingDayService(food_repo)
+
+    # Analyzer
     food_analyzer = FoodAnalyzer(api_key=openai_cfg["api_key"])
     logger.info("GPT food analyzer ready")
 
-    mongo_cfg = cfg["mongodb"]
-    mongo_storage = MongoStorage(uri=mongo_cfg["uri"], db_name=mongo_cfg["db_name"])
+    # Dashboard collection for linking
+    dashboard_users = db["dashboard_users"]
 
+    # Create bot
     app = create_bot(
         token=tg["bot_token"],
-        chat_id=tg["chat_id"],
-        sheets_client=sheets_client,
         analyzer=food_analyzer,
-        mongo_storage=mongo_storage,
+        user_repo=user_repo,
+        food_repo=food_repo,
+        feedback_repo=feedback_repo,
+        error_repo=error_repo,
+        eating_day_service=eating_day_service,
+        dashboard_users_collection=dashboard_users,
+        sleep_repo=sleep_repo,
+        workout_repo=workout_repo,
+        self_care_repo=self_care_repo,
     )
 
-    async def post_init(application):
-        try:
-            await application.bot.send_message(
-                chat_id=tg["chat_id"],
-                text=f"🚀 עלתה גרסה חדשה: {VERSION}\n{VERSION_NOTES}",
-            )
-        except Exception:
-            logger.exception("Failed to send startup message")
-
-    app.post_init = post_init
-
+    # Startup
     webhook_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
 
     if webhook_domain:
         port = int(os.environ.get("PORT", 8443))
         webhook_url = f"https://{webhook_domain}/webhook"
-        logger.info("Bot starting — webhook mode at %s (port %d), chat %s", webhook_url, port, tg["chat_id"])
+        logger.info("Bot starting — webhook mode at %s (port %d)", webhook_url, port)
         app.run_webhook(
             listen="0.0.0.0",
             port=port,
@@ -104,7 +127,7 @@ def main():
             webhook_url=webhook_url,
         )
     else:
-        logger.info("Bot starting — polling mode, chat %s", tg["chat_id"])
+        logger.info("Bot starting — polling mode")
         app.run_polling(drop_pending_updates=True)
 
 
