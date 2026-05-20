@@ -105,6 +105,10 @@ def create_app(config: dict | None = None) -> Flask:
             return redirect(url_for("landing"))
 
         bot_username = config.get("dugri_bot_username", "")
+        if not bot_username:
+            bot_url = config.get("telegram_bot_url", "")
+            if bot_url:
+                bot_username = bot_url.rstrip("/").rsplit("/", 1)[-1]
         signup_token = session["signup_session_token"]
         user_name = session.get("user_name", "")
         deep_link = f"https://t.me/{bot_username}?start={signup_token}"
