@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.0.2"
-VERSION_NOTES = "admin_chat_id ברירת מחדל"
+VERSION = "2.0.3"
+VERSION_NOTES = "landing_page_url מקונפיג"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -95,6 +95,9 @@ def main():
     food_analyzer = FoodAnalyzer(api_key=openai_cfg["api_key"])
     logger.info("GPT food analyzer ready")
 
+    # Landing page URL
+    landing_page_url = cfg.get("landing_page_url", "https://dugri.up.railway.app")
+
     # Dashboard collection for linking
     dashboard_users = db["dashboard_users"]
 
@@ -111,6 +114,7 @@ def main():
         sleep_repo=sleep_repo,
         workout_repo=workout_repo,
         self_care_repo=self_care_repo,
+        landing_page_url=landing_page_url,
     )
 
     # Startup notification to admin

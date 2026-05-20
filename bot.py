@@ -98,6 +98,7 @@ def create_bot(
     sleep_repo=None,
     workout_repo=None,
     self_care_repo=None,
+    landing_page_url: str = "https://dugri.up.railway.app",
 ) -> Application:
     app = Application.builder().token(token).build()
 
@@ -113,7 +114,7 @@ def create_bot(
         help_service = HelpService(analyzer)
         message_router = MessageRouterService(habit_service, qa_service, help_service)
 
-    trial_service = TrialService(user_repo)
+    trial_service = TrialService(user_repo, landing_page_url)
     feedback_service = FeedbackService(
         analyzer, food_repo, user_repo, feedback_repo, state_service,
     )
@@ -129,12 +130,13 @@ def create_bot(
         message_router=message_router,
         trial_service=trial_service,
         feedback_service=feedback_service,
+        landing_page_url=landing_page_url,
     )
 
     # Start handler with linking
     if dashboard_users_collection is not None:
         linking_service = LinkingService(user_repo, dashboard_users_collection)
-        start_handler = StartHandler(linking_service, onboarding_service)
+        start_handler = StartHandler(linking_service, onboarding_service, landing_page_url)
         app.add_handler(CommandHandler("start", start_handler.handle_start))
     else:
         app.add_handler(CommandHandler("start", h.handle_start_command))

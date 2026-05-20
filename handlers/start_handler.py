@@ -20,13 +20,11 @@ from keyboards import make_main_menu_keyboard
 from services.linking_service import LinkingService
 from services.onboarding_service import OnboardingService
 
-SIGNUP_URL = "https://dugri.co.il"
-
-
 class StartHandler:
-    def __init__(self, linking_service: LinkingService, onboarding_service: OnboardingService):
+    def __init__(self, linking_service: LinkingService, onboarding_service: OnboardingService, landing_page_url: str = "https://dugri.up.railway.app"):
         self._linking = linking_service
         self._onboarding = onboarding_service
+        self._landing_page_url = landing_page_url
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = update.effective_message
@@ -54,7 +52,7 @@ class StartHandler:
 
             else:  # invalid
                 await message.reply_text(
-                    f"הקישור פג או לא תקין. חזור לאתר וצור קישור חדש:\n{SIGNUP_URL}"
+                    f"הקישור פג או לא תקין. חזור לאתר וצור קישור חדש:\n{self._landing_page_url}"
                 )
                 return
 
@@ -62,7 +60,7 @@ class StartHandler:
         profile = self._linking.get_profile_without_token(tid)
         if profile is None:
             await message.reply_text(
-                f"כדי להתחיל, הירשם כאן: {SIGNUP_URL}"
+                f"כדי להתחיל, הירשם כאן: {self._landing_page_url}"
             )
         else:
             await message.reply_text(

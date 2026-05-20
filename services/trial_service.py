@@ -19,8 +19,9 @@ TRIAL_DAYS = 21
 
 
 class TrialService:
-    def __init__(self, user_repo: UserRepository):
+    def __init__(self, user_repo: UserRepository, landing_page_url: str = "https://dugri.up.railway.app"):
         self._user_repo = user_repo
+        self._landing_page_url = landing_page_url
 
     def check_and_expire(self, profile: UserProfile, now: datetime) -> bool:
         """If trial has expired, flip to trial_ended. Returns True if expired now."""
@@ -45,12 +46,12 @@ class TrialService:
         return (
             "התקופת ניסיון שלך עם דוגרי הסתיימה.\n"
             "בא לך להמשיך? 47 ₪ בחודש — אפשר לבטל בלחיצה.\n\n"
-            "https://dugri.co.il/subscribe"
+            f"{self._landing_page_url}/subscribe"
         )
 
     def get_expiry_message(self) -> str:
         return (
             "21 הימים שלך עם דוגרי הסתיימו.\n"
             "בא לך להמשיך? 47 ₪ בחודש — אפשר לבטל בלחיצה.\n\n"
-            "https://dugri.co.il/subscribe"
+            f"{self._landing_page_url}/subscribe"
         )

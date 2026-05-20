@@ -53,9 +53,6 @@ FIELD_LABELS = {
     "timezone": "אזור זמן",
 }
 
-SIGNUP_URL = "https://dugri.co.il"
-
-
 class HealthHandlers:
     def __init__(
         self,
@@ -69,7 +66,9 @@ class HealthHandlers:
         message_router: MessageRouterService | None = None,
         trial_service: TrialService | None = None,
         feedback_service: FeedbackService | None = None,
+        landing_page_url: str = "https://dugri.up.railway.app",
     ):
+        self.landing_page_url = landing_page_url
         self.analyzer = analyzer
         self.user_repo = user_repo
         self.food_repo = food_repo
@@ -245,7 +244,7 @@ class HealthHandlers:
         profile = self._get_profile(tid)
         if profile is None:
             await message.reply_text(
-                f"כדי להתחיל, הירשם כאן: {SIGNUP_URL}"
+                f"כדי להתחיל, הירשם כאן: {self.landing_page_url}"
             )
             return
 
@@ -269,7 +268,7 @@ class HealthHandlers:
         tid = update.effective_user.id
         profile = self._get_profile(tid)
         if profile is None:
-            await message.reply_text(f"צריך להירשם קודם: {SIGNUP_URL}")
+            await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
             return
 
         stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
@@ -295,7 +294,7 @@ class HealthHandlers:
         tid = update.effective_user.id
         profile = self._get_profile(tid)
         if profile is None:
-            await message.reply_text(f"צריך להירשם קודם: {SIGNUP_URL}")
+            await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
             return
 
         # Trial gating: check expiry on every message, block if ended
@@ -502,7 +501,7 @@ class HealthHandlers:
         tid = update.effective_user.id
         profile = self._get_profile(tid)
         if profile is None:
-            await message.reply_text(f"צריך להירשם קודם: {SIGNUP_URL}")
+            await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
             return
 
         today_str = self._get_today_str(profile)
