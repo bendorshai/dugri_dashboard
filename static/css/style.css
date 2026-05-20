@@ -591,6 +591,14 @@ a:hover {
     text-align: center;
 }
 
+.marketing-notice {
+    margin-top: 1rem;
+    font-size: 0.85em;
+    color: #5A554D;
+    text-align: center;
+    line-height: 1.5;
+}
+
 /* Post-signup zone */
 .post-signup-zone {
     padding: 4rem 0;

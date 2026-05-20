@@ -21,7 +21,7 @@ class TestLandingPage:
         data = resp.data.decode("utf-8")
         assert "consent-terms" in data
         assert "consent-medical" in data
-        assert "consent-marketing" in data
+        assert "consent-marketing" not in data
 
     def test_landing_has_logo(self, client):
         resp = client.get("/")

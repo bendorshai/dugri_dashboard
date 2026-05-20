@@ -8,12 +8,12 @@ consent, post-signup, legal, and error strings.
 from __future__ import annotations
 
 # -- Consent checkboxes (landing page) --
-CONSENT_TERMS = 'אני מסכים/ה ל<a href="/terms">תנאי השימוש</a> ול<a href="/privacy">מדיניות הפרטיות</a>'
-CONSENT_MEDICAL = (
-    "אני מבין/ה שדוגרי הוא כלי לעקיבות הרגלים ולא תחליף לייעוץ רפואי "
-    "או תזונתי מקצועי, ושהמספרים שמוצגים הם הערכות מבוססות-AI שעלי לבדוק בעצמי"
+CONSENT_TERMS = 'אני מסכים/ה ל<a href="/terms" target="_blank" rel="noopener noreferrer">תנאי השימוש</a> ול<a href="/privacy" target="_blank" rel="noopener noreferrer">מדיניות הפרטיות</a>, ומאשר/ת שאני בן/בת 18 ומעלה.'
+CONSENT_MEDICAL = "אני מבין/ה שדוגרי הוא כלי למודעות, לא תחליף לייעוץ רפואי או תזונתי."
+CONSENT_MARKETING_NOTICE = (
+    "בהרשמה לדוגרי, ייתכן שתקבלו מאיתנו עדכונים שיווקיים על השירות, "
+    "טיפים ועדכוני מוצר. אפשר להסיר את עצמכם בכל עת, בלחיצה אחת בכל מייל."
 )
-CONSENT_MARKETING = "אני מסכים/ה לקבל דברי פרסומת משי או מצוות דוגרי במייל"
 CONSENT_REQUIRED_LABEL = "חובה"
 
 # -- Error messages --

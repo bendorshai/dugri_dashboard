@@ -62,20 +62,19 @@ def login():
     # Read consent params from the signup form
     terms = request.args.get("terms")
     medical = request.args.get("medical")
-    marketing = request.args.get("marketing")
 
     # For returning users who are already logged in, skip consent check
     is_returning = "user_email" in session
 
     if not is_returning:
-        if not terms or not medical or not marketing:
+        if not terms or not medical:
             flash(ERROR_MISSING_CONSENT, "error")
             return redirect(url_for("landing"))
 
         session["pending_consents"] = {
             "terms": True,
             "medical": True,
-            "marketing": True,
+            "marketing": False,
         }
 
     oauth_cfg = _get_oauth_config()

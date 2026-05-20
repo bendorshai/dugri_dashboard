@@ -6,8 +6,7 @@
 <main class="landing-page" x-data="{
     terms: false,
     medical: false,
-    marketing: false,
-    get canSubmit() { return this.terms && this.medical && this.marketing }
+    get canSubmit() { return this.terms && this.medical }
 }">
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -27,9 +26,9 @@
                 <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="hero-logo">
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
                 <h1>דוגרי. מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</h1>
-                <p class="hero-lede">שישה הרגלים שמשנים את היום שלך — תיעוד בשיחה, לא בטופס.</p>
+                <p class="hero-lede">חמישה הרגלים שמשנים את היום-יום שלך — תיעוד בשיחה, לא בטופס.</p>
                 <div class="hero-actions">
-                    <a href="#signup" class="btn btn--primary">התחבר עם גוגל וקבל חודש חינם</a>
+                    <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
                 </div>
             </div>
 
@@ -49,10 +48,10 @@
                             <div class="metric"><b>1,640</b><span>קלוריות היום</span></div>
                             <div class="metric"><b>93g</b><span>חלבון</span></div>
                             <div class="metric"><b>14:8</b><span>חלון אכילה</span></div>
-                            <div class="metric"><b>2</b><span>קפה</span></div>
+                            <div class="metric"><b>1</b><span>משהו לעצמי</span></div>
                         </div>
-                        <div class="bubble bubble--user">+1 קפה</div>
-                        <div class="bubble bubble--bot">עודכן. אתה על 2 כוסות היום.</div>
+                        <div class="bubble bubble--user">ראיתי שקיעה בים</div>
+                        <div class="bubble bubble--bot">יפה. רשמתי "משהו לעצמי" השבוע.</div>
                         <div class="bubble bubble--user">אימון כוח 45 דקות</div>
                         <div class="bubble bubble--bot">יפה. הוספתי אימון לשבוע שלך.</div>
                         <div class="chat-input">כתוב הודעה...</div>
@@ -66,13 +65,13 @@
     <section class="section-panel">
         <div class="container split">
             <div>
-                <h2>אתה יודע שאתה צריך לעקוב. פשוט אין לך כוח.</h2>
-                <p>הבעיה היא לא שאתה עצלן. הבעיה היא שכל הכלים הקיימים בנויים סביב מסכים, תפריטים, חיפושים ועוד תפריטים. כל ארוחה היא פרויקט קטן.</p>
+                <h2>אתם יודעים שאתם צריכים לעקוב. פשוט אין כוח.</h2>
+                <p>הבעיה היא לא עצלנות. הבעיה היא שכל הכלים הקיימים בנויים סביב מסכים, תפריטים, חיפושים ועוד תפריטים. כל ארוחה היא פרויקט קטן.</p>
             </div>
             <ul class="pain-list">
-                <li>פתחת קבוצת וואטסאפ עם עצמך. תיעדת שם שלושה ימים. עכשיו זה ערימה של הודעות בלי שום סדר.</li>
-                <li>הורדת אפליקציה שאמורה לעזור לך בזה. אבל לא הסתדרת איתה...</li>
-                <li>הבטחת לעצמך שתהיה על זה, אבל לא מצאת פתרון פשוט וזורם.</li>
+                <li>פתחנו קבוצת וואטסאפ עם עצמנו. תיעדנו שם שלושה ימים. עכשיו זה ערימה של הודעות בלי שום סדר.</li>
+                <li>הורדנו אפליקציה שאמורה לעזור. לא הסתדרנו.</li>
+                <li>הבטחנו לעצמנו שנהיה על זה. לא מצאנו פתרון פשוט שזורם.</li>
             </ul>
         </div>
     </section>
@@ -81,21 +80,20 @@
     <section class="section-panel section-panel--alt">
         <div class="container split">
             <div class="solution-text">
-                <h2>דוגרי הוא בוט בטלגרם. אתה כותב, הוא מבין.</h2>
-                <p>אתה כותב "אכלתי פיתה עם חומוס וסלט". דוגרי עונה: "395 קלוריות, 14 גרם חלבון. רוצה לעדכן?".</p>
-                <p>אתה כותב "+1" כשאתה שותה כוס מים. אתה שולח "00:30" כשאתה הולך לישון. זהו. אין מסכים, אין תפריטים, אין הורדה של אפליקציה נוספת — דוגרי יושב בצ'אט שכבר פתוח אצלך כל היום.</p>
+                <h2>דוגרי הוא בוט בטלגרם. אתם כותבים, הוא מבין.</h2>
+                <p>אתם כותבים "אכלתי פיתה עם חומוס וסלט". דוגרי עונה: "395 קלוריות, 14 גרם חלבון. רוצה לעדכן?".</p>
+                <p>אתם שולחים "00:30" לפני השינה. זהו. אין מסכים, אין תפריטים, אין הורדה של אפליקציה נוספת — דוגרי יושב בצ'אט שכבר פתוח אצלכם כל היום.</p>
             </div>
             <div>
-                <p>שישה הרגלים, לא חמישים:</p>
+                <p>חמישה הרגלים, לא חמישים:</p>
                 <ul class="habits-list">
-                    <li>קלוריות</li>
-                    <li>חלבון</li>
+                    <li>קלוריות וחלבון</li>
                     <li>חלון אכילה</li>
                     <li>שעת שינה</li>
-                    <li>כוסות קפה</li>
-                    <li>אימונים</li>
+                    <li>אימונים בשבוע</li>
+                    <li>משהו לעצמי השבוע</li>
                 </ul>
-                <p>זה הבסיס שמשנים את הבריאות היומיומית. כל השאר זה רעש.</p>
+                <p>זה הבסיס שמשנה את הבריאות היומיומית. כל השאר זה רעש.</p>
             </div>
         </div>
     </section>
@@ -105,11 +103,11 @@
         <div class="container">
             <h2>דוגרי בנוי לעצלנים מוטיבציוניים.</h2>
             <ul class="features-list">
-                <li><strong>מבין עברית באמת.</strong> "שווארמה בלאפה", "שניצל ביתי של אמא", "סלט עם הרבה טחינה" — דוגרי מכיר את האוכל שאתה באמת אוכל, לא רק broccoli ו-grilled chicken.</li>
-                <li><strong>שיחה, לא טפסים.</strong> אתה כותב משפט אחד וזהו. תיעוד ארוחה לוקח חמש שניות, לא חמש דקות.</li>
-                <li><strong>אין אפליקציה להתקין.</strong> כבר יש לך טלגרם. דוגרי שם.</li>
-                <li><strong>סיכום שבועי שמגיע אליך.</strong> כל יום ראשון בבוקר — תמונה של השבוע שעבר. לא צריך לפתוח כלום.</li>
-                <li><strong>ייצוא לאקסל בלחיצה.</strong> הנתונים שלך — שלך.</li>
+                <li><strong>מבין עברית באמת.</strong> "שווארמה בלאפה", "שניצל ביתי של אמא", "סלט עם הרבה טחינה" — דוגרי מכיר את האוכל שאנחנו באמת אוכלים, לא רק broccoli ו-grilled chicken.</li>
+                <li><strong>שיחה, לא טפסים.</strong> כותבים משפט אחד וזהו. תיעוד ארוחה לוקח חמש שניות, לא חמש דקות.</li>
+                <li><strong>אין אפליקציה להתקין.</strong> כבר יש לנו טלגרם. דוגרי שם.</li>
+                <li><strong>סיכום שבועי שמגיע אלינו.</strong> כל יום ראשון בבוקר — תמונה של השבוע שעבר. לא צריך לפתוח כלום.</li>
+                <li><strong>ייצוא לאקסל בלחיצה.</strong> הנתונים שלנו — שלנו.</li>
             </ul>
         </div>
     </section>
@@ -117,9 +115,9 @@
     <!-- CTA band -->
     <section class="cta-band">
         <div class="container">
-            <h2>תוך חמש דקות יש לך את דוגרי בטלגרם.</h2>
-            <p class="tagline">המעקב הכי טוב הוא זה שאתה באמת עושה.</p>
-            <p>חודש שלם בחינם, בלי כרטיס אשראי. תתחבר עם חשבון גוגל, תאשר את התנאים, ותתחיל לתעד את הארוחה הבאה שלך.</p>
+            <h2>תוך חמש דקות יש לכם את דוגרי בטלגרם.</h2>
+            <p class="tagline">המעקב הכי טוב הוא זה שאנחנו באמת עושים.</p>
+            <p>21 יום התנסות ללא עלות. אחר כך 47 ₪ לחודש — אפשר לבטל בלחיצה. מתחברים עם חשבון גוגל, מאשרים את התנאים, ומתחילים לתעד את הארוחה הבאה.</p>
             <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
         </div>
     </section>
@@ -146,23 +144,17 @@
                     </label>
                 </div>
 
-                <div class="consent-checkbox" :class="{ 'consent-checkbox--checked': marketing }">
-                    <input type="checkbox" id="consent-marketing" x-model="marketing">
-                    <label for="consent-marketing">
-                        <span class="consent-badge consent-badge--required">{{ hs.CONSENT_REQUIRED_LABEL }}</span>
-                        {{ hs.CONSENT_MARKETING }}
-                    </label>
-                </div>
-
                 <div class="consent-actions">
-                    <a :href="canSubmit ? '{{ url_for('auth.login') }}?terms=1&medical=1&marketing=1' : '#'"
+                    <a :href="canSubmit ? '{{ url_for('auth.login') }}?terms=1&medical=1' : '#'"
                        class="btn btn--primary btn--full"
                        :disabled="!canSubmit"
                        :class="{ 'btn--disabled': !canSubmit }"
-                       @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1&marketing=1'">
+                       @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1'">
                         התחבר עם Google
                     </a>
                 </div>
+
+                <p class="marketing-notice">{{ hs.CONSENT_MARKETING_NOTICE }}</p>
             </div>
         </div>
     </section>
@@ -171,7 +163,7 @@
     <section class="section-panel">
         <div class="container about-section">
             <h2>מי אני?</h2>
-            <p>קוראים לי שי, אני יוצר רב תחומי ומטפל. לא באתי מעולם הכושר והתזונה אבל במשך שנים ממש ניסיתי לרזות ולהגביר את רמת החיוניות בגוף שלי. כי בסופו של יום זה עשה אותי שמח. ניסיתי המון תוכניות כולל אבא חטוב, דיאטניות וכולי... ובסופו של דבר דוגרי מאוד עזר לי. כי בפעם הראשונה בחיים קיבלתי פידבק אמיתי, כנה וישיר שעזר לי להגביר את המודעות להרגלי התזונה שלי. זה היה גם כיף וגם ממש מעצים לקבל שליטה בחזרה על הגוף שלי. ראיתי את הקסם והחלטתי שלא בריא לי לשמור אותו רק לעצמי.</p>
+            <p>קוראים לי שי, אני יוצר רב תחומי ומטפל. לא באתי מעולם הכושר והתזונה אבל במשך שנים ממש ניסיתי לרזות ולהגביר את רמת החיוניות בגוף שלי. כי בסופו של יום זה עשה אותי שמח. ניסיתי המון תוכניות כולל אבא חטוב, שומרי משקל, דיאטניות וכולי... ובסופו של דבר דוגרי מאוד עזר לי. כי בפעם הראשונה בחיים קיבלתי פידבק אמיתי, כנה וישיר שעזר לי להגביר את המודעות להרגלי התזונה שלי. זה היה גם כיף וגם ממש מעצים לקבל שליטה בחזרה על הגוף שלי. ראיתי את הקסם והחלטתי שלא בריא לי לשמור אותו רק לעצמי.</p>
         </div>
     </section>
 </main>
@@ -180,8 +172,8 @@
     <div class="container">
         <p>דוגרי — מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</p>
         <div>
-            <a href="{{ url_for('terms') }}">{{ hs.FOOTER_TERMS_LINK }}</a>
-            <a href="{{ url_for('privacy') }}">{{ hs.FOOTER_PRIVACY_LINK }}</a>
+            <a href="{{ url_for('terms') }}" target="_blank" rel="noopener noreferrer">{{ hs.FOOTER_TERMS_LINK }}</a>
+            <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener noreferrer">{{ hs.FOOTER_PRIVACY_LINK }}</a>
             <a href="{{ url_for('about') }}">{{ hs.FOOTER_ABOUT_LINK }}</a>
             {% if contact_email %}
             <a href="mailto:{{ contact_email }}">{{ hs.FOOTER_CONTACT_LINK }}</a>
