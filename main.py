@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.0.0"
-VERSION_NOTES = "רפקטור גדול: מולטי-יוזר, מונגו, 5 הרגלים, פידבק נלמד, trial"
+VERSION = "2.0.1"
+VERSION_NOTES = "הודעת גרסה לאדמין בלבד"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -112,6 +112,21 @@ def main():
         workout_repo=workout_repo,
         self_care_repo=self_care_repo,
     )
+
+    # Startup notification to admin
+    admin_chat_id = tg.get("admin_chat_id")
+
+    async def post_init(application):
+        if admin_chat_id:
+            try:
+                await application.bot.send_message(
+                    chat_id=admin_chat_id,
+                    text=f"🚀 דוגרי v{VERSION}\n{VERSION_NOTES}",
+                )
+            except Exception:
+                logger.exception("Failed to send startup message to admin")
+
+    app.post_init = post_init
 
     # Startup
     webhook_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
