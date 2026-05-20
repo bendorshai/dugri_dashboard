@@ -73,23 +73,34 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.route("/")
     def landing():
-        from flask import render_template, request, session
+        from flask import render_template, session
         import hebrew_strings as hs
 
-        post_signup = request.args.get("post_signup") == "1" and "user_email" in session
-        bot_username = config.get("dugri_bot_username", "")
         contact_email = config.get("contact_email", "")
-        signup_token = session.get("signup_session_token", "")
-        user_name = session.get("user_name", "")
-        deep_link = f"https://t.me/{bot_username}?start={signup_token}" if signup_token else ""
 
         return render_template(
             "landing.html",
-            post_signup=post_signup,
+            contact_email=contact_email,
+            hs=hs,
+        )
+
+    @app.route("/welcome")
+    def welcome():
+        from flask import render_template, redirect, url_for, session
+        import hebrew_strings as hs
+
+        if "user_email" not in session or "signup_session_token" not in session:
+            return redirect(url_for("landing"))
+
+        bot_username = config.get("dugri_bot_username", "")
+        signup_token = session["signup_session_token"]
+        user_name = session.get("user_name", "")
+        deep_link = f"https://t.me/{bot_username}?start={signup_token}"
+
+        return render_template(
+            "welcome.html",
             deep_link=deep_link,
             user_name=user_name,
-            contact_email=contact_email,
-            bot_username=bot_username,
             hs=hs,
         )
 

@@ -174,7 +174,7 @@ def callback():
     token = storage.regenerate_signup_session_token(email)
     session["signup_session_token"] = token
 
-    return redirect(url_for("landing", post_signup="1"))
+    return redirect(url_for("welcome"))
 
 
 @auth_bp.route("/logout")

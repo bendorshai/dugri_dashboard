@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}דוגרי — ברוך הבא{% endblock %}
+
+{% block head %}
+<style>
+    .welcome-page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.5rem;
+        background: linear-gradient(180deg, #EDF5F8 0%, #E0EFF4 100%);
+        text-align: center;
+    }
+
+    .welcome-logo {
+        max-width: 140px;
+        height: auto;
+        margin-bottom: 2rem;
+    }
+
+    .welcome-heading {
+        font-size: clamp(1.5rem, 4vw, 2.25rem);
+        color: #8B5E38;
+        margin-bottom: 2rem;
+        line-height: 1.3;
+    }
+
+    .welcome-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 1.1rem 3rem;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.3rem;
+        font-weight: 700;
+        background: #A67448;
+        color: #fff;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        box-shadow: 0 12px 28px rgba(166, 116, 72, 0.2);
+    }
+
+    .welcome-cta:hover {
+        background: #8B5E38;
+        transform: translateY(-1px);
+        box-shadow: 0 16px 36px rgba(166, 116, 72, 0.25);
+        color: #fff;
+    }
+
+    .welcome-fallback {
+        margin-top: 1.25rem;
+        font-size: 0.875rem;
+        color: #7A756D;
+    }
+
+    .welcome-fallback button {
+        color: #5BA8C4;
+        cursor: pointer;
+        background: none;
+        border: none;
+        font-size: inherit;
+        font-family: inherit;
+        text-decoration: underline;
+    }
+
+    .welcome-fallback button:hover {
+        color: #4590A8;
+    }
+
+    .copy-toast {
+        display: inline-block;
+        padding: 0.3rem 0.7rem;
+        border-radius: 6px;
+        background: #8FA876;
+        color: white;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-right: 0.5rem;
+    }
+
+    .welcome-footer {
+        margin-top: 3rem;
+        font-size: 0.8rem;
+        color: #9C9590;
+    }
+
+    .welcome-footer a {
+        color: #7A756D;
+        margin: 0 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<main class="welcome-page" x-data="{ copied: false }">
+    <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="welcome-logo">
+
+    <h1 class="welcome-heading">{{ hs.POST_SIGNUP_WELCOME.format(name=user_name or '') }}</h1>
+
+    <a href="{{ deep_link }}" target="_blank" rel="noopener" class="welcome-cta">
+        {{ hs.POST_SIGNUP_CTA }}
+    </a>
+
+    <p class="welcome-fallback">
+        <span x-show="copied" x-cloak class="copy-toast">הקישור הועתק!</span>
+        אם הכפתור לא נפתח אצלך,
+        <button @click="navigator.clipboard.writeText('{{ deep_link }}').then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
+            לחץ כאן להעתקת הקישור
+        </button>
+    </p>
+
+    <div class="welcome-footer">
+        <a href="{{ url_for('terms') }}">תנאי שימוש</a>
+        <a href="{{ url_for('privacy') }}">מדיניות פרטיות</a>
+    </div>
+</main>
+{% endblock %}

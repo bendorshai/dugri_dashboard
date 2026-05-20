@@ -39,25 +39,35 @@ class TestLandingPage:
         assert "/about" in data
 
 
-class TestPostSignupZone:
-    def test_post_signup_shows_telegram_link(self, client):
+class TestWelcomePage:
+    def test_welcome_shows_telegram_link(self, client):
         _login(client)
-        resp = client.get("/?post_signup=1")
+        resp = client.get("/welcome")
         data = resp.data.decode("utf-8")
         assert "t.me/TestDugriBot" in data
         assert "test-token-abc" in data
 
-    def test_post_signup_shows_welcome_message(self, client):
+    def test_welcome_shows_user_name(self, client):
         _login(client)
-        resp = client.get("/?post_signup=1")
+        resp = client.get("/welcome")
         data = resp.data.decode("utf-8")
-        assert "postSignup: true" in data
+        assert "Test User" in data
 
-    def test_post_signup_requires_session(self, client):
-        # Without login, post_signup param is ignored
-        resp = client.get("/?post_signup=1")
-        data = resp.data.decode("utf-8")
-        assert "postSignup: false" in data
+    def test_welcome_has_logo(self, client):
+        _login(client)
+        resp = client.get("/welcome")
+        assert b"1.png" in resp.data
+
+    def test_welcome_redirects_without_session(self, client):
+        resp = client.get("/welcome")
+        assert resp.status_code == 302
+
+    def test_welcome_redirects_without_token(self, client):
+        with client.session_transaction() as sess:
+            sess["user_email"] = "test@example.com"
+            # No signup_session_token
+        resp = client.get("/welcome")
+        assert resp.status_code == 302
 
 
 class TestLegalPages:

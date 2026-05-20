@@ -84,7 +84,7 @@ class TestCallbackNewUser:
 
         resp = client.get("/auth/callback?code=test-code&state=test-state")
         assert resp.status_code == 302
-        assert "post_signup=1" in resp.headers["Location"]
+        assert "/welcome" in resp.headers["Location"]
 
         mock_storage.create_user.assert_called_once()
         call_kwargs = mock_storage.create_user.call_args
@@ -184,7 +184,7 @@ class TestCallbackReturningUser:
 
         resp = client.get("/auth/callback?code=test-code&state=test-state")
         assert resp.status_code == 302
-        assert "post_signup=1" in resp.headers["Location"]
+        assert "/welcome" in resp.headers["Location"]
         mock_storage.regenerate_signup_session_token.assert_called_once()
 
     @patch("auth.DashboardStorage")

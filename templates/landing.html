@@ -4,18 +4,10 @@
 
 {% block body %}
 <main class="landing-page" x-data="{
-    postSignup: {{ 'true' if post_signup else 'false' }},
     terms: false,
     medical: false,
     marketing: false,
-    get canSubmit() { return this.terms && this.medical && this.marketing },
-    copied: false,
-    copyLink() {
-        navigator.clipboard.writeText('{{ deep_link }}').then(() => {
-            this.copied = true;
-            setTimeout(() => this.copied = false, 2000);
-        });
-    }
+    get canSubmit() { return this.terms && this.medical && this.marketing }
 }">
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -36,11 +28,8 @@
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
                 <h1>דוגרי. מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</h1>
                 <p class="hero-lede">שישה הרגלים שמשנים את היום שלך — תיעוד בשיחה, לא בטופס.</p>
-                <div class="hero-actions" x-show="!postSignup">
+                <div class="hero-actions">
                     <a href="#signup" class="btn btn--primary">התחבר עם גוגל וקבל חודש חינם</a>
-                </div>
-                <div class="hero-actions" x-show="postSignup" x-cloak>
-                    <a href="{{ deep_link }}" target="_blank" rel="noopener" class="btn btn--primary">{{ hs.POST_SIGNUP_CTA }}</a>
                 </div>
             </div>
 
@@ -126,7 +115,7 @@
     </section>
 
     <!-- CTA band -->
-    <section class="cta-band" x-show="!postSignup">
+    <section class="cta-band">
         <div class="container">
             <h2>תוך חמש דקות יש לך את דוגרי בטלגרם.</h2>
             <p class="tagline">המעקב הכי טוב הוא זה שאתה באמת עושה.</p>
@@ -135,25 +124,8 @@
         </div>
     </section>
 
-    <!-- Post-signup zone (shown after successful OAuth) -->
-    <section class="post-signup-zone" x-show="postSignup" x-cloak id="post-signup">
-        <div class="container">
-            <div class="post-signup-card">
-                <h2>{{ hs.POST_SIGNUP_WELCOME.format(name=user_name or '') }}</h2>
-                <a href="{{ deep_link }}" target="_blank" rel="noopener" class="btn btn--primary btn--full">
-                    {{ hs.POST_SIGNUP_CTA }}
-                </a>
-                <p class="post-signup-fallback">
-                    <span x-show="copied" class="copy-toast">הקישור הועתק!</span>
-                    {{ hs.POST_SIGNUP_FALLBACK.split(',')[0] }},
-                    <button @click="copyLink()">לחץ כאן להעתקת הקישור</button>
-                </p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Consent & Signup section (hidden after signup) -->
-    <section class="consent-section" x-show="!postSignup" id="signup">
+    <!-- Consent & Signup section -->
+    <section class="consent-section" id="signup">
         <div class="container">
             <div class="consent-card">
                 <h2>בואו נתחיל</h2>
