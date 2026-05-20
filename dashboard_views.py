@@ -26,10 +26,10 @@ def index():
 @login_required
 def home():
     cfg = current_app.config["APP_CONFIG"]
-    telegram_bot_url = cfg.get("telegram_bot_url", "")
+    bot_username = cfg.get("dugri_bot_username", "")
     return render_template(
         "dashboard/home.html", active_tab="home",
-        telegram_bot_url=telegram_bot_url,
+        telegram_bot_url=f"https://t.me/{bot_username}",
     )
 
 
