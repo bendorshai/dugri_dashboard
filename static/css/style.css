@@ -175,9 +175,12 @@ a:hover {
 }
 
 .hero-logo {
-    max-width: 280px;
+    max-width: 360px;
     height: auto;
     margin-bottom: 1.5rem;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .eyebrow {
@@ -194,8 +197,14 @@ a:hover {
     margin-bottom: 1.25rem;
 }
 
+.hero-grid > div:first-child {
+    text-align: center;
+}
+
 .landing-hero h1 {
     max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
     font-size: clamp(2.35rem, 6vw, 5rem);
     line-height: 1.03;
     margin-bottom: 1.35rem;
@@ -205,6 +214,8 @@ a:hover {
 
 .hero-lede {
     max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
     font-size: clamp(1.15rem, 2vw, 1.45rem);
     color: var(--ink);
     line-height: 1.65;
@@ -216,6 +227,7 @@ a:hover {
     flex-wrap: wrap;
     gap: 0.9rem;
     align-items: center;
+    justify-content: center;
     margin-bottom: 1.5rem;
 }
 
@@ -1056,6 +1068,30 @@ a:hover {
     justify-content: center;
     font-size: 0.875rem;
     font-weight: 700;
+}
+
+/* === Scroll reveal === */
+.reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+}
+
+.reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.reveal-item {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    transition-delay: calc(var(--item-delay, 0) * 0.12s);
+}
+
+.reveal-item.revealed {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* === Responsive === */
