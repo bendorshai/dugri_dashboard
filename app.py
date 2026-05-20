@@ -72,6 +72,12 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(api_bp)
 
+    @app.after_request
+    def set_cache_headers(response):
+        if response.content_type and "text/html" in response.content_type:
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
     @app.route("/")
     def landing():
         from flask import render_template, request, session, url_for

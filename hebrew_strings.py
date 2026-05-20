@@ -9,7 +9,7 @@ from __future__ import annotations
 
 # -- Consent checkboxes (landing page) --
 CONSENT_TERMS = 'אני מסכים/ה ל<a href="/terms" target="_blank" rel="noopener noreferrer">תנאי השימוש</a> ול<a href="/privacy" target="_blank" rel="noopener noreferrer">מדיניות הפרטיות</a>, ומאשר/ת שאני בן/בת 18 ומעלה.'
-CONSENT_MEDICAL = "אני מבין/ה שדוגרי הוא כלי למודעות, לא תחליף לייעוץ רפואי או תזונתי."
+CONSENT_MEDICAL = "אני מבין/ה שדוגרי הוא כלי למודעות, לא תחליף לייעוץ רפואי או תזונתי, ומסכים/ה לעיבוד מידע בריאותי (משקל, תזונה, שינה, פעילות גופנית) לצורך מתן השירות."
 CONSENT_MARKETING_NOTICE = (
     "בהרשמה לדוגרי, ייתכן שתקבלו מאיתנו עדכונים שיווקיים על השירות, "
     "טיפים ועדכוני מוצר. אפשר להסיר את עצמכם בכל עת, בלחיצה אחת בכל מייל."
