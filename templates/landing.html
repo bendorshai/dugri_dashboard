@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}דוגרי — מעקב הרגלים בעברית, בטלגרם, בלי בולשיט{% endblock %}
+{% block title %}דוגרי — איתך על ההרגלים{% endblock %}
 
 {% block body %}
 <main class="landing-page" x-data="{
@@ -23,7 +23,7 @@
     <section class="landing-hero">
         <div class="container hero-grid">
             <div>
-                <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="hero-logo">
+                <img src="{{ url_for('static', filename='images/1.png') }}" alt="הלוגו של דוגרי — בועת דיבור בצבע קינמון עם הכיתוב 'דוגרי, איתך על ההרגלים'" class="hero-logo">
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
                 <h1>דוגרי. מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</h1>
                 <p class="hero-lede">חמישה הרגלים שמשנים את היום-יום שלך — תיעוד בשיחה, לא בטופס.</p>
@@ -87,7 +87,7 @@
             <div>
                 <p>חמישה הרגלים, לא חמישים:</p>
                 <ul class="habits-list">
-                    <li>קלוריות וחלבון</li>
+                    <li>מודעות תזונתית</li>
                     <li>חלון אכילה</li>
                     <li>שעת שינה</li>
                     <li>אימונים בשבוע</li>
@@ -101,7 +101,7 @@
     <!-- Why it works -->
     <section class="section-panel">
         <div class="container">
-            <h2>דוגרי בנוי לעצלנים מוטיבציוניים.</h2>
+            <h2>דוגרי בנוי לשאפתנים עייפים.</h2>
             <ul class="features-list">
                 <li><strong>מבין עברית באמת.</strong> "שווארמה בלאפה", "שניצל ביתי של אמא", "סלט עם הרבה טחינה" — דוגרי מכיר את האוכל שאנחנו באמת אוכלים, לא רק broccoli ו-grilled chicken.</li>
                 <li><strong>שיחה, לא טפסים.</strong> כותבים משפט אחד וזהו. תיעוד ארוחה לוקח חמש שניות, לא חמש דקות.</li>
@@ -117,7 +117,7 @@
         <div class="container">
             <h2>תוך חמש דקות יש לכם את דוגרי בטלגרם.</h2>
             <p class="tagline">המעקב הכי טוב הוא זה שאנחנו באמת עושים.</p>
-            <p>21 יום התנסות ללא עלות. אחר כך 47 ₪ לחודש — אפשר לבטל בלחיצה. מתחברים עם חשבון גוגל, מאשרים את התנאים, ומתחילים לתעד את הארוחה הבאה.</p>
+            <p>21 יום התנסות ללא עלות. אחר כך 47 ₪ לחודש — אפשר לבטל בלחיצה. בלי צורך בכרטיס אשראי. מתחברים עם חשבון גוגל, מאשרים את התנאים, ומתחילים לתעד את הארוחה הבאה.</p>
             <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
         </div>
     </section>
@@ -150,7 +150,7 @@
                        :disabled="!canSubmit"
                        :class="{ 'btn--disabled': !canSubmit }"
                        @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1'">
-                        התחבר עם Google
+                        התחבר עם גוגל
                     </a>
                 </div>
 
@@ -170,7 +170,7 @@
 
 <footer class="landing-footer">
     <div class="container">
-        <p>דוגרי — מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.</p>
+        <p>דוגרי — איתך על ההרגלים.</p>
         <div>
             <a href="{{ url_for('terms') }}" target="_blank" rel="noopener noreferrer">{{ hs.FOOTER_TERMS_LINK }}</a>
             <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener noreferrer">{{ hs.FOOTER_PRIVACY_LINK }}</a>
