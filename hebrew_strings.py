@@ -15,10 +15,9 @@ CONSENT_MEDICAL = (
 )
 CONSENT_MARKETING = "אני מסכים/ה לקבל דברי פרסומת משי או מצוות דוגרי במייל"
 CONSENT_REQUIRED_LABEL = "חובה"
-CONSENT_OPTIONAL_LABEL = "אופציונלי"
 
 # -- Error messages --
-ERROR_MISSING_CONSENT = "כדי להמשיך, צריך לאשר את תנאי השימוש ואת ההצהרה הרפואית"
+ERROR_MISSING_CONSENT = "כדי להמשיך, צריך לאשר את כל התנאים"
 ERROR_OAUTH_FAILED = "ההתחברות נכשלה. נסה שוב."
 
 # -- Post-signup zone --

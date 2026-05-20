@@ -13,9 +13,9 @@
     /* Mediterranean blue — accent */
     --accent: #5BA8C4;
     --accent-dark: #4590A8;
-    /* Cream — background */
-    --bg: #FAF7F2;
-    --bg-alt: #F0EAE0;
+    /* Light blue — background */
+    --bg: #EDF5F8;
+    --bg-alt: #E0EFF4;
     /* Warm gray — text */
     --text: #5A554D;
     --text-muted: #7A756D;
@@ -141,16 +141,16 @@ a:hover {
 .landing-page {
     --ink: #5A554D;
     --muted: #7A756D;
-    --paper: #FAF7F2;
+    --paper: #EDF5F8;
     --cinnamon: #A67448;
     --cinnamon-dark: #8B5E38;
     --blue: #5BA8C4;
     --olive: #8FA876;
     --terracotta: #C97A6B;
     background:
-        radial-gradient(circle at 12% 8%, rgba(166, 116, 72, 0.18), transparent 28rem),
-        radial-gradient(circle at 86% 18%, rgba(91, 168, 196, 0.12), transparent 30rem),
-        linear-gradient(180deg, #FAF7F2 0%, #F0EAE0 44%, #FAF7F2 100%);
+        radial-gradient(circle at 12% 8%, rgba(166, 116, 72, 0.12), transparent 28rem),
+        radial-gradient(circle at 86% 18%, rgba(91, 168, 196, 0.15), transparent 30rem),
+        linear-gradient(180deg, #EDF5F8 0%, #E0EFF4 44%, #EDF5F8 100%);
     color: var(--ink);
     overflow: hidden;
 }
@@ -320,7 +320,7 @@ a:hover {
 }
 
 .bubble strong {
-    color: #3A8BA8;
+    color: var(--cinnamon-dark);
 }
 
 .chat-metrics {
@@ -340,7 +340,7 @@ a:hover {
 .metric b {
     display: block;
     font-size: 1.25rem;
-    color: #3A8BA8;
+    color: var(--cinnamon-dark);
     line-height: 1.2;
 }
 
@@ -460,7 +460,7 @@ a:hover {
 .features-list li strong {
     display: block;
     margin-bottom: 0.3rem;
-    color: var(--blue);
+    color: var(--cinnamon-dark);
 }
 
 /* CTA band */
@@ -577,8 +577,8 @@ a:hover {
 }
 
 .consent-badge--required {
-    background: rgba(91, 168, 196, 0.15);
-    color: var(--blue);
+    background: rgba(166, 116, 72, 0.12);
+    color: var(--cinnamon-dark);
 }
 
 .consent-badge--optional {
@@ -686,8 +686,8 @@ a:hover {
 /* Footer */
 .landing-footer {
     padding: 2rem 0;
-    background: var(--bg);
-    border-top: 1px solid rgba(90, 85, 77, 0.08);
+    background: #E0EFF4;
+    border-top: 1px solid rgba(91, 168, 196, 0.15);
     color: var(--muted);
     text-align: center;
 }

@@ -15,8 +15,13 @@ class TestLogin:
         resp = client.get("/auth/login?terms=1")
         assert resp.status_code == 302
 
-    def test_login_with_consents_redirects_to_google(self, client):
+    def test_login_without_marketing_consent_redirects_with_error(self, client):
         resp = client.get("/auth/login?terms=1&medical=1")
+        assert resp.status_code == 302
+        assert "accounts.google.com" not in resp.headers["Location"]
+
+    def test_login_with_all_consents_redirects_to_google(self, client):
+        resp = client.get("/auth/login?terms=1&medical=1&marketing=1")
         assert resp.status_code == 302
         assert "accounts.google.com" in resp.headers["Location"]
 
@@ -26,11 +31,6 @@ class TestLogin:
             assert sess["pending_consents"]["terms"] is True
             assert sess["pending_consents"]["medical"] is True
             assert sess["pending_consents"]["marketing"] is True
-
-    def test_login_marketing_defaults_to_false(self, client):
-        client.get("/auth/login?terms=1&medical=1")
-        with client.session_transaction() as sess:
-            assert sess["pending_consents"]["marketing"] is False
 
     def test_returning_user_skips_consent_check(self, client):
         with client.session_transaction() as sess:

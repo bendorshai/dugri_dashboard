@@ -68,14 +68,14 @@ def login():
     is_returning = "user_email" in session
 
     if not is_returning:
-        if not terms or not medical:
+        if not terms or not medical or not marketing:
             flash(ERROR_MISSING_CONSENT, "error")
             return redirect(url_for("landing"))
 
         session["pending_consents"] = {
             "terms": True,
             "medical": True,
-            "marketing": marketing == "1",
+            "marketing": True,
         }
 
     oauth_cfg = _get_oauth_config()
