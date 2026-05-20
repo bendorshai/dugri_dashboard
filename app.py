@@ -59,6 +59,7 @@ def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.secret_key = config.get("flask", {}).get("secret_key", "change-me")
     app.config["DEBUG"] = config.get("flask", {}).get("debug", False)
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 300  # 5 min cache for static files
     app.config["APP_CONFIG"] = config
 
     from auth import auth_bp
@@ -73,15 +74,20 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.route("/")
     def landing():
-        from flask import render_template, session
+        from flask import render_template, request, session, url_for
         import hebrew_strings as hs
 
         contact_email = config.get("contact_email", "")
+        base_url = request.url_root.rstrip("/")
+        og_image_url = base_url + url_for("static", filename="images/1.png")
+        og_page_url = base_url + "/"
 
         return render_template(
             "landing.html",
             contact_email=contact_email,
             hs=hs,
+            og_image_url=og_image_url,
+            og_page_url=og_page_url,
         )
 
     @app.route("/welcome")

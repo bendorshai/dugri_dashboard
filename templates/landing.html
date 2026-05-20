@@ -2,6 +2,20 @@
 
 {% block title %}דוגרי - איתך על ההרגלים{% endblock %}
 
+{% block meta %}
+    <meta name="description" content="מעקב הרגלים בעברית, בטלגרם, בלי בולשיט. חמישה הרגלים, תיעוד בשיחה, לא בטופס.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="דוגרי - איתך על ההרגלים">
+    <meta property="og:description" content="מעקב הרגלים בעברית, בטלגרם, בלי בולשיט. חמישה הרגלים, תיעוד בשיחה, לא בטופס.">
+    <meta property="og:image" content="{{ og_image_url }}">
+    <meta property="og:url" content="{{ og_page_url }}">
+    <meta property="og:locale" content="he_IL">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="דוגרי - איתך על ההרגלים">
+    <meta name="twitter:description" content="מעקב הרגלים בעברית, בטלגרם, בלי בולשיט.">
+    <meta name="twitter:image" content="{{ og_image_url }}">
+{% endblock %}
+
 {% block body %}
 <main class="landing-page" x-data="{
     terms: false,
