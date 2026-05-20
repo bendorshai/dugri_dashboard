@@ -59,7 +59,7 @@ def _build_consents() -> dict:
 
 @auth_bp.route("/login")
 def login():
-    # Read consent params from the signup form
+    # Read consent params from signup form (terms + medical required)
     terms = request.args.get("terms")
     medical = request.args.get("medical")
 
