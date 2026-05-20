@@ -154,6 +154,17 @@ class HealthHandlers:
         )
         return f"{items_text}{status}"
 
+    @staticmethod
+    def _format_items_text(items, total_cal: int, total_prot: int) -> str:
+        lines = []
+        for item in items:
+            lines.append(f"• {item.description}")
+            lines.append(f"  ~{item.estimated_grams} גרם | {item.calories} קל׳ | {item.protein} גרם חלבון")
+        text = "\n".join(lines)
+        if len(items) > 1:
+            text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot} גרם חלבון"
+        return text
+
     def _check_crossing_alerts(
         self,
         prev_cal: int,
@@ -299,10 +310,7 @@ class HealthHandlers:
         }
 
         # Build response with item breakdown
-        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein} גרם חלבון" for item in result.items]
-        items_text = "\n".join(items_lines)
-        if len(result.items) > 1:
-            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot} גרם חלבון"
+        items_text = self._format_items_text(result.items, total_cal, total_prot)
 
         # Check crossing alerts
         alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
@@ -420,15 +428,16 @@ class HealthHandlers:
         prev_cal = new_daily_cal - total_cal
         prev_protein = new_daily_prot - total_prot
 
-        items_lines = [f"• {item.description}: {item.calories} קל׳ | {item.protein} גרם חלבון" for item in result.items]
-        items_text = "\n".join(items_lines)
-        if len(result.items) > 1:
-            items_text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot} גרם חלבון"
+        items_text = self._format_items_text(result.items, total_cal, total_prot)
 
         alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
         response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
         if alerts:
             response = f"{alerts}\n\n{response}"
+
+        # Add photo tip from GPT analysis
+        if result.photo_tips:
+            response += f"\n\n💡 {result.photo_tips[0]}"
 
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(row_number))
         await safe_react(message, OK_HAND)

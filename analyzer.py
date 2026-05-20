@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class FoodItem(BaseModel):
     description: str
+    estimated_grams: int
     calories: int
     protein: int
 
@@ -20,6 +21,13 @@ class FoodAnalysisResult(BaseModel):
     items: list[FoodItem]
     total_calories: int
     total_protein: int
+
+
+class FoodPhotoResult(BaseModel):
+    items: list[FoodItem]
+    total_calories: int
+    total_protein: int
+    photo_tips: list[str]
 
 
 class CorrectionResult(BaseModel):
@@ -164,7 +172,7 @@ class FoodAnalyzer:
 
     def analyze_food_photo(
         self, base64_image: str, today_str: str, caption: str = "",
-    ) -> FoodAnalysisResult | None:
+    ) -> FoodPhotoResult | None:
         system = FOOD_PHOTO_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
         user_content = [
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
@@ -179,7 +187,7 @@ class FoodAnalyzer:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_content},
                 ],
-                response_format=FoodAnalysisResult,
+                response_format=FoodPhotoResult,
                 temperature=0,
             )
             result = response.choices[0].message.parsed

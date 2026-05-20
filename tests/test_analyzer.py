@@ -10,7 +10,8 @@ mock_openai_module = MagicMock()
 sys.modules.setdefault("openai", mock_openai_module)
 
 from analyzer import (
-    FoodAnalyzer, FoodItem, FoodAnalysisResult, MessageParseResult,
+    FoodAnalyzer, FoodItem, FoodAnalysisResult, FoodPhotoResult,
+    MessageParseResult,
     CorrectionResult, BulkCorrectionItem, BulkCorrectionResult,
     WeeklyFeedbackResult,
 )
@@ -38,7 +39,7 @@ class TestAnalyzeFoodText:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.parsed = FoodAnalysisResult(
-            items=[FoodItem(description="שניצל", calories=400, protein=30)],
+            items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
             total_calories=400,
             total_protein=30,
         )
@@ -55,7 +56,7 @@ class TestAnalyzeFoodText:
     def test_returns_parsed_result(self, analyzer):
         fa, mock_client = analyzer
         expected = FoodAnalysisResult(
-            items=[FoodItem(description="שניצל", calories=400, protein=30)],
+            items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
             total_calories=400,
             total_protein=30,
         )
@@ -104,10 +105,11 @@ class TestAnalyzeFoodText:
 class TestAnalyzeFoodPhoto:
     def test_sends_image_content(self, analyzer):
         fa, mock_client = analyzer
-        expected = FoodAnalysisResult(
-            items=[FoodItem(description="סלט", calories=150, protein=5)],
+        expected = FoodPhotoResult(
+            items=[FoodItem(description="סלט", estimated_grams=200, calories=150, protein=5)],
             total_calories=150,
             total_protein=5,
+            photo_tips=["צילום מצוין! 👍 המשך לצלם ככה"],
         )
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
@@ -130,8 +132,9 @@ class TestAnalyzeFoodPhoto:
         fa, mock_client = analyzer
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.parsed = FoodAnalysisResult(
+        mock_response.choices[0].message.parsed = FoodPhotoResult(
             items=[], total_calories=0, total_protein=0,
+            photo_tips=["צלם בזווית 45°"],
         )
         mock_client.beta.chat.completions.parse.return_value = mock_response
 
@@ -139,6 +142,37 @@ class TestAnalyzeFoodPhoto:
 
         call_args = mock_client.beta.chat.completions.parse.call_args
         assert call_args[1]["model"] == "gpt-4o"
+
+    def test_uses_photo_result_format(self, analyzer):
+        fa, mock_client = analyzer
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = FoodPhotoResult(
+            items=[], total_calories=0, total_protein=0,
+            photo_tips=["טיפ"],
+        )
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        fa.analyze_food_photo("base64data", "05/05/2026")
+
+        call_args = mock_client.beta.chat.completions.parse.call_args
+        assert call_args[1]["response_format"] == FoodPhotoResult
+
+    def test_returns_photo_tips(self, analyzer):
+        fa, mock_client = analyzer
+        expected = FoodPhotoResult(
+            items=[FoodItem(description="סלט", estimated_grams=200, calories=150, protein=5)],
+            total_calories=150,
+            total_protein=5,
+            photo_tips=["צלחת שטוחה עדיפה על קערה עמוקה"],
+        )
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = expected
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        result = fa.analyze_food_photo("base64data", "05/05/2026")
+        assert result.photo_tips == ["צלחת שטוחה עדיפה על קערה עמוקה"]
 
 
 class TestWeeklyFeedback:
@@ -234,7 +268,7 @@ class TestParseMessage:
     def test_returns_food_type(self, analyzer):
         fa, mock_client = analyzer
         food_result = FoodAnalysisResult(
-            items=[FoodItem(description="שניצל", calories=400, protein=30)],
+            items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
             total_calories=400, total_protein=30,
         )
         expected = MessageParseResult(type="food", food=food_result)

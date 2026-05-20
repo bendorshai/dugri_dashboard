@@ -9,8 +9,8 @@ from analyzer import FoodAnalyzer
 from storage import MongoStorage
 from bot import create_bot
 
-VERSION = "0.7.3"
-VERSION_NOTES = "תיקון: מספר+מאכל (כמו '3 עגבניות שרי') מוחזר כפריט אחד"
+VERSION = "0.8.0"
+VERSION_NOTES = "הערכת גרמים לכל פריט, טיפי צילום חכמים מותאמים לתמונה"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

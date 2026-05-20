@@ -23,7 +23,7 @@ mock_ext = sys.modules["telegram.ext"]
 mock_ext.ContextTypes = MagicMock()
 mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
-from analyzer import FoodItem, FoodAnalysisResult
+from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult
 from keyboards import format_daily_status
 
 
@@ -162,6 +162,44 @@ class TestBuildFoodResponse:
         assert "שניצל" in response
         assert "400/2000" in response
         assert "30/150" in response
+
+
+class TestFormatItemsText:
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        return h
+
+    def test_single_item_shows_grams(self):
+        h = self._make_handler()
+        items = [FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)]
+        result = h._format_items_text(items, 400, 30)
+        assert "• שניצל" in result
+        assert "~200 גרם" in result
+        assert "400 קל׳" in result
+        assert "30 גרם חלבון" in result
+        assert "סה\"כ" not in result
+
+    def test_multiple_items_shows_total(self):
+        h = self._make_handler()
+        items = [
+            FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30),
+            FoodItem(description="סלט", estimated_grams=150, calories=50, protein=3),
+        ]
+        result = h._format_items_text(items, 450, 33)
+        assert "• שניצל" in result
+        assert "~200 גרם" in result
+        assert "• סלט" in result
+        assert "~150 גרם" in result
+        assert "סה\"כ: 450 קל׳ | 33 גרם חלבון" in result
+
+    def test_two_line_format_per_item(self):
+        h = self._make_handler()
+        items = [FoodItem(description="חביתה מ-2 ביצים", estimated_grams=120, calories=180, protein=12)]
+        result = h._format_items_text(items, 180, 12)
+        lines = result.split("\n")
+        assert lines[0] == "• חביתה מ-2 ביצים"
+        assert lines[1].strip().startswith("~120 גרם")
 
 
 class TestOneRowPerMessage:
