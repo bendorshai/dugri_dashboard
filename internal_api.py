@@ -1,13 +1,12 @@
 """
-internal_api.py — Internal webhook endpoint for dashboard-to-bot notifications.
+internal_api.py — Internal webhook handlers for dashboard-to-bot notifications.
 
-Handles target change notifications from the dashboard. When a user updates
-their targets on the dashboard, this endpoint receives the old and new values,
-generates a GPT-powered validation message in Dugri's tone, and sends it
-to the user via Telegram.
+Handles:
+- Target change notifications (GPT-powered validation message)
+- Admin outreach (founder wants to connect with user)
 
 Depends on: analyzer, prompts, telegram bot instance.
-Used by: bot.py (registered as a webhook route).
+Used by: web_server.py (registered as Starlette routes).
 """
 
 from __future__ import annotations
@@ -76,3 +75,43 @@ async def handle_target_change(
     except Exception:
         logger.exception("Failed to handle target change notification")
         return None
+
+
+async def handle_admin_outreach(
+    telegram_user_id: int,
+    name: str,
+    founder_telegram_username: str,
+    bot: Any,
+) -> bool:
+    """Send an outreach message inviting the user to chat with the founder.
+
+    Returns True on success, False on failure.
+    """
+    greeting = f"היי {name}, " if name else "היי, "
+    text = (
+        f"{greeting}"
+        "שי, היזם של דוגרי, רוצה להתחבר איתך כדי ללמוד על שביעות הרצון שלך מדוגרי. "
+        "אם בא לך, לחצ/י על הכפתור למטה ותפתח שיחה ישירות איתו 👇"
+    )
+
+    try:
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        reply_markup = None
+        if founder_telegram_username:
+            reply_markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton(
+                    text="💬 פתח שיחה עם שי",
+                    url=f"https://t.me/{founder_telegram_username}",
+                ),
+            ]])
+
+        await bot.send_message(
+            chat_id=telegram_user_id,
+            text=text,
+            reply_markup=reply_markup,
+        )
+        return True
+    except Exception:
+        logger.exception("Failed to send admin outreach message")
+        return False

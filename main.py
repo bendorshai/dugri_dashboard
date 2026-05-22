@@ -113,6 +113,9 @@ def main():
         landing_page_url=landing_page_url,
     )
 
+    # Store analyzer in bot_data so internal API can access it
+    app.bot_data["analyzer"] = food_analyzer
+
     # Startup notification to admin
     admin_chat_id = tg.get("admin_chat_id", 2145100468)
 
@@ -132,15 +135,41 @@ def main():
     webhook_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
 
     if webhook_domain:
+        import uvicorn
+        from web_server import create_web_app
+
         port = int(os.environ.get("PORT", 8443))
         webhook_url = f"https://{webhook_domain}/webhook"
+        internal_secret = cfg.get("internal_secret", "")
         logger.info("Bot starting — webhook mode at %s (port %d)", webhook_url, port)
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path="webhook",
-            webhook_url=webhook_url,
+
+        web_app = create_web_app(
+            ptb_app=app,
+            internal_secret=internal_secret,
+            webhook_path="/webhook",
         )
+
+        async def on_startup():
+            await app.initialize()
+            await app.start()
+            await app.bot.set_webhook(url=webhook_url)
+            if admin_chat_id:
+                try:
+                    await app.bot.send_message(
+                        chat_id=admin_chat_id,
+                        text=f"🚀 דוגרי v{VERSION}\n{VERSION_NOTES}",
+                    )
+                except Exception:
+                    logger.exception("Failed to send startup message to admin")
+
+        async def on_shutdown():
+            await app.stop()
+            await app.shutdown()
+
+        web_app.add_event_handler("startup", on_startup)
+        web_app.add_event_handler("shutdown", on_shutdown)
+
+        uvicorn.run(web_app, host="0.0.0.0", port=port)
     else:
         logger.info("Bot starting — polling mode")
         app.run_polling(drop_pending_updates=True)
