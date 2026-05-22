@@ -59,17 +59,20 @@ def preferences_post():
     user = storage.get_user(email)
     existing_toggles = user.get("toggles", {}) if user else {}
 
-    # Build toggles
+    # Build toggles from hidden status fields (dormant/active/cancelled)
     toggle_names = ["sleep", "eating_window", "workouts", "self_care", "target_data", "weekly_summary"]
     toggles = {}
     for name in toggle_names:
         existing = existing_toggles.get(name, {})
-        enabled = request.form.get(f"{name}_enabled")
-        if enabled:
-            toggles[name] = {**existing, "status": "active"}
+        # Hidden field carries the exact status chosen by the UI
+        status = request.form.get(f"{name}_status")
+        if status in ("dormant", "active", "cancelled"):
+            toggles[name] = {**existing, "status": status}
         else:
-            if existing.get("status") == "active":
-                toggles[name] = {**existing, "status": "cancelled"}
+            # Fallback: infer from checkbox
+            enabled = request.form.get(f"{name}_enabled")
+            if enabled:
+                toggles[name] = {**existing, "status": "active"}
             else:
                 toggles[name] = existing or {"status": "dormant"}
 
