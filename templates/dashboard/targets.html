@@ -1,0 +1,32 @@
+{% extends "dashboard/layout.html" %}
+
+{% block dashboard_content %}
+<div class="dashboard-card" style="max-width: 500px;">
+    <h2>יעדים</h2>
+    <p class="text-muted">יעד הקלוריות והחלבון היומי שלך. שינוי כאן מסתנכרן עם הבוט.</p>
+
+    {% set targets = user.get('targets', {}) if user else {} %}
+
+    <form method="POST" action="{{ url_for('dashboard_views.targets_post') }}">
+        <div class="form-group" style="margin-bottom: 16px;">
+            <label for="calories">יעד קלוריות יומי</label>
+            <input type="number" id="calories" name="calories"
+                   value="{{ targets.get('calories', '') or '' }}"
+                   min="800" max="6000" step="50"
+                   placeholder="טרם הוגדר"
+                   class="form-input">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+            <label for="protein">יעד חלבון יומי (גרם)</label>
+            <input type="number" id="protein" name="protein"
+                   value="{{ targets.get('protein', '') or '' }}"
+                   min="30" max="400" step="5"
+                   placeholder="טרם הוגדר"
+                   class="form-input">
+        </div>
+
+        <button type="submit" class="btn btn-primary">שמור</button>
+    </form>
+</div>
+{% endblock %}

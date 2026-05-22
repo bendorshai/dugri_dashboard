@@ -274,7 +274,9 @@ dashboard/
 │   └── dashboard/
 │       ├── layout.html     # Dashboard nav + main layout
 │       ├── home.html       # Bot usage guide
-│       ├── goals.html      # Habit goal configuration (toggle + targets)
+│       ├── toggles.html    # Habit toggle control (synced with bot)
+│       ├── targets.html    # Calorie/protein targets (synced with bot)
+│       ├── weekly_summaries.html  # Weekly feedback archive
 │       ├── profile.html    # Personal data (age, weight, height)
 │       └── subscription.html
 ├── static/css/style.css
@@ -295,7 +297,8 @@ Primary key: `_id` = user email. Key fields:
 - `name`, `photo_url`, `telegram_user_id`
 - `signup_session_token`, `signup_session_token_expires_at`
 - `consents` object (terms, privacy, medical disclaimer, marketing opt-in — all timestamped + versioned)
-- `goals` object (each habit: `enabled` bool + config like `target`, `start`/`end` times)
+- `toggles` object (each toggle: `status` dormant/active/cancelled, timestamps)
+- `targets` object (unified: `calories`, `protein` — shared with bot)
 - `birth_year`, `height_cm`, `weight_kg` (optional profile data)
 - `subscription_status` (`trial_pending` / `active` / `cancelled`)
 
@@ -324,10 +327,12 @@ On Railway: injected via `DASHBOARD_CONFIG_JSON` env var.
 
 ### Interaction with health_tracker bot
 
-The **only** connection is the `signup_session_token` in MongoDB. Dashboard writes it; bot reads it to link a Telegram user to a dashboard account. No direct API calls between the two services.
+Two connection points:
+1. **Signup:** `signup_session_token` in MongoDB. Dashboard writes it; bot reads it to link accounts.
+2. **Target changes:** Dashboard calls bot's internal webhook (`POST /internal/notify-target-update`) when targets are updated. Bot generates and sends a GPT-powered validation message to the user. Config keys: `bot_internal_url`, `internal_secret`.
 
 ---
 
 ## עדכון אחרון
 
-21.05.2026
+22.05.2026

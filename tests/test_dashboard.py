@@ -14,42 +14,65 @@ def _login(client):
 MOCK_USER = {
     "_id": "test@example.com",
     "name": "Test",
-    "goals": {
-        "calories": {"enabled": True, "target": 2000},
-        "protein": {"enabled": True, "target": 150},
+    "targets": {"calories": 2000, "protein": 150},
+    "toggles": {
+        "sleep": {"status": "active"},
+        "eating_window": {"status": "dormant"},
+        "workouts": {"status": "dormant"},
+        "self_care": {"status": "dormant"},
+        "target_data": {"status": "dormant"},
+        "weekly_summary": {"status": "active"},
     },
     "onboarding_complete": True,
 }
 
 
-class TestDashboardGoals:
+class TestDashboardToggles:
     @patch("dashboard_views.DashboardStorage")
-    def test_goals_page_renders(self, mock_storage_cls, client):
+    def test_toggles_page_renders(self, mock_storage_cls, client):
         mock_storage = MagicMock()
         mock_storage.get_user.return_value = MOCK_USER
         mock_storage_cls.return_value = mock_storage
         _login(client)
-        resp = client.get("/dashboard/goals")
+        resp = client.get("/dashboard/toggles")
         assert resp.status_code == 200
-        assert "הגדרת יעדים".encode() in resp.data
+        assert "מתגים".encode() in resp.data
 
     @patch("dashboard_views.DashboardStorage")
-    def test_goals_post_updates(self, mock_storage_cls, client):
+    def test_toggles_post_updates(self, mock_storage_cls, client):
         mock_storage = MagicMock()
+        mock_storage.get_user.return_value = MOCK_USER
         mock_storage_cls.return_value = mock_storage
         _login(client)
-        resp = client.post("/dashboard/goals", data={
-            "calories_enabled": "1", "calories_target": "1800",
+        resp = client.post("/dashboard/toggles", data={
+            "sleep_enabled": "1",
+            "weekly_summary_enabled": "1",
         })
         assert resp.status_code == 302
-        goals = mock_storage.update_user_goals.call_args[0][1]
-        assert goals["calories"]["target"] == 1800
+        toggles = mock_storage.update_user_toggles.call_args[0][1]
+        assert toggles["sleep"]["status"] == "active"
+        assert toggles["weekly_summary"]["status"] == "active"
 
+
+class TestDashboardTargets:
     @patch("dashboard_views.DashboardStorage")
-    def test_index_redirects_to_goals(self, mock_storage_cls, client):
+    def test_targets_page_renders(self, mock_storage_cls, client):
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = MOCK_USER
+        mock_storage_cls.return_value = mock_storage
         _login(client)
-        resp = client.get("/dashboard/")
+        resp = client.get("/dashboard/targets")
+        assert resp.status_code == 200
+        assert "יעדים".encode() in resp.data
+
+
+class TestDashboardGoalsRedirect:
+    @patch("dashboard_views.DashboardStorage")
+    def test_goals_redirects_to_toggles(self, mock_storage_cls, client):
+        _login(client)
+        resp = client.get("/dashboard/goals")
         assert resp.status_code == 302
+        assert "toggles" in resp.location
 
 
 class TestDashboardSubscription:
@@ -66,5 +89,10 @@ class TestDashboardSubscription:
 
 class TestDashboardAuth:
     def test_redirects_when_not_logged_in(self, client):
-        resp = client.get("/dashboard/goals")
+        resp = client.get("/dashboard/toggles")
+        assert resp.status_code == 302
+
+    def test_index_redirects_to_home(self, client):
+        _login(client)
+        resp = client.get("/dashboard/")
         assert resp.status_code == 302

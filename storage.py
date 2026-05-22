@@ -58,6 +58,18 @@ class DashboardStorage:
             "pending_state": None,
             "feedback_steering_prompt": None,
             "last_feedback_offered_at": None,
+            # Toggle system (opt-in toggles dormant, weekly_summary active by default)
+            "toggles": {
+                "sleep": {"status": "dormant"},
+                "eating_window": {"status": "dormant"},
+                "workouts": {"status": "dormant"},
+                "self_care": {"status": "dormant"},
+                "target_data": {"status": "dormant"},
+                "weekly_summary": {"status": "active"},
+            },
+            "dashboard_intro_shown": False,
+            "target_retry_done": False,
+            "eating_window_retry_done": False,
             "created_at": now,
             "updated_at": now,
         }
@@ -115,3 +127,46 @@ class DashboardStorage:
             "signup_session_token": token,
             "signup_session_token_expires_at": {"$gt": now},
         })
+
+    # -- Toggle management --
+
+    def update_user_toggles(self, email: str, toggles: dict) -> None:
+        """Update toggle states from dashboard."""
+        self._users.update_one(
+            {"_id": email},
+            {"$set": {
+                "toggles": toggles,
+                "updated_at": self._now(),
+            }},
+        )
+
+    # -- Unified targets --
+
+    def update_user_targets(self, email: str, calories: int | None, protein: int | None) -> dict:
+        """Update calorie and protein targets. Returns the old targets dict."""
+        user = self._users.find_one({"_id": email})
+        old_targets = user.get("targets", {}) if user else {}
+
+        self._users.update_one(
+            {"_id": email},
+            {"$set": {
+                "targets.calories": calories,
+                "targets.protein": protein,
+                "updated_at": self._now(),
+            }},
+        )
+        return old_targets
+
+    # -- Weekly summaries --
+
+    def get_weekly_summaries(self, email: str, limit: int = 20) -> list[dict]:
+        """Get recent weekly summaries for a user. Joins via telegram_user_id."""
+        user = self._users.find_one({"_id": email})
+        if not user or not user.get("telegram_user_id"):
+            return []
+
+        feedback_col = self._db["weekly_feedback"]
+        cursor = feedback_col.find(
+            {"telegram_user_id": user["telegram_user_id"]},
+        ).sort("created_at", -1).limit(limit)
+        return list(cursor)
