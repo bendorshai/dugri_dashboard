@@ -27,7 +27,7 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_email" not in session:
-            return redirect(url_for("auth.login"))
+            return redirect(url_for("auth.login", returning="1"))
         return f(*args, **kwargs)
     return decorated
 
@@ -62,9 +62,10 @@ def login():
     # Read consent params from signup form (terms + medical required)
     terms = request.args.get("terms")
     medical = request.args.get("medical")
+    returning = request.args.get("returning")
 
-    # For returning users who are already logged in, skip consent check
-    is_returning = "user_email" in session
+    # For returning users (session expired or explicit returning flag), skip consent check
+    is_returning = "user_email" in session or returning == "1"
 
     if not is_returning:
         if not terms or not medical:
@@ -167,7 +168,7 @@ def callback():
 
     # Returning user with telegram linked → dashboard
     if user.get("telegram_user_id"):
-        return redirect(url_for("dashboard_views.goals"))
+        return redirect(url_for("dashboard_views.home"))
 
     # Generate fresh signup session token for Telegram deep link
     token = storage.regenerate_signup_session_token(email)
