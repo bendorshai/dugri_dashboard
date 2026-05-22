@@ -113,7 +113,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
+                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.super_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -129,7 +129,7 @@
 
         <!-- Consistently Active -->
         <div x-show="activeTab === 'consistent'" x-transition>
-            <p class="leads-desc">Logged food every day in the last 7 days. Reliable users building a habit.</p>
+            <p class="leads-desc">Logged food every day in the last 7 completed days (excluding today). Reliable users building a habit.</p>
             {% if consistently_active %}
             <table class="leads-table">
                 <thead>
@@ -144,7 +144,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
+                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.consistently_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -160,7 +160,7 @@
 
         <!-- Inconsistently Active -->
         <div x-show="activeTab === 'inconsistent'" x-transition>
-            <p class="leads-desc">Logged food on some but not all of the last 7 days. May need encouragement to build consistency.</p>
+            <p class="leads-desc">Logged food on some but not all of the last 7 completed days (excluding today). May need encouragement to build consistency.</p>
             {% if inconsistently_active %}
             <table class="leads-table">
                 <thead>
@@ -175,7 +175,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
+                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.inconsistently_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -206,7 +206,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
+                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.stopped | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -243,7 +243,7 @@
                         </td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
+                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.stuck_at_gate | replace('{name}', lead.name or '') }}')">Copy Message</button>

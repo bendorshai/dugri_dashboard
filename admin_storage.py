@@ -261,11 +261,16 @@ class AdminStorage:
     # -- Hot Leads --
 
     def _get_7day_activity(self) -> dict[int, set[str]]:
-        """Return {telegram_user_id: set of active date strings} for last 7 days."""
+        """Return {telegram_user_id: set of active date strings} for 7 completed days.
+
+        Excludes today — consistency metrics should not penalize for an
+        incomplete day.  Window = yesterday back to 7 days ago.
+        """
         def _fetch():
-            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            cutoff = today_start - timedelta(days=7)
             entries = list(self._food.find(
-                _created_at_gte(cutoff),
+                _created_at_range(cutoff, today_start),
                 {"telegram_user_id": 1, "created_at": 1},
             ))
             from collections import defaultdict

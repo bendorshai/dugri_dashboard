@@ -115,4 +115,4 @@ class TestAdminAuth:
         html = resp.data.decode()
         assert "Active User" in html
         assert "active@test.com" in html
-        assert "tg://user?id=99999" in html
+        assert "t.me/@id99999" in html
