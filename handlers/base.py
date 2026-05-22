@@ -92,7 +92,7 @@ class HealthHandlers:
 
     def _get_today_str(self, profile: UserProfile) -> str:
         now = get_user_now(profile.timezone)
-        return now.strftime("%d/%m/%Y")
+        return self.eating_day_svc.get_stats_date(profile, now)
 
     def _get_time_str(self, profile: UserProfile) -> str:
         now = get_user_now(profile.timezone)
@@ -100,8 +100,8 @@ class HealthHandlers:
 
     def _is_within_window(self, profile: UserProfile) -> bool:
         now = get_user_now(profile.timezone)
-        ws = profile.eating_window.start if profile.eating_window else "08:00"
-        we = profile.eating_window.end if profile.eating_window else "20:00"
+        ws = profile.eating_window.start if profile.eating_window else "00:00"
+        we = profile.eating_window.end if profile.eating_window else "23:59"
         return is_within_eating_window(now, ws, we)
 
     def _target_cal(self, profile: UserProfile) -> int:
@@ -181,8 +181,14 @@ class HealthHandlers:
                 self.toggle_service.activate_toggle(tid, toggle_name)
                 self.state_service.clear_pending(tid)
                 if toggle_name == "eating_window":
-                    self.state_service.set_pending(tid, "awaiting_eating_window")
-                    await message.reply_text("מתי חלון האכילה שלך? שלח בפורמט: HH:MM-HH:MM (למשל: 08:00-20:00)")
+                    # Auto-compute eating window from existing food entries
+                    window = self.eating_day_svc.compute_eating_window(tid)
+                    if window:
+                        self.user_repo.update_fields(tid, {
+                            "eating_window.start": window.start,
+                            "eating_window.end": window.end,
+                        })
+                    await message.reply_text("יפה, אני עוקב אחרי חלון האכילה שלך מהיום.")
                 else:
                     await message.reply_text("יפה, נרשמתי.")
             else:
@@ -249,20 +255,7 @@ class HealthHandlers:
             await message.reply_text(response)
             return True
 
-        if kind == "awaiting_eating_window":
-            parts = message.text.strip().split("-")
-            if len(parts) == 2:
-                self.user_repo.update_fields(tid, {
-                    "eating_window.start": parts[0].strip(),
-                    "eating_window.end": parts[1].strip(),
-                })
-                self.state_service.clear_pending(tid)
-                await message.reply_text("חלון אכילה עודכן.")
-            else:
-                await message.reply_text("פורמט: HH:MM-HH:MM (למשל: 08:00-20:00)")
-            return True
-
-        # Unknown dispatched state — clear and fall through
+        # Unknown dispatched state - clear and fall through
         self.state_service.clear_pending(tid)
         return False
 
@@ -499,11 +492,46 @@ class HealthHandlers:
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
 
+        # Recompute eating window from actual meal history
+        await self._recompute_eating_window(context, tid, profile)
+
         # Piggyback hooks: check if any hooks should fire after this meal
         await self._check_piggyback_hooks(message, tid, profile)
 
     # ------------------------------------------------------------------
-    # Piggyback hooks — fire pending hooks after a meal
+    # Eating window auto-computation
+    # ------------------------------------------------------------------
+
+    async def _recompute_eating_window(self, context, tid: int, profile: UserProfile):
+        """Recompute eating window from food entries if toggle is active."""
+        if not profile.toggles or profile.toggles.eating_window.status != "active":
+            return
+
+        new_window = self.eating_day_svc.compute_eating_window(tid)
+        if not new_window:
+            return
+
+        old = profile.eating_window
+        if old and old.start == new_window.start and old.end == new_window.end:
+            return
+
+        self.user_repo.update_fields(tid, {
+            "eating_window.start": new_window.start,
+            "eating_window.end": new_window.end,
+        })
+
+        # Reschedule window warning/close jobs with new times
+        updated_profile = self._get_profile(tid)
+        if updated_profile and context.application and context.application.job_queue:
+            from scheduler import schedule_eating_window_jobs
+            schedule_eating_window_jobs(
+                context.application.job_queue, tid, updated_profile,
+                self.user_repo, self.food_repo, self.feedback_repo,
+                self.analyzer, self.eating_day_svc,
+            )
+
+    # ------------------------------------------------------------------
+    # Piggyback hooks - fire pending hooks after a meal
     # ------------------------------------------------------------------
 
     async def _check_piggyback_hooks(self, message, tid: int, profile: UserProfile):
@@ -581,7 +609,6 @@ class HealthHandlers:
         # Recurring hooks piggyback
         prompt_pools = {
             "sleep": M.HOOK_SLEEP_PROMPTS,
-            "eating_window": M.HOOK_EATING_WINDOW_PROMPTS,
             "workouts": M.HOOK_WORKOUTS_PROMPTS,
             "self_care": M.HOOK_SELF_CARE_PROMPTS,
         }
@@ -743,16 +770,7 @@ class HealthHandlers:
         text = message.text.strip()
 
         try:
-            if field == "eating_window":
-                parts = text.split("-")
-                if len(parts) != 2:
-                    await message.reply_text("פורמט לא תקין. השתמש ב: HH:MM-HH:MM")
-                    return True
-                self.user_repo.update_fields(tid, {
-                    "eating_window.start": parts[0].strip(),
-                    "eating_window.end": parts[1].strip(),
-                })
-            elif field == "target_calories":
+            if field == "target_calories":
                 value = int(text)
                 self.user_repo.update_fields(tid, {"targets.calories": value})
             elif field == "target_protein":

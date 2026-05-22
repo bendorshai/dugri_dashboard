@@ -18,7 +18,6 @@ import pytz
 
 from constants import (
     SLEEP_HOOK_WINDOW,
-    EATING_WINDOW_HOOK_WINDOW,
     WORKOUTS_HOOK_WINDOW,
     SELF_CARE_HOOK_WINDOW,
     WEEKLY_SUMMARY_HOOK_WINDOW,
@@ -71,10 +70,6 @@ def get_hooks_to_schedule(profile: User) -> list[dict]:
         "sleep": {
             "schedule_type": "daily",
             "window": SLEEP_HOOK_WINDOW,
-        },
-        "eating_window": {
-            "schedule_type": "daily",
-            "window": EATING_WINDOW_HOOK_WINDOW,
         },
         "workouts": {
             "schedule_type": "weekly",
@@ -187,7 +182,6 @@ async def _hook_callback(context):
     import messages as M
     prompt_pools = {
         "sleep": M.HOOK_SLEEP_PROMPTS,
-        "eating_window": M.HOOK_EATING_WINDOW_PROMPTS,
         "workouts": M.HOOK_WORKOUTS_PROMPTS,
         "self_care": M.HOOK_SELF_CARE_PROMPTS,
     }
@@ -237,9 +231,14 @@ def schedule_eating_window_jobs(
     for job in job_queue.get_jobs_by_name(f"window_{telegram_user_id}_close"):
         job.schedule_removal()
 
+    # Don't schedule if no eating window computed yet
+    if not profile.eating_window:
+        logger.info("No eating window for user %d, skipping window job scheduling", telegram_user_id)
+        return
+
     tz_str = profile.timezone
     tz = pytz.timezone(tz_str)
-    window_end = profile.eating_window.end if profile.eating_window else "20:00"
+    window_end = profile.eating_window.end
     end_h, end_m = parse_time_window(window_end)
 
     # 30-min warning

@@ -1,12 +1,15 @@
 """
-eating_day_service.py — לוגיקת יום-אכילה וסיכומים.
+eating_day_service.py - eating-day logic and auto-computed eating window.
 
-הקובץ הזה אחראי על חישוב "מה נכלל ביום-אכילה לוגי" — שזה לא בהכרח
-יום קלנדרי. יום-אכילה רץ מ-window_start ביום X עד window_start ביום X+1.
-ארוחה בשעה 02:00 בלילה שייכת ליום-האכילה הקודם.
+An "eating day" is not a calendar day. It runs from window_start on day X
+to window_start on day X+1. A meal at 02:00 belongs to the previous eating day.
 
-תלוי ב: repositories/food_repository, models/profile, parsing.
-נצרך על ידי: handlers, scheduler.
+The eating window is auto-computed from the user's recent food entries
+(median first/last meal times over the past 7 days). When no window exists
+yet, the fallback is 00:00-23:59 (full calendar day).
+
+Depends on: repositories/food_repository, models/profile, parsing.
+Used by: handlers, scheduler.
 """
 
 from __future__ import annotations
@@ -14,24 +17,85 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from models.food import FoodEntry
-from models.profile import UserProfile
-from parsing import is_within_eating_window, get_user_now
+from models.profile import EatingWindow, UserProfile
+from parsing import is_within_eating_window, get_user_now, israel_today
 from repositories.food_repository import FoodRepository
+
+
+def _round_time_down_30(time_str: str) -> str:
+    """Round HH:MM down to nearest 30-minute mark (for window start)."""
+    h, m = int(time_str[:2]), int(time_str[3:5])
+    m = (m // 30) * 30
+    return f"{h:02d}:{m:02d}"
+
+
+def _round_time_up_30(time_str: str) -> str:
+    """Round HH:MM up to nearest 30-minute mark (for window end)."""
+    h, m = int(time_str[:2]), int(time_str[3:5])
+    if m % 30 == 0:
+        return f"{h:02d}:{m:02d}"
+    m = ((m // 30) + 1) * 30
+    if m >= 60:
+        m = 0
+        h = (h + 1) % 24
+    return f"{h:02d}:{m:02d}"
 
 
 class EatingDayService:
     def __init__(self, food_repo: FoodRepository):
         self._food_repo = food_repo
 
-    def get_stats_date(self, profile: UserProfile, now: datetime) -> str:
-        """איזה תאריך להציג סטטיסטיקות עבורו.
+    # ------------------------------------------------------------------
+    # Auto-computed eating window
+    # ------------------------------------------------------------------
 
-        בתוך החלון -> היום.
-        אחרי סגירת החלון (ערב) -> היום (יום שהסתיים).
-        לפני פתיחת החלון (בוקר) -> אתמול.
+    def compute_eating_window(self, telegram_user_id: int) -> EatingWindow | None:
+        """Compute eating window from last 7 days of food entries.
+
+        Returns None if fewer than 2 days have meals (not enough data).
+        Uses median of each day's first/last meal time, rounded to 30 min.
         """
-        window_start = profile.eating_window.start if profile.eating_window else "08:00"
-        window_end = profile.eating_window.end if profile.eating_window else "20:00"
+        today = israel_today()
+        dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
+        entries = self._food_repo.get_by_user_and_dates(telegram_user_id, dates)
+        if not entries:
+            return None
+
+        by_date: dict[str, list[str]] = {}
+        for e in entries:
+            if e.time:
+                by_date.setdefault(e.date, []).append(e.time)
+
+        if len(by_date) < 2:
+            return None
+
+        first_times: list[str] = []
+        last_times: list[str] = []
+        for times in by_date.values():
+            s = sorted(times)
+            first_times.append(s[0])
+            last_times.append(s[-1])
+
+        first_times.sort()
+        last_times.sort()
+        start = _round_time_down_30(first_times[len(first_times) // 2])
+        end = _round_time_up_30(last_times[len(last_times) // 2])
+        return EatingWindow(start=start, end=end)
+
+    # ------------------------------------------------------------------
+    # Eating day logic
+    # ------------------------------------------------------------------
+
+    def get_stats_date(self, profile: UserProfile, now: datetime) -> str:
+        """Which date to show stats for.
+
+        Inside the window -> today.
+        After window close (evening) -> today (completed day).
+        Before window open (morning) -> yesterday.
+        Fallback (no window): 00:00-23:59 -> always today.
+        """
+        window_start = profile.eating_window.start if profile.eating_window else "00:00"
+        window_end = profile.eating_window.end if profile.eating_window else "23:59"
 
         if is_within_eating_window(now, window_start, window_end):
             return now.strftime("%d/%m/%Y")
@@ -48,10 +112,10 @@ class EatingDayService:
     def get_eating_day_entries(
         self, profile: UserProfile, date_str: str,
     ) -> list[FoodEntry]:
-        """כל הרשומות של יום-אכילה לוגי. מקור-אמת יחיד לתצוגות יומיות."""
+        """All entries for a logical eating day. Single source of truth."""
         day = datetime.strptime(date_str, "%d/%m/%Y").date()
         next_day_str = (day + timedelta(days=1)).strftime("%d/%m/%Y")
-        window_start = profile.eating_window.start if profile.eating_window else "08:00"
+        window_start = profile.eating_window.start if profile.eating_window else "00:00"
 
         entries = self._food_repo.get_by_user_and_dates(
             profile.telegram_user_id, [date_str, next_day_str],
@@ -70,7 +134,7 @@ class EatingDayService:
     def get_eating_day_totals(
         self, profile: UserProfile, date_str: str,
     ) -> tuple[int, int]:
-        """סך קלוריות וחלבון ליום-אכילה לוגי."""
+        """Total calories and protein for a logical eating day."""
         entries = self.get_eating_day_entries(profile, date_str)
         total_cal = 0
         total_prot = 0

@@ -41,7 +41,6 @@ WEEKLY_SUMMARY_ANCHOR_DAY = 6  # Sunday
 # ---------------------------------------------------------------------------
 
 SLEEP_HOOK_WINDOW = (8, 10)            # 08:00–10:00
-EATING_WINDOW_HOOK_WINDOW = (18, 22)   # 18:00–22:00
 WORKOUTS_HOOK_WINDOW = (16, 20)        # 16:00–20:00
 SELF_CARE_HOOK_WINDOW = (10, 14)       # 10:00–14:00
 WEEKLY_SUMMARY_HOOK_WINDOW = (9, 11)   # 09:00–11:00

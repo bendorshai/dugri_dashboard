@@ -53,9 +53,6 @@ class TestRotatingPrompts:
     def test_sleep_prompts_count(self):
         assert len(M.HOOK_SLEEP_PROMPTS) == ROTATING_PROMPT_COUNT
 
-    def test_eating_window_prompts_count(self):
-        assert len(M.HOOK_EATING_WINDOW_PROMPTS) == ROTATING_PROMPT_COUNT
-
     def test_workouts_prompts_count(self):
         assert len(M.HOOK_WORKOUTS_PROMPTS) == ROTATING_PROMPT_COUNT
 
@@ -65,7 +62,6 @@ class TestRotatingPrompts:
     def test_all_prompts_are_nonempty_strings(self):
         for pool in [
             M.HOOK_SLEEP_PROMPTS,
-            M.HOOK_EATING_WINDOW_PROMPTS,
             M.HOOK_WORKOUTS_PROMPTS,
             M.HOOK_SELF_CARE_PROMPTS,
         ]:

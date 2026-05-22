@@ -54,12 +54,6 @@ class TestRandomTimeWindows:
         assert end == 10
         assert start < end
 
-    def test_eating_window_hook_window(self):
-        start, end = C.EATING_WINDOW_HOOK_WINDOW
-        assert start == 18
-        assert end == 22
-        assert start < end
-
     def test_workouts_hook_window(self):
         start, end = C.WORKOUTS_HOOK_WINDOW
         assert start == 16

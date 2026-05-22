@@ -63,7 +63,6 @@ def make_profile_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("יעד חלבון", callback_data=f"{CB_EDIT_FIELD}target_protein"),
         ],
         [
-            InlineKeyboardButton("חלון אכילה", callback_data=f"{CB_EDIT_FIELD}eating_window"),
             InlineKeyboardButton("אזור זמן", callback_data=f"{CB_EDIT_FIELD}timezone"),
         ],
         [InlineKeyboardButton("🤖 הצע יעדים לפי נתוני גוף", callback_data=f"{CB_PROFILE}suggest_targets")],

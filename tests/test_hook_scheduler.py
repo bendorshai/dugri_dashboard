@@ -14,7 +14,6 @@ import pytest
 from models.profile import User, ToggleState, Toggles
 from constants import (
     SLEEP_HOOK_WINDOW,
-    EATING_WINDOW_HOOK_WINDOW,
     WORKOUTS_HOOK_WINDOW,
     SELF_CARE_HOOK_WINDOW,
     WEEKLY_SUMMARY_HOOK_WINDOW,
@@ -60,7 +59,6 @@ class TestRandomTimeInWindow:
         random.seed(0)
         for window in [
             SLEEP_HOOK_WINDOW,
-            EATING_WINDOW_HOOK_WINDOW,
             WORKOUTS_HOOK_WINDOW,
             SELF_CARE_HOOK_WINDOW,
             WEEKLY_SUMMARY_HOOK_WINDOW,
@@ -133,15 +131,14 @@ class TestGetHooksToSchedule:
         assert len(sc_hooks) == 1
         assert sc_hooks[0]["anchor_day"] == SELF_CARE_ANCHOR_DAY
 
-    def test_active_eating_window_gets_daily_hook(self):
+    def test_active_eating_window_not_scheduled_as_hook(self):
+        """Eating window is auto-computed, not a proactive hook."""
         user = _make_user(toggles=Toggles(
             eating_window=ToggleState(status="active"),
         ))
         hooks = get_hooks_to_schedule(user)
         ew_hooks = [h for h in hooks if h["toggle_name"] == "eating_window"]
-        assert len(ew_hooks) == 1
-        assert ew_hooks[0]["schedule_type"] == "daily"
-        assert ew_hooks[0]["window"] == EATING_WINDOW_HOOK_WINDOW
+        assert len(ew_hooks) == 0
 
     def test_active_weekly_summary_gets_weekly_hook(self):
         user = _make_user(toggles=Toggles())  # weekly_summary is active by default
@@ -175,5 +172,6 @@ class TestGetHooksToSchedule:
             eating_window=ToggleState(status="active"),
         ))
         hooks = get_hooks_to_schedule(user)
-        # sleep + eating_window + workouts + self_care + weekly_summary (default active)
-        assert len(hooks) == 5
+        # sleep + workouts + self_care + weekly_summary (default active)
+        # eating_window is auto-computed, not a proactive hook
+        assert len(hooks) == 4
