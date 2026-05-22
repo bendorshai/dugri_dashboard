@@ -32,7 +32,9 @@ class TestAdminAuth:
         mock_storage.get_activity_hours.return_value = [0] * 24
         mock_storage.get_churn_curve.return_value = []
         mock_storage.get_super_active_users.return_value = []
-        mock_storage.get_churning_users.return_value = []
+        mock_storage.get_consistently_active_users.return_value = []
+        mock_storage.get_inconsistently_active_users.return_value = []
+        mock_storage.get_stopped_users.return_value = []
         mock_storage.get_stuck_at_gate_users.return_value = []
         mock_storage_cls.return_value = mock_storage
 
@@ -60,7 +62,9 @@ class TestAdminAuth:
         mock_storage.get_activity_hours.return_value = [0] * 24
         mock_storage.get_churn_curve.return_value = []
         mock_storage.get_super_active_users.return_value = []
-        mock_storage.get_churning_users.return_value = []
+        mock_storage.get_consistently_active_users.return_value = []
+        mock_storage.get_inconsistently_active_users.return_value = []
+        mock_storage.get_stopped_users.return_value = []
         mock_storage.get_stuck_at_gate_users.return_value = []
         mock_storage_cls.return_value = mock_storage
 
@@ -98,7 +102,9 @@ class TestAdminAuth:
                 "last_active": "2026-05-22T12:00:00",
             }
         ]
-        mock_storage.get_churning_users.return_value = []
+        mock_storage.get_consistently_active_users.return_value = []
+        mock_storage.get_inconsistently_active_users.return_value = []
+        mock_storage.get_stopped_users.return_value = []
         mock_storage.get_stuck_at_gate_users.return_value = []
         mock_storage_cls.return_value = mock_storage
 

@@ -77,13 +77,19 @@
 
     <!-- Hot Leads -->
     <section class="admin-leads" x-data="{ activeTab: 'super_active' }">
-        <h2>Hot Leads</h2>
+        <h2>User Segments</h2>
         <div class="leads-tabs">
             <button :class="{ active: activeTab === 'super_active' }" @click="activeTab = 'super_active'">
                 Super Active <span class="tab-count">{{ super_active | length }}</span>
             </button>
-            <button :class="{ active: activeTab === 'churning' }" @click="activeTab = 'churning'">
-                Churning <span class="tab-count">{{ churning | length }}</span>
+            <button :class="{ active: activeTab === 'consistent' }" @click="activeTab = 'consistent'">
+                Consistently Active <span class="tab-count">{{ consistently_active | length }}</span>
+            </button>
+            <button :class="{ active: activeTab === 'inconsistent' }" @click="activeTab = 'inconsistent'">
+                Inconsistently Active <span class="tab-count">{{ inconsistently_active | length }}</span>
+            </button>
+            <button :class="{ active: activeTab === 'stopped' }" @click="activeTab = 'stopped'">
+                Stopped Using <span class="tab-count">{{ stopped | length }}</span>
             </button>
             <button :class="{ active: activeTab === 'stuck' }" @click="activeTab = 'stuck'">
                 Stuck at Gate <span class="tab-count">{{ stuck | length }}</span>
@@ -92,16 +98,11 @@
 
         <!-- Super Active -->
         <div x-show="activeTab === 'super_active'" x-transition>
+            <p class="leads-desc">Logged 5+ food entries in the last 3 days. High-engagement users worth nurturing.</p>
             {% if super_active %}
             <table class="leads-table">
                 <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Signed Up</th>
-                        <th>Last Active</th>
-                        <th>Actions</th>
-                    </tr>
+                    <tr><th>Name</th><th>Email</th><th>Signed Up</th><th>Last Active</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                     {% for lead in super_active %}
@@ -112,13 +113,10 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram" title="Open Telegram chat">Telegram</a>
+                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
-                            <button class="btn-copy-msg" title="Copy outreach message"
-                                onclick="copyMessage('{{ outreach_templates.super_active | replace('{name}', lead.name or '') }}')">
-                                Copy Message
-                            </button>
+                            <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.super_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -129,21 +127,16 @@
             {% endif %}
         </div>
 
-        <!-- Churning -->
-        <div x-show="activeTab === 'churning'" x-transition>
-            {% if churning %}
+        <!-- Consistently Active -->
+        <div x-show="activeTab === 'consistent'" x-transition>
+            <p class="leads-desc">Logged food every day in the last 7 days. Reliable users building a habit.</p>
+            {% if consistently_active %}
             <table class="leads-table">
                 <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Signed Up</th>
-                        <th>Last Active</th>
-                        <th>Actions</th>
-                    </tr>
+                    <tr><th>Name</th><th>Email</th><th>Signed Up</th><th>Last Active</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
-                    {% for lead in churning %}
+                    {% for lead in consistently_active %}
                     <tr>
                         <td>{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
@@ -151,35 +144,89 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram" title="Open Telegram chat">Telegram</a>
+                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
-                            <button class="btn-copy-msg" title="Copy outreach message"
-                                onclick="copyMessage('{{ outreach_templates.churning | replace('{name}', lead.name or '') }}')">
-                                Copy Message
-                            </button>
+                            <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.consistently_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
             {% else %}
-            <p class="leads-empty">No churning users found.</p>
+            <p class="leads-empty">No consistently active users found.</p>
+            {% endif %}
+        </div>
+
+        <!-- Inconsistently Active -->
+        <div x-show="activeTab === 'inconsistent'" x-transition>
+            <p class="leads-desc">Logged food on some but not all of the last 7 days. May need encouragement to build consistency.</p>
+            {% if inconsistently_active %}
+            <table class="leads-table">
+                <thead>
+                    <tr><th>Name</th><th>Email</th><th>Active Days (of 7)</th><th>Last Active</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for lead in inconsistently_active %}
+                    <tr>
+                        <td>{{ lead.name or '-' }}</td>
+                        <td>{{ lead.email or '-' }}</td>
+                        <td>{{ lead.active_days }}/7</td>
+                        <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
+                        <td class="lead-actions">
+                            {% if lead.telegram_user_id %}
+                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
+                            {% endif %}
+                            <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
+                            <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.inconsistently_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="leads-empty">No inconsistently active users found.</p>
+            {% endif %}
+        </div>
+
+        <!-- Stopped Using -->
+        <div x-show="activeTab === 'stopped'" x-transition>
+            <p class="leads-desc">Were active for 7+ days but have not logged anything in the last 5 days.</p>
+            {% if stopped %}
+            <table class="leads-table">
+                <thead>
+                    <tr><th>Name</th><th>Email</th><th>Signed Up</th><th>Last Active</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for lead in stopped %}
+                    <tr>
+                        <td>{{ lead.name or '-' }}</td>
+                        <td>{{ lead.email or '-' }}</td>
+                        <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
+                        <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
+                        <td class="lead-actions">
+                            {% if lead.telegram_user_id %}
+                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
+                            {% endif %}
+                            <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
+                            <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.stopped | replace('{name}', lead.name or '') }}')">Copy Message</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="leads-empty">No stopped users found.</p>
             {% endif %}
         </div>
 
         <!-- Stuck at Gate -->
         <div x-show="activeTab === 'stuck'" x-transition>
+            <p class="leads-desc">Signed up on the website but never started logging. Either never linked the bot or linked but logged zero entries.</p>
             {% if stuck %}
             <table class="leads-table">
                 <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Signed Up</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
+                    <tr><th>Name</th><th>Email</th><th>Signed Up</th><th>Status</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                     {% for lead in stuck %}
@@ -196,13 +243,10 @@
                         </td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram" title="Open Telegram chat">Telegram</a>
+                            <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram">Telegram</a>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
-                            <button class="btn-copy-msg" title="Copy outreach message"
-                                onclick="copyMessage('{{ outreach_templates.stuck_at_gate | replace('{name}', lead.name or '') }}')">
-                                Copy Message
-                            </button>
+                            <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.stuck_at_gate | replace('{name}', lead.name or '') }}')">Copy Message</button>
                         </td>
                     </tr>
                     {% endfor %}

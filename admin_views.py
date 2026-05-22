@@ -14,7 +14,9 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 OUTREACH_TEMPLATES = {
     "super_active": "היי {name}, ראיתי שאתה ממש פעיל עם דוגרי. אשמח לשמוע מה עובד לך ומה אפשר לשפר",
-    "churning": "היי {name}, שמתי לב שלא התעדכנת כבר כמה ימים. הכל בסדר? אם יש משהו שאפשר לשפר אשמח לשמוע",
+    "consistently_active": "היי {name}, ראיתי שאתה מתעד באופן קבוע עם דוגרי. אשמח לשמוע מה עובד לך",
+    "inconsistently_active": "היי {name}, ראיתי שאתה משתמש בדוגרי. אשמח לשמוע מה אפשר לעשות כדי שזה יהיה יותר קל",
+    "stopped": "היי {name}, שמתי לב שלא התעדכנת כבר כמה ימים. הכל בסדר? אם יש משהו שאפשר לשפר אשמח לשמוע",
     "stuck_at_gate": "היי {name}, ראיתי שנרשמת לדוגרי אבל עדיין לא התחלת לתעד. צריך עזרה עם ההתחברות לבוט?",
 }
 
@@ -44,7 +46,9 @@ def dashboard():
 
     # Hot leads
     super_active = storage.get_super_active_users()
-    churning = storage.get_churning_users()
+    consistently_active = storage.get_consistently_active_users()
+    inconsistently_active = storage.get_inconsistently_active_users()
+    stopped = storage.get_stopped_users()
     stuck = storage.get_stuck_at_gate_users()
 
     return render_template(
@@ -58,7 +62,9 @@ def dashboard():
         hours_json=json.dumps(hours),
         churn_json=json.dumps(churn),
         super_active=super_active,
-        churning=churning,
+        consistently_active=consistently_active,
+        inconsistently_active=inconsistently_active,
+        stopped=stopped,
         stuck=stuck,
         outreach_templates=OUTREACH_TEMPLATES,
         active_tab="admin",

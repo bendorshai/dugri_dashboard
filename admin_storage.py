@@ -238,6 +238,23 @@ class AdminStorage:
 
     # -- Hot Leads --
 
+    def _get_7day_activity(self) -> dict[int, set[str]]:
+        """Return {telegram_user_id: set of active date strings} for last 7 days."""
+        def _fetch():
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+            entries = list(self._food.find(
+                {"created_at": {"$gte": cutoff}},
+                {"telegram_user_id": 1, "created_at": 1},
+            ))
+            from collections import defaultdict
+            tid_days: dict[int, set[str]] = defaultdict(set)
+            for e in entries:
+                ct = _parse_dt(e.get("created_at"))
+                if ct:
+                    tid_days[e["telegram_user_id"]].add(ct.strftime("%Y-%m-%d"))
+            return dict(tid_days)
+        return _cached("7day_activity", _fetch)
+
     def get_super_active_users(self) -> list[dict]:
         def _fetch():
             cutoff = datetime.now(timezone.utc) - timedelta(days=3)
@@ -266,7 +283,54 @@ class AdminStorage:
 
         return _cached("leads_super_active", _fetch)
 
-    def get_churning_users(self) -> list[dict]:
+    def get_consistently_active_users(self) -> list[dict]:
+        def _fetch():
+            activity = self._get_7day_activity()
+            super_active_tids = {
+                lead["telegram_user_id"]
+                for lead in self.get_super_active_users()
+            }
+
+            consistent_tids = []
+            for tid, days in activity.items():
+                if len(days) == 7 and tid not in super_active_tids:
+                    last_day = max(days)
+                    consistent_tids.append({"_id": tid, "last_active": last_day, "active_days": 7})
+
+            return self._enrich_leads(consistent_tids, "consistently_active")
+
+        return _cached("leads_consistent", _fetch)
+
+    def get_inconsistently_active_users(self) -> list[dict]:
+        def _fetch():
+            activity = self._get_7day_activity()
+            super_active_tids = {
+                lead["telegram_user_id"]
+                for lead in self.get_super_active_users()
+            }
+            consistent_tids = {
+                lead["telegram_user_id"]
+                for lead in self.get_consistently_active_users()
+            }
+            exclude = super_active_tids | consistent_tids
+
+            inconsistent_tids = []
+            for tid, days in activity.items():
+                if 1 <= len(days) < 7 and tid not in exclude:
+                    last_day = max(days)
+                    inconsistent_tids.append({
+                        "_id": tid,
+                        "last_active": last_day,
+                        "active_days": len(days),
+                    })
+
+            # Sort by active days descending
+            inconsistent_tids.sort(key=lambda r: r["active_days"], reverse=True)
+            return self._enrich_leads(inconsistent_tids, "inconsistently_active")
+
+        return _cached("leads_inconsistent", _fetch)
+
+    def get_stopped_users(self) -> list[dict]:
         def _fetch():
             cutoff_recent = datetime.now(timezone.utc) - timedelta(days=5)
             cutoff_old = datetime.now(timezone.utc) - timedelta(days=30)
@@ -287,7 +351,6 @@ class AdminStorage:
             if not formerly_active:
                 return []
 
-            # Check which are still active recently
             recent_entries = list(self._food.find(
                 {"created_at": {"$gte": cutoff_recent},
                  "telegram_user_id": {"$in": list(formerly_active)}},
@@ -295,12 +358,12 @@ class AdminStorage:
             ))
             still_active = {e["telegram_user_id"] for e in recent_entries}
 
-            churned_tids = formerly_active - still_active
-            if not churned_tids:
+            stopped_tids = formerly_active - still_active
+            if not stopped_tids:
                 return []
 
             result = []
-            for tid in churned_tids:
+            for tid in stopped_tids:
                 last = self._food.find_one(
                     {"telegram_user_id": tid},
                     sort=[("created_at", -1)],
@@ -309,9 +372,9 @@ class AdminStorage:
                     "_id": tid,
                     "last_active": last["created_at"] if last else None,
                 })
-            return self._enrich_leads(result, "churning")
+            return self._enrich_leads(result, "stopped")
 
-        return _cached("leads_churning", _fetch)
+        return _cached("leads_stopped", _fetch)
 
     def get_stuck_at_gate_users(self) -> list[dict]:
         def _fetch():
@@ -374,12 +437,15 @@ class AdminStorage:
         result = []
         for r in tid_records:
             user = users_by_tid.get(r["_id"], {})
-            result.append({
+            lead = {
                 "email": user.get("_id"),
                 "name": user.get("name"),
                 "telegram_user_id": r["_id"],
                 "category": category,
                 "signup_date": user.get("created_at"),
                 "last_active": r.get("last_active"),
-            })
+            }
+            if "active_days" in r:
+                lead["active_days"] = r["active_days"]
+            result.append(lead)
         return result

@@ -958,6 +958,10 @@ a:hover {
     border-left: 1px solid var(--border);
     padding: 2rem 0;
     flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
 }
 
 .dashboard-nav-item {
@@ -1233,6 +1237,10 @@ a:hover {
    Admin Dashboard (LTR, English)
    ============================================================ */
 
+.dashboard-content:has(.admin-dashboard) {
+    max-width: none;
+}
+
 .admin-dashboard {
     direction: ltr;
     text-align: left;
@@ -1245,9 +1253,6 @@ a:hover {
     grid-template-columns: 1fr 1fr 2fr;
     gap: 1.5rem;
     margin-bottom: 2rem;
-    max-width: 1100px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 .kpi-card {
@@ -1340,9 +1345,6 @@ a:hover {
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
     margin-bottom: 2rem;
-    max-width: 1100px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 .chart-card {
@@ -1374,9 +1376,6 @@ a:hover {
     border-radius: var(--radius);
     padding: 1.5rem 2rem;
     box-shadow: var(--shadow);
-    max-width: 1100px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 .admin-leads h2 {
@@ -1527,6 +1526,16 @@ a:hover {
 .badge-info {
     background: #E8F4F8;
     color: var(--accent-dark);
+}
+
+.leads-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: #FAF7F2;
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
 }
 
 .leads-empty {
