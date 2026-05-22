@@ -113,7 +113,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
+                            <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.super_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -144,7 +144,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
+                            <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.consistently_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -175,7 +175,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
+                            <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.inconsistently_active | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -206,7 +206,7 @@
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
+                            <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.stopped | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -243,7 +243,7 @@
                         </td>
                         <td class="lead-actions">
                             {% if lead.telegram_user_id %}
-                            <a href="https://t.me/@id{{ lead.telegram_user_id }}" target="_blank" rel="noopener" class="btn-telegram">Telegram</a>
+                            <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
                             <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
                             <button class="btn-copy-msg" onclick="copyMessage('{{ outreach_templates.stuck_at_gate | replace('{name}', lead.name or '') }}')">Copy Message</button>
@@ -264,9 +264,43 @@
 // -- Copy message helper --
 function copyMessage(text) {
     navigator.clipboard.writeText(text).then(() => {
-        const toast = document.getElementById('copyToast');
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2000);
+        showToast('Message copied!');
+    });
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('copyToast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// -- Dugri outreach: send a Telegram message via the bot --
+function sendOutreach(telegramUserId, name, btn) {
+    if (!confirm('Send Dugri outreach message to ' + (name || 'this user') + '?')) return;
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    fetch('/admin/outreach', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({telegram_user_id: telegramUserId, name: name}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            btn.textContent = 'Sent!';
+            btn.classList.add('btn-outreach--sent');
+            showToast('Outreach message sent via Dugri!');
+        } else {
+            btn.textContent = 'Failed';
+            btn.disabled = false;
+            showToast('Failed to send: ' + (data.error || 'unknown error'));
+        }
+    })
+    .catch(() => {
+        btn.textContent = 'Failed';
+        btn.disabled = false;
+        showToast('Network error');
     });
 }
 

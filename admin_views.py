@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import logging
 
-from flask import Blueprint, render_template, current_app
+import requests
+from flask import Blueprint, render_template, current_app, request, jsonify
 
 from admin_storage import AdminStorage
 from auth import admin_required
@@ -69,3 +70,53 @@ def dashboard():
         outreach_templates=OUTREACH_TEMPLATES,
         active_tab="admin",
     )
+
+
+@admin_bp.route("/outreach", methods=["POST"])
+@admin_required
+def send_outreach():
+    """Send a Telegram message from Dugri to a user, inviting them to chat with the founder."""
+    data = request.get_json()
+    if not data or not data.get("telegram_user_id"):
+        return jsonify({"error": "missing telegram_user_id"}), 400
+
+    cfg = current_app.config["APP_CONFIG"]
+    bot_token = cfg.get("telegram_bot_token")
+    founder_username = cfg.get("founder_telegram_username", "")
+    if not bot_token:
+        return jsonify({"error": "bot token not configured"}), 500
+
+    telegram_user_id = data["telegram_user_id"]
+    user_name = data.get("name", "")
+
+    text = (
+        f"היי{' ' + user_name if user_name else ''}, "
+        "שי, היזם של דוגרי, רוצה להתחבר איתך כדי ללמוד על שביעות הרצון שלך מדוגרי. "
+        "אם בא לך, לחצ/י על הכפתור למטה ותפתח שיחה ישירות איתו 👇"
+    )
+
+    # Telegram Bot API: sendMessage with inline keyboard
+    payload = {
+        "chat_id": telegram_user_id,
+        "text": text,
+    }
+    if founder_username:
+        payload["reply_markup"] = json.dumps({
+            "inline_keyboard": [[
+                {"text": "💬 פתח שיחה עם שי", "url": f"https://t.me/{founder_username}"},
+            ]],
+        })
+
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json=payload,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return jsonify({"ok": True})
+        logger.error("Telegram API error: %s", resp.text)
+        return jsonify({"error": "telegram send failed"}), 502
+    except Exception:
+        logger.exception("Failed to send outreach message")
+        return jsonify({"error": "telegram send failed"}), 502

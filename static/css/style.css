@@ -1466,20 +1466,31 @@ a:hover {
     flex-wrap: wrap;
 }
 
-.btn-telegram {
+.btn-outreach {
     display: inline-block;
     padding: 0.3rem 0.6rem;
     font-size: 0.75rem;
     font-weight: 500;
     color: #fff;
     background: #0088cc;
+    border: none;
     border-radius: var(--radius-sm);
-    text-decoration: none;
+    cursor: pointer;
     transition: background 0.15s;
+    font-family: var(--font);
 }
 
-.btn-telegram:hover {
+.btn-outreach:hover {
     background: #006699;
+}
+
+.btn-outreach:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.btn-outreach--sent {
+    background: var(--success);
 }
 
 .btn-whatsapp {
