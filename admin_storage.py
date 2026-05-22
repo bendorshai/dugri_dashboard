@@ -23,6 +23,22 @@ def _cached(key: str, fetch_fn):
     return data
 
 
+def _parse_dt(val) -> datetime | None:
+    """Parse a datetime that may be BSON datetime or ISO string."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, str):
+        return datetime.fromisoformat(val)
+    return None
+
+
+def _iso(dt: datetime) -> str:
+    """Format datetime as ISO string for string comparison against stored values."""
+    return dt.isoformat()
+
+
 class AdminStorage:
     def __init__(self, uri: str, db_name: str):
         self._client = MongoClient(uri)
@@ -44,9 +60,8 @@ class AdminStorage:
         return _cached("total_signups", lambda: self._users.count_documents({}))
 
     def get_active_this_week(self) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-
         def _fetch():
+            cutoff = _iso(datetime.now(timezone.utc) - timedelta(days=7))
             pipeline = [
                 {"$match": {"created_at": {"$gte": cutoff}}},
                 {"$group": {"_id": "$telegram_user_id"}},
@@ -62,7 +77,6 @@ class AdminStorage:
             total = self._users.count_documents({})
             linked = self._users.count_documents({"telegram_user_id": {"$ne": None}})
 
-            # Get all linked users with their signup and trial timestamps
             linked_users = list(self._users.find(
                 {"telegram_user_id": {"$ne": None}},
                 {"telegram_user_id": 1, "created_at": 1, "trial_started_at": 1},
@@ -80,23 +94,17 @@ class AdminStorage:
                 if not first_entry or not first_entry.get("created_at"):
                     continue
 
-                entry_time = first_entry["created_at"]
-                if isinstance(entry_time, str):
-                    entry_time = datetime.fromisoformat(entry_time)
+                entry_time = _parse_dt(first_entry["created_at"])
+                if not entry_time:
+                    continue
 
-                # Activation from dashboard signup
-                signup_time = user.get("created_at")
+                signup_time = _parse_dt(user.get("created_at"))
                 if signup_time:
-                    if isinstance(signup_time, str):
-                        signup_time = datetime.fromisoformat(signup_time)
                     if (entry_time - signup_time).total_seconds() <= 86400:
                         activated_from_signup += 1
 
-                # Activation from bot link
-                link_time = user.get("trial_started_at")
+                link_time = _parse_dt(user.get("trial_started_at"))
                 if link_time:
-                    if isinstance(link_time, str):
-                        link_time = datetime.fromisoformat(link_time)
                     if (entry_time - link_time).total_seconds() <= 86400:
                         activated_from_link += 1
 
@@ -113,26 +121,30 @@ class AdminStorage:
 
     def get_dau_30_days(self) -> list[dict]:
         def _fetch():
-            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
-            pipeline = [
-                {"$match": {"created_at": {"$gte": cutoff}}},
-                {"$group": {
-                    "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
-                    "users": {"$addToSet": "$telegram_user_id"},
-                }},
-                {"$project": {"date": "$_id", "count": {"$size": "$users"}, "_id": 0}},
-                {"$sort": {"date": 1}},
-            ]
-            result = list(self._food.aggregate(pipeline))
+            cutoff = _iso(datetime.now(timezone.utc) - timedelta(days=30))
 
-            # Fill gaps with zeros
+            # Since created_at is stored as ISO string, use string comparison
+            # and extract date portion (first 10 chars) in Python
+            entries = list(self._food.find(
+                {"created_at": {"$gte": cutoff}},
+                {"telegram_user_id": 1, "created_at": 1},
+            ))
+
+            # Group by date, count distinct users
+            from collections import defaultdict
+            day_users: dict[str, set] = defaultdict(set)
+            for e in entries:
+                ct = e.get("created_at")
+                if not ct:
+                    continue
+                date_str = str(ct)[:10]  # "YYYY-MM-DD" from ISO string or datetime
+                day_users[date_str].add(e["telegram_user_id"])
+
+            # Fill 30-day range with zeros
             days = {}
             for i in range(30):
                 d = (datetime.now(timezone.utc) - timedelta(days=29 - i)).strftime("%Y-%m-%d")
-                days[d] = 0
-            for r in result:
-                if r["date"] in days:
-                    days[r["date"]] = r["count"]
+                days[d] = len(day_users.get(d, set()))
             return [{"date": d, "count": c} for d, c in days.items()]
 
         return _cached("dau_30", _fetch)
@@ -154,7 +166,8 @@ class AdminStorage:
 
     def get_activity_hours(self) -> list[int]:
         def _fetch():
-            # food_entries have a "time" field as "HH:MM"
+            # food_entries have a "time" field as "HH:MM" string
+            # Use simple aggregation on string field
             pipeline = [
                 {"$match": {"time": {"$exists": True, "$ne": None}}},
                 {"$project": {
@@ -175,7 +188,6 @@ class AdminStorage:
 
     def get_churn_curve(self) -> list[dict]:
         def _fetch():
-            # For each user, determine their signup date and which days (1-14) they logged food
             users = list(self._users.find(
                 {"telegram_user_id": {"$ne": None}},
                 {"telegram_user_id": 1, "created_at": 1},
@@ -189,11 +201,9 @@ class AdminStorage:
             now = datetime.now(timezone.utc)
 
             for user in users:
-                signup = user.get("created_at")
+                signup = _parse_dt(user.get("created_at"))
                 if not signup:
                     continue
-                if isinstance(signup, str):
-                    signup = datetime.fromisoformat(signup)
 
                 tid = user["telegram_user_id"]
                 entries = list(self._food.find(
@@ -203,11 +213,9 @@ class AdminStorage:
 
                 entry_days = set()
                 for e in entries:
-                    ct = e.get("created_at")
+                    ct = _parse_dt(e.get("created_at"))
                     if not ct:
                         continue
-                    if isinstance(ct, str):
-                        ct = datetime.fromisoformat(ct)
                     day_offset = (ct - signup).days + 1
                     if 1 <= day_offset <= 14:
                         entry_days.add(day_offset)
@@ -231,62 +239,67 @@ class AdminStorage:
 
     def get_super_active_users(self) -> list[dict]:
         def _fetch():
-            cutoff = datetime.now(timezone.utc) - timedelta(days=3)
-            pipeline = [
-                {"$match": {"created_at": {"$gte": cutoff}}},
-                {"$group": {
-                    "_id": "$telegram_user_id",
-                    "entry_count": {"$sum": 1},
-                    "last_active": {"$max": "$created_at"},
-                }},
-                {"$match": {"entry_count": {"$gte": 5}}},
-                {"$sort": {"entry_count": -1}},
+            cutoff = _iso(datetime.now(timezone.utc) - timedelta(days=3))
+
+            # Fetch recent entries and group in Python (created_at is ISO string)
+            entries = list(self._food.find(
+                {"created_at": {"$gte": cutoff}},
+                {"telegram_user_id": 1, "created_at": 1},
+            ))
+
+            from collections import Counter
+            tid_counts: Counter = Counter()
+            tid_last: dict = {}
+            for e in entries:
+                tid = e["telegram_user_id"]
+                tid_counts[tid] += 1
+                ct = e.get("created_at")
+                if ct and (tid not in tid_last or str(ct) > str(tid_last[tid])):
+                    tid_last[tid] = ct
+
+            active_tids = [
+                {"_id": tid, "last_active": tid_last.get(tid)}
+                for tid, count in tid_counts.most_common()
+                if count >= 5
             ]
-            active_tids = list(self._food.aggregate(pipeline))
             return self._enrich_leads(active_tids, "super_active")
 
         return _cached("leads_super_active", _fetch)
 
     def get_churning_users(self) -> list[dict]:
         def _fetch():
-            cutoff_recent = datetime.now(timezone.utc) - timedelta(days=5)
-            cutoff_old = datetime.now(timezone.utc) - timedelta(days=30)
+            cutoff_recent = _iso(datetime.now(timezone.utc) - timedelta(days=5))
+            cutoff_old = _iso(datetime.now(timezone.utc) - timedelta(days=30))
 
-            # Users who had entries before 5 days ago (active period)
-            pipeline_active = [
-                {"$match": {"created_at": {"$gte": cutoff_old, "$lt": cutoff_recent}}},
-                {"$group": {
-                    "_id": "$telegram_user_id",
-                    "active_days": {"$addToSet": {
-                        "$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"},
-                    }},
-                }},
-                {"$match": {"$expr": {"$gte": [{"$size": "$active_days"}, 7]}}},
-            ]
-            formerly_active = {
-                r["_id"] for r in self._food.aggregate(pipeline_active)
-            }
+            # Fetch entries from 5-30 days ago, group by user and count distinct days
+            old_entries = list(self._food.find(
+                {"created_at": {"$gte": cutoff_old, "$lt": cutoff_recent}},
+                {"telegram_user_id": 1, "created_at": 1},
+            ))
 
+            from collections import defaultdict
+            tid_days: dict[int, set] = defaultdict(set)
+            for e in old_entries:
+                ct = e.get("created_at")
+                if ct:
+                    tid_days[e["telegram_user_id"]].add(str(ct)[:10])
+
+            formerly_active = {tid for tid, days in tid_days.items() if len(days) >= 7}
             if not formerly_active:
                 return []
 
-            # Exclude those still active recently
-            pipeline_recent = [
-                {"$match": {
-                    "created_at": {"$gte": cutoff_recent},
-                    "telegram_user_id": {"$in": list(formerly_active)},
-                }},
-                {"$group": {"_id": "$telegram_user_id"}},
-            ]
-            still_active = {
-                r["_id"] for r in self._food.aggregate(pipeline_recent)
-            }
+            # Check which are still active recently
+            recent_entries = list(self._food.find(
+                {"created_at": {"$gte": cutoff_recent},
+                 "telegram_user_id": {"$in": list(formerly_active)}},
+                {"telegram_user_id": 1},
+            ))
+            still_active = {e["telegram_user_id"] for e in recent_entries}
 
             churned_tids = formerly_active - still_active
             if not churned_tids:
                 return []
 
-            # Get last activity for churned users
             result = []
             for tid in churned_tids:
                 last = self._food.find_one(
@@ -303,13 +316,11 @@ class AdminStorage:
 
     def get_stuck_at_gate_users(self) -> list[dict]:
         def _fetch():
-            # Users with no telegram_user_id (never linked)
             unlinked = list(self._users.find(
                 {"telegram_user_id": None},
                 {"_id": 1, "name": 1, "created_at": 1},
             ))
 
-            # Users with telegram_user_id but zero food entries
             linked_users = list(self._users.find(
                 {"telegram_user_id": {"$ne": None}},
                 {"_id": 1, "name": 1, "telegram_user_id": 1, "created_at": 1},
