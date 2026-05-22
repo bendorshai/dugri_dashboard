@@ -1,0 +1,434 @@
+# Dugri — Onboarding & Legal Spec
+
+**Status:** Requirements & Features Document — to be handed to Claude Code for implementation planning
+**Stack:** Flask 3.1, MongoDB, Jinja2, Python 3.12, existing `dashboard/` service on Railway
+**Language:** Spec in English; user-facing copy in Hebrew (provided in section 9)
+
+---
+
+## 1. Context & Goals
+
+Dugri is a Telegram bot that helps Israelis track healthy habits — meals (calories + protein), eating window, sleep, workouts, and weekly self-care. The actual product experience lives inside Telegram. The website exists for three reasons only:
+
+1. **Account creation** — authenticate the user and create their record in MongoDB
+2. **Legal consent** — capture explicit, documented consent to terms of service and privacy policy (regulatory requirement under Israeli privacy law)
+3. **Bridge to Telegram** — open the bot with a deep-linked session token so the bot can recognize the user
+
+Everything else — getting to know the user, profile setup, habit selection, goals, motivation — happens inside the bot, conversationally, after the user is already there. This is a foundational design choice: the website doesn't pretend to be the product.
+
+The onboarding goal is **time from landing-page-arrival to first-meal-logged-in-bot under 3 minutes**, with no friction beyond what's legally required.
+
+---
+
+## 2. Page Structure — Single Page, No Steps
+
+The entire onboarding lives on **one page** at the root URL. No multi-step wizard, no progress bar, no "step 1 of 4". This is a deliberate signal: the product won't dig at you.
+
+### Layout (top to bottom on a single scroll):
+
+**Hero zone (above the fold):**
+- Logo (Dugri primary version — cream background, cinnamon frame and text)
+- Headline in cinnamon (`#A67448`): "איתך על ההרגלים"
+- Subhead in warm gray (`#5A554D`), one or two lines: explains what Dugri does in plain Hebrew. Sample: "בוט בטלגרם שעוזר לך להישאר על ההרגלים שלך — בלי לחפור, בלי טפסים, בלי אפליקציה להוריד."
+- A single screenshot or short looping animation of the bot in action (showing a meal being logged and Dugri responding with the calorie/protein count). This replaces marketing copy with proof.
+
+**Sign-up zone (the operative section):**
+- One CTA: **"התחבר עם Google"** button — cinnamon fill, cream text, large and centered
+- Below the button, three required checkboxes (each must be checked to proceed):
+  1. אני מסכים/ה ל[תנאי השימוש](/terms) ול[מדיניות הפרטיות](/privacy)
+  2. אני מבין/ה שדוגרי הוא כלי לעקיבות הרגלים ולא תחליף לייעוץ רפואי או תזונתי מקצועי, ושהמספרים שמוצגים הם הערכות מבוססות-AI שעלי לבדוק בעצמי
+  3. (optional, separate checkbox) אני מסכים/ה לקבל דברי פרסומת משי או מצוות דוגרי במייל
+- Note next to checkboxes 1 and 2: "חובה" / next to checkbox 3: "אופציונלי"
+
+**Post-signup zone (revealed after Google OAuth succeeds and checkboxes 1+2 are confirmed):**
+- The page state changes (no full page reload): the sign-up zone collapses, and a new block appears
+- Welcome line in cinnamon: "יופי, שי. בוא נפתח את דוגרי בטלגרם."
+- Large CTA button: **"פתח את דוגרי בטלגרם"** — cinnamon fill, opens `https://t.me/<bot_username>?start=<session_token>` in a new tab
+- Below: a small line of reassurance: "אם הכפתור לא נפתח אצלך, [לחץ כאן](#) להעתקת הקישור"
+
+**Footer zone:**
+- "מי עומד מאחורי דוגרי" — single short paragraph about Shai (the founder), in cinnamon link, opens an `/about` page
+- Links to /terms, /privacy, contact email
+- Small copyright line
+
+### Branding tokens (apply consistently)
+
+| Token | Value | Use |
+|---|---|---|
+| Background | `#FAF7F2` (cream) | Page background |
+| Primary | `#A67448` (cinnamon) | Logo, headlines, CTA fills, links |
+| Accent | `#5BA8C4` (Mediterranean blue) | Subtle accents, illustrations, breathing space dividers |
+| Text | `#5A554D` (warm gray) | All body text |
+| Positive | `#8FA876` (olive) | Success states ("Signed up successfully") |
+| Warning | `#C97A6B` (terracotta) | Error states ("Please accept the terms"), always paired with explanatory text |
+
+Typography: Hebrew-first, RTL throughout. Use the same Hebrew font family already configured in the existing dashboard. Avoid playful or rounded fonts — Dugri's typography is direct, slightly assertive, but not corporate.
+
+The logo file should be loaded from the existing branding assets directory.
+
+---
+
+## 3. Authentication Flow
+
+**Mechanism:** Google OAuth via Authlib (already in the dashboard service). No alternative login methods at MVP.
+
+**Data captured from Google:** Email (required), full name (required), profile photo URL (optional, stored if present for future personalization in the bot).
+
+**Behavior:**
+
+1. User clicks "התחבר עם Google" → standard Google OAuth flow opens
+2. Google redirects back to the callback route with auth code
+3. Backend validates the code, retrieves email + name + photo
+4. **Before creating the user record**, backend verifies that checkboxes 1 and 2 were submitted (the form sends them along with the OAuth state)
+5. If consent missing → redirect back with terracotta-colored error: "נדרש לאשר את תנאי השימוש כדי להמשיך"
+6. If consent present → create `user_profiles` document with:
+   - `email`, `name`, `photo_url` (if any)
+   - `consents`: object with `terms_accepted_at`, `privacy_accepted_at`, `medical_disclaimer_accepted_at`, `marketing_opt_in` (bool with timestamp if true)
+   - `created_at`, `updated_at`
+   - `telegram_user_id`: null (filled later when user opens the bot)
+   - `signup_session_token`: a random 32-char token (used in the Telegram deep link)
+   - `trial_started_at`: null (set when user first interacts with the bot, not at signup)
+   - `subscription_status`: "trial_pending"
+7. Render the post-signup zone with the "Open Dugri in Telegram" button
+
+**Session handling:** Standard Flask session cookie (already configured). Keep the user logged in for 30 days so returning users see the dashboard or "open bot" button instead of repeating the flow.
+
+**Returning users (already signed up):** If a user with this email already exists, skip the consent capture (their previous consent is on file) and go directly to the post-signup zone. If their `telegram_user_id` is already set, redirect to `/dashboard` instead.
+
+---
+
+## 4. Telegram Linking — Deep Link Mechanism
+
+**Approach:** Token-based deep link. No phone number collection. This is industry standard and removes friction.
+
+**Flow:**
+
+1. After successful signup, the website generates a `signup_session_token` (32-char random string) and stores it on the user record
+2. The "Open Dugri in Telegram" button opens `https://t.me/<DUGRI_BOT_USERNAME>?start=<signup_session_token>`
+3. Telegram opens the bot and sends `/start <signup_session_token>` as the user's first message
+4. The bot receives this in its start handler:
+   - Parse the token from the start payload
+   - Look up the `user_profiles` document with that `signup_session_token`
+   - If found and `telegram_user_id` is null: link the Telegram user ID to that record, clear the token (single-use), set `trial_started_at = now()` and `subscription_status = "trial_active"`
+   - If found but `telegram_user_id` already set: ignore the token (account already linked), greet normally
+   - If not found (expired/invalid token): respond with "נראה שהקישור פג. חזור לאתר ונסה שוב: [URL]"
+5. Once linked, the bot starts the conversational onboarding (out of scope for this spec — handled separately in the bot service)
+
+**Token security:**
+- Tokens are cryptographically random (use `secrets.token_urlsafe(24)`)
+- Tokens expire 24 hours after creation. If a user clicks the link after expiration, the bot tells them to return to the website. The website should regenerate a fresh token on every visit by a logged-in-but-not-yet-linked user.
+- Tokens are single-use — once consumed by the bot, they're deleted from the record
+
+**Edge case — user closes the tab before opening Telegram:** When they return to the website (even days later) while still in their browser session, they should land on the post-signup zone again with the same button, regenerated token. If their session expired, they re-do Google OAuth (which is instant if they're still logged into Google) and skip the consent step.
+
+---
+
+## 5. Trial & Subscription Model (V1)
+
+**21-day free trial**, no credit card required at signup. After day 21:
+
+- The bot sends a message: "השבועיים וחצי שלך עם דוגרי הסתיימו. אם בא לך להמשיך — זה 47 ₪ בחודש. רוצה? [כפתור: כן, להמשיך]"
+- Tapping the button opens a payment page on the website (out of scope for V1 implementation — placeholder OK for MVP)
+- If the user doesn't pay, the bot enters a degraded state: it still responds, but only with "התקופה שלך הסתיימה. אם תחליט להמשיך, [קישור]" — no meal logging, no insights
+- Users who don't pay remain in the database; their data isn't deleted unless they actively request it
+
+**No automatic charging** at end of trial. The user must take an explicit action to subscribe. This decision is intentional and brand-consistent: Dugri doesn't surprise you.
+
+**Implementation scope for this spec:** Track `trial_started_at` and `subscription_status` on the user profile. Build the trial-end notification mechanism in the bot (separate spec). Payment page is a placeholder route that returns "בקרוב" for now.
+
+---
+
+## 6. Terms of Service — Required Content
+
+The terms of service page lives at `/terms`. Below is the **content structure** in Hebrew that Claude Code should render in a clean Jinja2 template (matching the cream/cinnamon/warm-gray branding from section 2).
+
+### Header
+- Title: "תנאי שימוש"
+- Subtitle: "עדכון אחרון: [date — set at deploy time]"
+
+### Sections
+
+**1. כללי**
+Welcome users to Dugri ("השירות"), operated by Shai Bendor Meir ("מפעיל השירות"). Use of the service constitutes acceptance of these terms.
+
+**2. תיאור השירות**
+Dugri is a Telegram-based habit tracking tool. It helps users log meals (with AI-based calorie and protein estimation), eating windows, sleep, workouts, and weekly self-care. The service includes:
+- A Telegram bot interface (the primary product)
+- A website for account management
+- AI-generated insights and weekly summaries
+
+**3. הרשמה וזיהוי**
+Account creation requires authentication via Google. The user agrees to provide accurate information. Each account is personal and non-transferable. Dugri identifies the user through their Telegram account ID after linking — the user is responsible for the security of their Telegram account.
+
+**4. הצהרה רפואית — חשוב**
+*Bold, with terracotta accent in the rendered page.*
+
+דוגרי הוא כלי לעקיבות הרגלים בלבד. דוגרי **אינו** תחליף לייעוץ רפואי, תזונתי או פסיכולוגי מקצועי. המידע שהמערכת מציגה — לרבות הערכות קלוריות, ערכים תזונתיים, ניתוחים שבועיים והמלצות — נועד לצורכי מודעות עצמית בלבד ואינו מהווה ייעוץ רפואי או תזונתי, אבחנה, או טיפול.
+
+אם יש לך תנאי רפואי כלשהו, הפרעת אכילה, היסטוריה של הפרעות אכילה, הריון, או שאתה נוטל תרופות שמושפעות מתזונה — התייעץ עם איש מקצוע מוסמך לפני שאתה משתמש בדוגרי או מסתמך על המידע שהוא מציג.
+
+במקרה של מצוקה נפשית או רפואית, פנה לרופא, לקופת חולים, או לקו חירום מתאים.
+
+**5. הצהרת AI — דיוק והערכות**
+המערכת מבוססת על מודלי בינה מלאכותית (כולל OpenAI) להערכת ערכים תזונתיים מתוך תיאורים בטקסט או מתוך תמונות. ההערכות האלה הן **אומדן** ולא מדידה מדויקת. דוגרי **אינו מתחייב** לדיוק המספרים שהוא מציג.
+
+האחריות לבדוק את הערכים, להשוות לתוויות מזון אמיתיות, ולהתאים את האכילה לצרכים האישיים — היא של המשתמש בלבד. מפעיל השירות אינו אחראי לנזק שייגרם משימוש או הסתמכות על המספרים שהמערכת מציגה.
+
+**6. תקופת התנסות ותשלום**
+
+- תקופת התנסות חינמית של 21 ימים מרגע חיבור החשבון לטלגרם
+- בתום תקופת ההתנסות, המשך השימוש בשירות מותנה בתשלום חודשי של 47 ₪ (כולל מע"מ)
+- אין חיוב אוטומטי — המשתמש בוחר באופן פעיל להמשיך ולשלם בתום תקופת ההתנסות
+- מפעיל השירות שומר לעצמו את הזכות לשנות את המחיר, בהודעה מראש למשתמשים פעילים. שינוי לא יחול על תשלום שכבר בוצע
+- בתום תקופת ההתנסות, אם המשתמש בוחר לא להמשיך, השירות הפעיל מופסק אך הנתונים נשמרים במערכת למקרה שהמשתמש יחליט לחזור
+
+**7. ביטולים והחזרים**
+תשלום חודשי על השירות אינו ניתן להחזר עבור החודש שכבר שולם, אך המשתמש רשאי לבטל את המשך השימוש בכל עת — הביטול ייכנס לתוקף בסוף החודש הנוכחי ולא יחויב חודש נוסף.
+
+**8. התנהלות המשתמש**
+המשתמש מתחייב להשתמש בשירות בהתאם לחוק. חל איסור על שימוש המנסה לפגוע במערכת, לחלץ מידע של משתמשים אחרים, או לעקוף את מנגנוני התשלום. מפעיל השירות רשאי להשעות או למחוק חשבונות שמפרים את התנאים.
+
+**9. שינוי וסיום השירות**
+מפעיל השירות רשאי לעדכן את תכונות השירות, להוסיף או להסיר פיצ'רים, או להפסיק את השירות בכל עת. במקרה של הפסקה מלאה, ניתנת התראה של 30 יום לפחות, ומתאפשרת הורדה של נתוני המשתמש.
+
+**10. קניין רוחני**
+הקוד, העיצוב, הלוגו, ושם המותג "דוגרי" הם קניין רוחני של מפעיל השירות. הנתונים שהמשתמש יצר (תיעודי ארוחות, מטרות, יומן הרגלים) שייכים למשתמש. ראה את מדיניות הפרטיות לפרטים על השימוש שמפעיל השירות עושה בנתונים אלה.
+
+**11. הגבלת אחריות**
+השירות מסופק "כמות שהוא" (as is). מפעיל השירות אינו אחראי לתקלות זמניות, אובדן נתונים שנגרם מצד שלישי (Telegram, OpenAI, Google), או נזק עקיף כלשהו שעלול להיגרם משימוש בשירות. ראה גם סעיפים 4 ו-5 בנוגע לאחריות רפואית ולדיוק AI.
+
+**12. תקשורת שיווקית**
+בעת ההרשמה, המשתמש יכול לסמן הסכמה נפרדת לקבלת דברי פרסומת בדוא"ל. ניתן לבטל את ההסכמה הזו בכל עת באמצעות קישור הסרה בכל מייל, או בפנייה לכתובת המייל של מפעיל השירות. ביטול לא ישפיע על הודעות תפעוליות הקשורות לשירות.
+
+**13. דין וסמכות שיפוט**
+על תנאי שימוש אלה יחולו דיני מדינת ישראל בלבד. סמכות השיפוט הבלעדית נתונה לבתי המשפט המוסמכים בישראל.
+
+**14. יצירת קשר**
+שי בן-דור מאיר
+דוא"ל: [TO BE FILLED]
+לשאלות, פניות, או בקשות הקשורות לתנאים אלה
+
+---
+
+## 7. Privacy Policy — Required Content
+
+The privacy policy lives at `/privacy`. Same template/styling as terms.
+
+### Header
+- Title: "מדיניות פרטיות"
+- Subtitle: "עדכון אחרון: [date]. בהתאם לחוק הגנת הפרטיות (ישראל) וסעיף 30א לחוק התקשורת (בזק ושידורים)"
+
+### Sections
+
+**1. מי אנחנו**
+דוגרי הוא שירות מעקב הרגלים בריאות, המופעל על ידי שי בן-דור מאיר.
+דוא"ל ליצירת קשר: [TO BE FILLED]
+
+**2. המידע שאנחנו אוספים**
+
+**מידע שהמשתמש מוסר בעת ההרשמה:**
+- שם מלא וכתובת דוא"ל (מתקבלים אוטומטית מחשבון Google)
+- תמונת פרופיל (אם זמינה ב-Google)
+- הסכמות משפטיות עם חותמת זמן
+
+**מידע שנאסף במהלך השימוש בבוט:**
+- מזהה משתמש בטלגרם (Telegram user ID)
+- תיעודי ארוחות שהמשתמש מקליד או מצלם
+- תמונות שהמשתמש שולח לבוט לזיהוי מזון
+- נתונים שהמשתמש מספק לבוט: גיל, משקל, גובה, יעדים, חלון אכילה, שעת שינה, אימונים
+- היסטוריית הודעות בין המשתמש לבוט (לצורך המשכיות שיחה)
+- תובנות, סיכומים שבועיים, וניתוחים שהמערכת מייצרת על בסיס הנתונים
+
+**מידע שנאסף אוטומטית:**
+- כתובת IP, סוג דפדפן, מערכת הפעלה, סוג מכשיר (באתר)
+- דפים שביקרת בהם באתר, זמן שהייה, מקור ההגעה
+- לוגים תפעוליים ולוגי שגיאות
+
+**3. כיצד אנו משתמשים במידע**
+
+- **מתן השירות:** הצגת תיעודי הארוחות שלך, חישוב ערכים תזונתיים, יצירת סיכומים ותובנות, ניהול חשבונך
+- **שיפור השירות:** ניתוח דפוסי שימוש, איתור באגים, פיתוח פיצ'רים
+- **אימון מודלי AI:** מפעיל השירות רשאי להשתמש בנתונים שנאספים — כולל תיעודי ארוחות, תמונות, ושיחות עם הבוט — לצורך אימון, שיפור, או פיתוח של מודלי בינה מלאכותית. נתונים אלה ישמשו רק את מפעיל השירות; **לא נמכור או נעביר נתונים אישיים לצדדים שלישיים** למטרת אימון, פרסום, או מכירה של מידע
+- **תקשורת תפעולית:** הודעות הקשורות לחשבון, תזכורות, התראות על תום תקופת ההתנסות, ועדכוני שירות. הודעות אלה אינן תלויות בהסכמה שיווקית
+- **תקשורת שיווקית (בכפוף להסכמה נפרדת):** שליחת תכנים, טיפים, ועדכונים על שירותים נוספים, רק למשתמשים שסימנו הסכמה מפורשת לכך
+
+**4. בסיס חוקי לעיבוד המידע**
+
+- **הסכמה מפורשת:** סימון תיבת ההסכמה בעת ההרשמה מהווה הסכמה לתנאי מדיניות זו ולעיבוד המידע
+- **ביצוע התקשרות:** עיבוד הנדרש לצורך מתן השירות שביקשת
+- **אינטרס לגיטימי:** שיפור השירות, אבטחת מידע, ופיתוח טכנולוגי
+
+**5. שיתוף מידע עם צדדים שלישיים**
+
+מפעיל השירות **לא מוכר** מידע אישי לצדדים שלישיים, ולא משתף מידע אישי למטרת פרסום של גורמים אחרים. עם זאת, חלק מפעולות השירות מחייבות שיתוף מידע עם ספקי שירות טכניים:
+
+- **Telegram:** הבוט פועל על תשתית Telegram. הודעותיך ותמונותיך עוברות דרך Telegram. ראה את מדיניות הפרטיות של Telegram.
+- **OpenAI:** טקסטים ותמונות של ארוחות נשלחים ל-OpenAI לצורך זיהוי מזון והערכת ערכים תזונתיים. OpenAI מצהירה כי לא משתמשת בנתונים אלה לאימון מודליה (לפי תנאי ה-API שלהם, נכון למועד עדכון מדיניות זו)
+- **Google:** משתמש לזיהוי בעת ההרשמה (Google OAuth)
+- **Railway:** ספק התשתית שלנו לאחסון השרת והמידע
+- **MongoDB:** מסד הנתונים, מאוחסן ב-Railway
+
+ספקים אלה כפופים למדיניות פרטיות משלהם ומחויבים לדרישות החוק.
+
+**6. שמירת מידע**
+
+- מידע על חשבון פעיל נשמר כל עוד החשבון פעיל
+- מידע על חשבון בלתי פעיל (משתמש שלא חזר לבוט במשך 12 חודשים רצופים) נשמר 24 חודשים נוספים ואז נמחק, אלא אם המשתמש מבקש מחיקה מוקדמת
+- לוגי שגיאות נמחקים אוטומטית לאחר 30 יום
+- מידע הקשור לתשלומים נשמר בהתאם לדרישות חוקי המס
+
+**7. זכויות המשתמש**
+
+בהתאם לחוק הגנת הפרטיות, יש לך זכות:
+- לעיין במידע שנאסף עליך
+- לבקש תיקון של מידע שגוי
+- לבקש מחיקה מלאה של המידע שלך מהמערכת
+- לקבל עותק של המידע שלך (ניידות מידע)
+- להתנגד לעיבוד המידע למטרות שיווק
+- לבטל את ההסכמה לקבלת תקשורת שיווקית בכל עת
+
+לכל בקשה, פנה ל-[EMAIL]. נשיב תוך 30 יום.
+
+**8. אבטחת מידע**
+
+אנו נוקטים באמצעי אבטחה סבירים: הצפנת תקשורת (HTTPS/SSL), בקרת גישה לבסיס הנתונים, גיבויים שוטפים, ועדכוני אבטחה. עם זאת, אין מערכת מאובטחת לחלוטין. במקרה של פרצת אבטחה המשפיעה על פרטיותך, נודיע לך כנדרש על פי חוק.
+
+**9. עוגיות (Cookies)**
+
+האתר משתמש בעוגיות הכרחיות בלבד (לתפעול הסשן, זיהוי משתמש מחובר, והעדפות שפה). אין שימוש בעוגיות פרסום או מעקב צדדי-שלישי באתר ב-V1.
+
+**10. מידע על קטינים**
+
+השירות מיועד למשתמשים בני 18 ומעלה. איננו אוספים ביודעין מידע על קטינים. אם נודע לנו שמשתמש פחות מגיל 18 נרשם, נמחק את המידע מיידית.
+
+**11. שינויים במדיניות**
+
+עדכונים מהותיים יפורסמו באתר ויישלחו במייל למשתמשים פעילים. תאריך העדכון האחרון מופיע בראש המסמך. המשך שימוש בשירות לאחר פרסום שינויים מהווה הסכמה למדיניות המעודכנת.
+
+**12. יצירת קשר**
+
+שי בן-דור מאיר
+דוא"ל: [TO BE FILLED]
+
+אם לא קיבלת מענה מספק, ניתן לפנות לרשות להגנת הפרטיות בישראל.
+
+---
+
+## 8. Technical Implementation Notes
+
+**Existing assets to reuse:**
+- Google OAuth setup (Authlib) — already configured for the existing dashboard
+- MongoDB connection and `user_profiles` collection — extend with new fields
+- Jinja2 template base — extend with the cream/cinnamon design tokens
+- Existing Hebrew/RTL CSS conventions
+
+**New routes:**
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/` | GET | Onboarding landing page (this spec) |
+| `/auth/google/start` | GET | Initiates Google OAuth (existing) |
+| `/auth/google/callback` | GET | OAuth callback, captures consent, creates user (existing — extend with consent capture) |
+| `/terms` | GET | Renders terms of service from a markdown or template file |
+| `/privacy` | GET | Renders privacy policy from a markdown or template file |
+| `/about` | GET | Founder bio page (placeholder OK for V1) |
+| `/api/regenerate-bot-link` | POST | For returning logged-in users — generates a fresh session token and returns the deep link URL |
+
+**New env variables:**
+
+| Variable | Purpose |
+|---|---|
+| `DUGRI_BOT_USERNAME` | Telegram username of the bot (used in deep link URL) |
+| `FOUNDER_TELEGRAM_USERNAME` | Founder's personal Telegram username (used by admin dashboard outreach) |
+| `CONTACT_EMAIL` | Displayed in terms and privacy |
+| `MARKETING_FROM_EMAIL` | Sender address for marketing emails (only used in V2) |
+
+**New / extended MongoDB fields on `user_profiles`:**
+
+```
+{
+  "_id": ObjectId,
+  "email": str,
+  "name": str,
+  "photo_url": str | null,
+  "telegram_user_id": int | null,
+  "signup_session_token": str | null,
+  "signup_session_token_expires_at": datetime | null,
+  "consents": {
+    "terms_accepted_at": datetime,
+    "privacy_accepted_at": datetime,
+    "medical_disclaimer_accepted_at": datetime,
+    "marketing_opt_in": bool,
+    "marketing_opt_in_at": datetime | null,
+    "consent_version": str  // e.g. "2026-05-19" — bump if terms change so we can re-prompt
+  },
+  "trial_started_at": datetime | null,
+  "subscription_status": "trial_pending" | "trial_active" | "trial_ended" | "paid" | "cancelled",
+  "created_at": datetime,
+  "updated_at": datetime
+}
+```
+
+**Tests to write:**
+- OAuth callback with all consents → user created correctly
+- OAuth callback missing required consent → redirected with error, no user created
+- Returning user with active session → skips consent step
+- Telegram token consumed by bot → user linked, token cleared, trial started
+- Telegram token expired → bot returns user to website with clear message
+- Marketing opt-in toggle → stored correctly
+
+---
+
+## 9. Hebrew Copy Bank (Final Strings)
+
+For Claude Code to plug directly into templates. All strings are final and reflect Dugri's voice.
+
+### Landing page
+
+| Element | Hebrew copy |
+|---|---|
+| Hero headline | איתך על ההרגלים |
+| Hero subhead | בוט בטלגרם שעוזר לך להישאר על ההרגלים שלך — בלי לחפור, בלי טפסים, בלי אפליקציה להוריד |
+| Sign-up CTA | התחבר עם Google |
+| Consent 1 (required) | אני מסכים/ה ל[תנאי השימוש](/terms) ול[מדיניות הפרטיות](/privacy) |
+| Consent 2 (required) | אני מבין/ה שדוגרי הוא כלי לעקיבות הרגלים ולא תחליף לייעוץ רפואי או תזונתי מקצועי, ושהמספרים שמוצגים הם הערכות מבוססות-AI שעלי לבדוק בעצמי |
+| Consent 3 (optional) | אני מסכים/ה לקבל דברי פרסומת משי או מצוות דוגרי במייל |
+| Error: missing required consent | כדי להמשיך, צריך לאשר את תנאי השימוש ואת ההצהרה הרפואית |
+| Post-signup welcome | יופי, {{ name }}. בוא נפתח את דוגרי בטלגרם |
+| Post-signup CTA | פתח את דוגרי בטלגרם |
+| Post-signup fallback link | אם הכפתור לא נפתח אצלך, [לחץ כאן להעתקת הקישור](#) |
+| Footer | מי עומד מאחורי דוגרי · תנאי שימוש · מדיניות פרטיות · יצירת קשר |
+
+### About page (placeholder content)
+
+| Element | Hebrew copy |
+|---|---|
+| Headline | מי עומד מאחורי דוגרי |
+| Body (placeholder — to be replaced with Shai's real bio) | היי, אני שי בן-דור מאיר. בניתי את דוגרי כי הייתי צריך אותו בעצמי. רציתי כלי שיעזור לי להיות "על זה" בלי לחפור בי, בלי שיהפוך את הבריאות שלי לעוד פרויקט עם UI לתחזק. דוגרי הוא מה שיצא — בוט בטלגרם שמראה לך את עצמך, ועוזר לך להישאר קשוב. |
+
+---
+
+## 10. Out of Scope (Do Not Build in V1)
+
+- Payment flow / Stripe integration — the trial-end CTA links to a placeholder "soon" page
+- Phone number collection
+- Email magic-link auth as alternative to Google OAuth
+- Account settings page (changing email, deleting account, etc.) — handle deletion requests manually via email for V1
+- Multi-language support beyond Hebrew
+- Mobile app
+- Analytics tracking pixels (no Meta pixel, no Google Analytics in V1 — keep the site clean)
+- Cookie consent banner — not required because no tracking cookies are used
+
+---
+
+## 11. Deliverables
+
+A working Flask application within the existing `dashboard/` service:
+- Single-page onboarding at `/`
+- `/terms`, `/privacy`, `/about` pages, styled consistently with the brand
+- Extended `user_profiles` schema and consent capture logic in the OAuth callback
+- Telegram deep-link generation
+- Tests for OAuth callback consent logic and token lifecycle
+- All Hebrew strings extracted into a single file (`hebrew_strings.py` or similar) for easy editing
+
+The PR description should note any deviations from this spec and assumptions made about the existing dashboard service's conventions.

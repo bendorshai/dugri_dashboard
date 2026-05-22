@@ -39,75 +39,87 @@ def home():
 
 
 # ------------------------------------------------------------------
-# Toggles (replaces old goals page)
+# Preferences (merged toggles + targets)
 # ------------------------------------------------------------------
 
-@dashboard_bp.route("/toggles", methods=["GET"])
+@dashboard_bp.route("/preferences", methods=["GET"])
 @login_required
-def toggles():
+def preferences():
     storage = _get_storage()
     user = storage.get_user(session["user_email"])
-    return render_template("dashboard/toggles.html", user=user, active_tab="toggles")
+    return render_template("dashboard/preferences.html", user=user, active_tab="preferences")
 
 
-@dashboard_bp.route("/toggles", methods=["POST"])
+@dashboard_bp.route("/preferences", methods=["POST"])
 @login_required
-def toggles_post():
+def preferences_post():
     storage = _get_storage()
     email = session["user_email"]
-
-    toggle_names = ["sleep", "eating_window", "workouts", "self_care", "target_data", "weekly_summary"]
-    toggles = {}
 
     user = storage.get_user(email)
     existing_toggles = user.get("toggles", {}) if user else {}
 
+    # Build toggles
+    toggle_names = ["sleep", "eating_window", "workouts", "self_care", "target_data", "weekly_summary"]
+    toggles = {}
     for name in toggle_names:
         existing = existing_toggles.get(name, {})
         enabled = request.form.get(f"{name}_enabled")
         if enabled:
             toggles[name] = {**existing, "status": "active"}
         else:
-            # If was active and now unchecked → cancelled
             if existing.get("status") == "active":
                 toggles[name] = {**existing, "status": "cancelled"}
             else:
                 toggles[name] = existing or {"status": "dormant"}
 
     storage.update_user_toggles(email, toggles)
-    return redirect(url_for("dashboard_views.toggles"))
 
-
-# ------------------------------------------------------------------
-# Targets (unified calorie + protein targets)
-# ------------------------------------------------------------------
-
-@dashboard_bp.route("/targets", methods=["GET"])
-@login_required
-def targets():
-    storage = _get_storage()
-    user = storage.get_user(session["user_email"])
-    return render_template("dashboard/targets.html", user=user, active_tab="targets")
-
-
-@dashboard_bp.route("/targets", methods=["POST"])
-@login_required
-def targets_post():
-    storage = _get_storage()
-    email = session["user_email"]
-
+    # Build targets
     cal_str = request.form.get("calories", "").strip()
     prot_str = request.form.get("protein", "").strip()
-
     calories = int(cal_str) if cal_str else None
     protein = int(prot_str) if prot_str else None
 
     old_targets = storage.update_user_targets(email, calories, protein)
 
-    # Notify bot via internal webhook
-    _notify_bot_target_change(email, old_targets, {"calories": calories, "protein": protein})
+    # Additional targets: sleep_time, workouts_per_week
+    extra = {}
+    sleep_target = request.form.get("sleep_target", "").strip()
+    if sleep_target:
+        extra["targets.sleep_time"] = sleep_target
+    workouts_str = request.form.get("workouts_per_week", "").strip()
+    if workouts_str:
+        extra["targets.workouts_per_week"] = int(workouts_str)
 
-    return redirect(url_for("dashboard_views.targets"))
+    # Eating window
+    ew_start = request.form.get("eating_window_start", "").strip()
+    ew_end = request.form.get("eating_window_end", "").strip()
+    if ew_start and ew_end and toggles.get("eating_window", {}).get("status") == "active":
+        extra["eating_window"] = {"start": ew_start, "end": ew_end}
+
+    if extra:
+        storage.update_user_profile(email, extra)
+
+    # Notify bot if calorie/protein targets changed
+    new_targets = {"calories": calories, "protein": protein}
+    if old_targets.get("calories") != calories or old_targets.get("protein") != protein:
+        _notify_bot_target_change(email, old_targets, new_targets)
+
+    return redirect(url_for("dashboard_views.preferences"))
+
+
+# Legacy redirects
+@dashboard_bp.route("/toggles", methods=["GET", "POST"])
+@login_required
+def toggles():
+    return redirect(url_for("dashboard_views.preferences"))
+
+
+@dashboard_bp.route("/targets", methods=["GET", "POST"])
+@login_required
+def targets():
+    return redirect(url_for("dashboard_views.preferences"))
 
 
 def _notify_bot_target_change(email: str, old_targets: dict, new_targets: dict):
@@ -213,5 +225,5 @@ def subscription():
 @dashboard_bp.route("/goals", methods=["GET", "POST"])
 @login_required
 def goals():
-    """Redirect legacy goals URL to new toggles page."""
-    return redirect(url_for("dashboard_views.toggles"))
+    """Redirect legacy goals URL to preferences page."""
+    return redirect(url_for("dashboard_views.preferences"))

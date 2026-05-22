@@ -1,0 +1,111 @@
+Claude Code Prompt — Admin Dashboard for Health Tracker MVP
+Context
+I'm building "Dugri" — a Telegram bot that helps Israelis track healthy habits (meals, eating window, sleep, workouts, weekly self-care). The system is in pre-launch MVP phase. Before opening to a wider audience, I need an internal admin dashboard to observe real user behavior, identify users who are ready for a sales conversation, and learn which features matter.
+The stack is documented in TECH_STACK.md — Python 3.12, Flask 3.1, MongoDB via PyMongo, Jinja2 templates with custom CSS, deployed on Railway. The dashboard service already exists at dashboard/. Add the admin section to that existing service, following its current patterns (routes, templates, CSS conventions, OAuth setup).
+Goal
+Build an admin-only section at /admin that surfaces a small set of high-signal metrics. The guiding principle is few metrics, high accuracy, no noise. This is not a generic analytics dashboard — it's a focused operator's cockpit for a founder running a beta.
+Access control
+Restrict /admin to a hardcoded list of admin emails (read from an ADMIN_EMAILS env var, comma-separated). Reuse the existing Google OAuth flow — no separate auth system. Non-admin users hitting /admin get a 403.
+Page structure
+One page, /admin, with three zones top-to-bottom:
+Zone 1 — Headline numbers (top of page)
+Three large numbers in a row. Each is a single integer or percentage with a small label underneath. No decoration, no sparklines.
+
+Total users — count of all user_profiles documents.
+Active this week — distinct users who logged at least one food_entries document in the last 7 days.
+Activation rate — % of users who logged at least one meal within 24 hours of completing onboarding. (Onboarding completion = the moment user_profiles has goals set + Telegram linked. If you can't determine this exact moment from existing fields, propose the closest proxy and flag it in a code comment.)
+
+Zone 2 — Four charts (2x2 grid)
+Chart A: Daily active users — last 30 days
+A bar chart, one bar per day. Y-axis: count of distinct users who logged at least one meal that day. Hover/title shows the date and the count. This is the "how many logged on day X" metric.
+Chart B: Habit adoption — which of the 5 habits users actually track
+Horizontal bar chart with one bar per habit (meals, eating window, sleep, workouts, weekly self-care). Bar length = number of users who have logged that habit at least 3 times in their lifetime (3 is the threshold for "this user genuinely uses this habit" — not just tried it once). This tells me whether the "5 habits" promise holds up or whether users collapse to 1–2.
+Chart C: Activity by hour of day — when users engage
+Bar chart, 24 bars (0–23). Each bar = total food_entries logged in that hour of the day, across all users, last 30 days. Use the user's local timezone from their profile if available, otherwise UTC (note this in a code comment). This tells me when to schedule proactive bot messages.
+Chart D: Drop-off by day-of-journey
+Bar chart, 14 bars (day 1 through day 14 of each user's journey since signup). Each bar = % of users who logged at least one meal on that day-of-their-journey, out of users who reached that day at all. This reveals the canonical drop-off day (typically day 3 or day 14 in habit apps) so I can design an intervention exactly there.
+Zone 3 — Hot leads table (bottom of page)
+A single table with one row per "hot lead." Columns: Name, Email, Category, Last activity, WhatsApp button.
+Each row has a WhatsApp icon button that opens https://wa.me/<phone>?text=<URL-encoded message> in a new tab. The message template is in Hebrew:
+היי <שם>, מדבר איתך <המייסד> מדוגרי. שמתי לב שאתה משתמש כבר כמה ימים ורציתי לשמוע איך זה מרגיש לך - מתאים לך שיחה קצרה השבוע?
+Adjust the template per category (the message for a churned user is different from a power user — see categories below).
+Phone numbers come from user_profiles. If a user has no phone number on file, show the row without the WhatsApp button and display a small "no phone" indicator instead.
+Hot-lead categories (compute and label each lead)
+A user is a hot lead if they fall into one of these four categories. Categorize each lead by the first matching rule, in this order:
+
+Engaged power user — logged meals on at least 5 of the last 7 days. Sort these first; most ready for a positive conversation.
+Recent churn — logged meals on at least 5 days within their first 14 days, but zero meals in the last 7 days. Sort second; highest learning value for the founder.
+Stuck at the gate — completed onboarding more than 48 hours ago but logged zero meals. Sort third; reveals onboarding friction.
+Sent unusual message — sent a Telegram message in the last 14 days that is longer than 200 characters OR contains a question mark, AND is not a food log. Sort fourth; signals manual engagement worth a human reply. (If you can't reliably distinguish "not a food log" from existing data, propose the best proxy and flag it.)
+
+Show at most 25 leads. If more qualify, show the most recently active 25 and add a small note "showing 25 of N — refine in code if you want more."
+Implementation notes
+
+Use Chart.js via CDN for the four charts (existing dashboard already uses server-side rendering with custom CSS; Chart.js is lightweight and fits the stack without adding build steps). Render charts client-side from JSON injected into the template.
+Aggregate all metrics in MongoDB aggregation pipelines, not Python loops. Performance matters even at small scale because this page will be reloaded often by me.
+Cache aggregation results in memory for 60 seconds. The dashboard doesn't need real-time data and aggregations on the full collections will get expensive as data grows.
+Visual style: match the Dugri brand. Background #FAF7F2 (cream), primary #A67448 (cinnamon), accent #5BA8C4 (Mediterranean blue), text #5A554D (warm gray), positive #8FA876 (olive), warning #C97A6B (terracotta). Chart bars in cinnamon by default, blue for time-based charts (C and D), olive for positive states. Use the same Hebrew-friendly font and RTL conventions already in the dashboard.
+The admin page itself should be in English (it's for me, not for users). Only the WhatsApp template text is in Hebrew.
+Add a small "last updated X seconds ago" indicator near the top so I know whether I'm looking at the cache or fresh data.
+Write tests for the aggregation logic (mock MongoDB, assert pipeline outputs given known input documents). Skip tests for the rendering layer.
+
+Out of scope (do not build)
+
+No filters, no date pickers, no export buttons. The whole point is that I look at one page and see what matters.
+No individual user drill-down pages. If I need to investigate a specific user, I'll query MongoDB directly.
+No funnel visualizations beyond what's listed. No retention cohorts. No revenue charts (no paying users yet).
+No mobile responsiveness beyond what comes for free. This is a desktop tool.
+
+Deliverable
+A working /admin route in the existing dashboard/ Flask service, deployable to Railway with the rest of the dashboard. Include a one-paragraph note in the PR description about any assumptions you had to make (especially around onboarding completion timestamp and the "not a food log" classifier).
+
+
+
+====================
+
+
+יופי, יש לי תשובות. אענה לך לפי הסדר.
+1. הכפתור בהודעה שפותח שיחה ישירה איתך
+כן, זה אפשרי וסטנדרטי בטלגרם. ה-Bot API תומך ב-inline keyboard עם כפתור מסוג URL. הכפתור יכול להיות tg://resolve?domain=YOUR_USERNAME או https://t.me/YOUR_USERNAME - שניהם פותחים שיחה ישירה איתך בטלגרם.
+מה שצריך:
+
+שיהיה לך username ציבורי בטלגרם )לדוגמה: @shaibendor(. אם אין לך - תגדיר עכשיו.
+ב-spec של ההודעה: כפתור תחתון "📱 לשיחה ישירה עם שי" שמפנה ל-https://t.me/YOUR_USERNAME
+
+איך זה עובד בפועל:
+
+אתה לוחץ "שלח דרך הבוט" בדשבורד
+הבוט שולח למשתמש: "היי דנה, מדבר איתך שי בן-דור מאיר, היזם של דוגרי. שמתי לב..." + כפתור "📱 דבר עם שי ישירות"
+המשתמש לוחץ - נפתחת שיחה איתך אישית בטלגרם
+כל שיחת ההמשך מתבצעת בחשבון הפרטי שלך, לא דרך הבוט
+
+זה פתרון אלגנטי כי דוגרי נשאר דוגרי )לא מתחזה אליך( ואתה ניגש כשי, בשם הפרטי שלך, ברגע שיש עניין הדדי.
+2. תיקון לתוכנית הדשבורד
+הנה פסקה שמחליפה את חלק ה"כפתור וואטסאפ" בדשבורד המנהלים שיצרנו קודם. אפשר להוסיף אותה ל-spec או להחליף את הקטע הרלוונטי.
+
+Amendment to Admin Dashboard Spec — Outreach via Bot
+Replace the WhatsApp button approach in the hot leads table with a bot-based outreach flow. Phone numbers are not collected at signup, so direct phone/WhatsApp contact isn't available. Instead, leverage the existing Telegram channel where the user already engages with Dugri.
+Mechanism:
+Each row in the hot leads table includes a "Send via bot" button. Clicking it opens a small modal with:
+
+A pre-filled Hebrew message template, adjusted to the lead's category (engaged power user, recent churn, stuck at the gate, unusual message). The founder can edit before sending.
+A "Send" button that triggers the bot to deliver the message to the user via Telegram, signed "שי, מאחורי דוגרי" (or whatever signature is configured).
+A status indicator after sending: "Sent at HH:MM" + tracking of whether the user replied.
+
+Message structure on the user's side:
+The bot sends a friendly outreach message in Hebrew, followed by an inline keyboard button below the message text:
+📱 דבר עם שי ישירות
+The button is a Telegram URL button linking to https://t.me/<founder_username> (stored as FOUNDER_TELEGRAM_USERNAME env var). When the user taps it, Telegram opens a direct conversation with the founder's personal Telegram account — outside the bot's namespace.
+Why this matters:
+This preserves the brand boundary (Dugri stays Dugri, doesn't impersonate the founder) while giving the user a one-tap path to a real human conversation, only when they choose to take it. Phone numbers are never required; the conversation lives entirely in Telegram where the user already feels comfortable.
+Implementation notes:
+
+Add FOUNDER_TELEGRAM_USERNAME to env config
+Bot must have permission to send messages to the user (already true since they've interacted with the bot)
+Store each outreach event in MongoDB (outreach_log collection): user_id, category, sent_at, message_text, replied_at (null until they respond)
+The "Last activity" column in the leads table updates if the user replies to the outreach, so the founder can see at a glance who engaged back
+
+Out of scope:
+
+No automatic follow-ups if the user doesn't respond. The founder decides manually whether to retry.
+No bulk send. One message at a time, intentionally, to keep outreach personal.

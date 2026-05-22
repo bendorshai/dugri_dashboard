@@ -10,15 +10,10 @@
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span>דבר דוגרי</span>
         </a>
-        <a href="{{ url_for('dashboard_views.toggles') }}"
-           class="dashboard-nav-item {% if active_tab == 'toggles' %}dashboard-nav-item--active{% endif %}">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-            <span>מתגים</span>
-        </a>
-        <a href="{{ url_for('dashboard_views.targets') }}"
-           class="dashboard-nav-item {% if active_tab == 'targets' %}dashboard-nav-item--active{% endif %}">
+        <a href="{{ url_for('dashboard_views.preferences') }}"
+           class="dashboard-nav-item {% if active_tab == 'preferences' %}dashboard-nav-item--active{% endif %}">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            <span>יעדים</span>
+            <span>העדפות אישיות</span>
         </a>
         <a href="{{ url_for('dashboard_views.weekly_summaries') }}"
            class="dashboard-nav-item {% if active_tab == 'weekly_summaries' %}dashboard-nav-item--active{% endif %}">
