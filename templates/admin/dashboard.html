@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dugri Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+</head>
+<body class="admin-dashboard">
+
+    <header class="admin-header">
+        <div class="admin-header-inner">
+            <h1>Dugri Admin</h1>
+            <a href="{{ url_for('auth.logout') }}" class="admin-logout">Logout</a>
+        </div>
+    </header>
+
+    <main class="admin-main">
+
+        <!-- KPI Cards -->
+        <section class="admin-kpis">
+            <div class="kpi-card">
+                <span class="kpi-label">Active Users</span>
+                <span class="kpi-value">{{ total_users }}</span>
+                <span class="kpi-sub">Linked to bot</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Active This Week</span>
+                <span class="kpi-value">{{ active_week }}</span>
+                <span class="kpi-sub">Logged food in last 7 days</span>
+            </div>
+            <div class="kpi-card kpi-funnel">
+                <span class="kpi-label">Signup Funnel</span>
+                <div class="funnel-stages">
+                    <div class="funnel-stage">
+                        <span class="funnel-count">{{ funnel.total_signups }}</span>
+                        <span class="funnel-name">Signups</span>
+                    </div>
+                    <span class="funnel-arrow">&rarr;</span>
+                    <div class="funnel-stage">
+                        <span class="funnel-count">{{ funnel.linked_to_bot }}</span>
+                        <span class="funnel-name">Linked Bot</span>
+                        {% if funnel.total_signups > 0 %}
+                        <span class="funnel-pct">{{ (funnel.linked_to_bot / funnel.total_signups * 100) | round(0) | int }}%</span>
+                        {% endif %}
+                    </div>
+                    <span class="funnel-arrow">&rarr;</span>
+                    <div class="funnel-stage">
+                        <span class="funnel-count">{{ funnel.activated_24h_from_signup }}</span>
+                        <span class="funnel-name">Meal &lt;24h (signup)</span>
+                        {% if funnel.total_signups > 0 %}
+                        <span class="funnel-pct">{{ (funnel.activated_24h_from_signup / funnel.total_signups * 100) | round(0) | int }}%</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="funnel-alt">
+                    <span class="funnel-alt-label">Meal &lt;24h from bot link:</span>
+                    <strong>{{ funnel.activated_24h_from_link }}</strong>
+                    {% if funnel.linked_to_bot > 0 %}
+                    <span class="funnel-pct">({{ (funnel.activated_24h_from_link / funnel.linked_to_bot * 100) | round(0) | int }}%)</span>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="admin-charts">
+            <div class="chart-card">
+                <h3>Daily Active Users (30 days)</h3>
+                <canvas id="dauChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Habit Adoption</h3>
+                <canvas id="habitsChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Activity Hours</h3>
+                <canvas id="hoursChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Retention Curve (Day 1-14)</h3>
+                <canvas id="churnChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Hot Leads -->
+        <section class="admin-leads" x-data="{ activeTab: 'super_active' }">
+            <h2>Hot Leads</h2>
+            <div class="leads-tabs">
+                <button :class="{ active: activeTab === 'super_active' }" @click="activeTab = 'super_active'">
+                    Super Active <span class="tab-count">{{ super_active | length }}</span>
+                </button>
+                <button :class="{ active: activeTab === 'churning' }" @click="activeTab = 'churning'">
+                    Churning <span class="tab-count">{{ churning | length }}</span>
+                </button>
+                <button :class="{ active: activeTab === 'stuck' }" @click="activeTab = 'stuck'">
+                    Stuck at Gate <span class="tab-count">{{ stuck | length }}</span>
+                </button>
+            </div>
+
+            <!-- Super Active -->
+            <div x-show="activeTab === 'super_active'" x-transition>
+                {% if super_active %}
+                <table class="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Signed Up</th>
+                            <th>Last Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lead in super_active %}
+                        <tr>
+                            <td>{{ lead.name or '-' }}</td>
+                            <td>{{ lead.email or '-' }}</td>
+                            <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
+                            <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
+                            <td class="lead-actions">
+                                {% if lead.telegram_user_id %}
+                                <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram" title="Open Telegram chat">Telegram</a>
+                                {% endif %}
+                                <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
+                                <button class="btn-copy-msg" title="Copy outreach message"
+                                    onclick="copyMessage('{{ outreach_templates.super_active | replace('{name}', lead.name or '') }}')">
+                                    Copy Message
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="leads-empty">No super active users found.</p>
+                {% endif %}
+            </div>
+
+            <!-- Churning -->
+            <div x-show="activeTab === 'churning'" x-transition>
+                {% if churning %}
+                <table class="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Signed Up</th>
+                            <th>Last Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lead in churning %}
+                        <tr>
+                            <td>{{ lead.name or '-' }}</td>
+                            <td>{{ lead.email or '-' }}</td>
+                            <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
+                            <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
+                            <td class="lead-actions">
+                                {% if lead.telegram_user_id %}
+                                <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram" title="Open Telegram chat">Telegram</a>
+                                {% endif %}
+                                <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
+                                <button class="btn-copy-msg" title="Copy outreach message"
+                                    onclick="copyMessage('{{ outreach_templates.churning | replace('{name}', lead.name or '') }}')">
+                                    Copy Message
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="leads-empty">No churning users found.</p>
+                {% endif %}
+            </div>
+
+            <!-- Stuck at Gate -->
+            <div x-show="activeTab === 'stuck'" x-transition>
+                {% if stuck %}
+                <table class="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Signed Up</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lead in stuck %}
+                        <tr>
+                            <td>{{ lead.name or '-' }}</td>
+                            <td>{{ lead.email or '-' }}</td>
+                            <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
+                            <td>
+                                {% if lead.sub_reason == 'never_linked' %}
+                                <span class="badge badge-warn">Never linked bot</span>
+                                {% else %}
+                                <span class="badge badge-info">Linked, no entries</span>
+                                {% endif %}
+                            </td>
+                            <td class="lead-actions">
+                                {% if lead.telegram_user_id %}
+                                <a href="tg://user?id={{ lead.telegram_user_id }}" class="btn-telegram" title="Open Telegram chat">Telegram</a>
+                                {% endif %}
+                                <button class="btn-whatsapp" disabled title="Coming soon">WhatsApp</button>
+                                <button class="btn-copy-msg" title="Copy outreach message"
+                                    onclick="copyMessage('{{ outreach_templates.stuck_at_gate | replace('{name}', lead.name or '') }}')">
+                                    Copy Message
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="leads-empty">No stuck users found.</p>
+                {% endif %}
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+    // -- Copy message helper --
+    function copyMessage(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            const toast = document.getElementById('copyToast');
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2000);
+        });
+    }
+
+    // -- Chart.js setup --
+    const CINNAMON = '#A67448';
+    const BLUE = '#5BA8C4';
+    const OLIVE = '#8FA876';
+    const TERRA = '#C97A6B';
+    const GRAY = '#5A554D';
+    const CREAM = '#FAF7F2';
+
+    Chart.defaults.font.family = "'Segoe UI', Tahoma, Arial, sans-serif";
+    Chart.defaults.color = GRAY;
+
+    // DAU Chart
+    const dauData = {{ dau_json | safe }};
+    new Chart(document.getElementById('dauChart'), {
+        type: 'line',
+        data: {
+            labels: dauData.map(d => d.date.slice(5)),
+            datasets: [{
+                label: 'Active Users',
+                data: dauData.map(d => d.count),
+                borderColor: BLUE,
+                backgroundColor: BLUE + '33',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 2,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                x: { ticks: { maxTicksLimit: 10 } },
+            },
+        },
+    });
+
+    // Habits Chart
+    const habitsData = {{ habits_json | safe }};
+    const habitLabels = {
+        sleep: 'Sleep',
+        eating_window: 'Eating Window',
+        workouts: 'Workouts',
+        self_care: 'Self Care',
+        weekly_summary: 'Weekly Summary',
+    };
+    new Chart(document.getElementById('habitsChart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(habitsData).map(k => habitLabels[k] || k),
+            datasets: [{
+                label: 'Users tracking',
+                data: Object.values(habitsData),
+                backgroundColor: [BLUE, CINNAMON, OLIVE, TERRA, GRAY],
+                borderRadius: 4,
+            }],
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } },
+        },
+    });
+
+    // Activity Hours Chart
+    const hoursData = {{ hours_json | safe }};
+    new Chart(document.getElementById('hoursChart'), {
+        type: 'bar',
+        data: {
+            labels: hoursData.map((_, i) => i.toString().padStart(2, '0') + ':00'),
+            datasets: [{
+                label: 'Entries',
+                data: hoursData,
+                backgroundColor: BLUE + '99',
+                borderColor: BLUE,
+                borderWidth: 1,
+                borderRadius: 2,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true },
+                x: { ticks: { maxTicksLimit: 12 } },
+            },
+        },
+    });
+
+    // Churn / Retention Curve
+    const churnData = {{ churn_json | safe }};
+    new Chart(document.getElementById('churnChart'), {
+        type: 'line',
+        data: {
+            labels: churnData.map(d => 'Day ' + d.day),
+            datasets: [{
+                label: '% Active',
+                data: churnData.map(d => d.pct),
+                borderColor: CINNAMON,
+                backgroundColor: CINNAMON + '33',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+            }],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } },
+            },
+        },
+    });
+    </script>
+
+    <div id="copyToast" class="copy-toast">Message copied!</div>
+
+</body>
+</html>

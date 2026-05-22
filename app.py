@@ -66,11 +66,13 @@ def create_app(config: dict | None = None) -> Flask:
     from onboarding import onboarding_bp
     from dashboard_views import dashboard_bp
     from api import api_bp
+    from admin_views import admin_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(onboarding_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(admin_bp)
 
     @app.after_request
     def set_cache_headers(response):

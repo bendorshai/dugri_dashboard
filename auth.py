@@ -32,6 +32,18 @@ def login_required(f):
     return decorated
 
 
+def admin_required(f):
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        admin_emails = current_app.config["APP_CONFIG"].get("admin_emails", [])
+        if session["user_email"] not in admin_emails:
+            from flask import abort
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
 def _get_storage() -> DashboardStorage:
     cfg = current_app.config["APP_CONFIG"]
     mongo_cfg = cfg["mongodb"]
