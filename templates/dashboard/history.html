@@ -565,8 +565,17 @@
 <div x-data="historyApp()" x-init="init()">
     <!-- Header -->
     <div class="history-header">
-        <h1>📋 היסטוריית פעילות</h1>
-        <p class="history-subtitle">כל מה שרשמת — ארוחות, אימונים, שינה ומשהו לעצמך</p>
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+                <h1>📋 היסטוריית פעילות</h1>
+                <p class="history-subtitle">כל מה שרשמת — ארוחות, אימונים, שינה ומשהו לעצמך</p>
+            </div>
+            <button class="btn btn--secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem; min-height: 36px;"
+                    @click="downloadCsv()" :disabled="loading || days.length === 0"
+                    x-show="hasAnyData">
+                📥 הורד CSV
+            </button>
+        </div>
     </div>
 
     <!-- Date Navigation -->
@@ -964,6 +973,52 @@ function historyApp() {
 
         toggleDay(index) {
             this.openDays[index] = !this.openDays[index];
+        },
+
+        downloadCsv() {
+            const BOM = '\uFEFF';
+            const rows = [['תאריך', 'סוג', 'שעה', 'תיאור', 'קלוריות', 'חלבון (g)']];
+
+            for (const day of this.days) {
+                const dateStr = day.date_display;
+
+                for (const meal of day.meals) {
+                    rows.push([dateStr, 'ארוחה', meal.time, meal.description, meal.calories, meal.protein]);
+                }
+
+                if (day.meals.length > 0) {
+                    rows.push([dateStr, 'סה"כ ארוחות', '', '', day.meals_total.calories, day.meals_total.protein]);
+                }
+
+                for (const w of day.workouts) {
+                    rows.push([dateStr, 'אימון', '', w.note || 'אימון נרשם', '', '']);
+                }
+
+                if (day.sleep) {
+                    rows.push([dateStr, 'שינה', day.sleep.sleep_time, '', '', '']);
+                }
+
+                for (const sc of (day.self_care || [])) {
+                    rows.push([dateStr, 'משהו לעצמי', '', sc.description, '', '']);
+                }
+            }
+
+            const csvContent = BOM + rows.map(r =>
+                r.map(cell => {
+                    const s = String(cell ?? '');
+                    return s.includes(',') || s.includes('"') || s.includes('\n')
+                        ? '"' + s.replace(/"/g, '""') + '"'
+                        : s;
+                }).join(',')
+            ).join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `dugri-history-${this.startDate}-${this.endDate}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
     };
 }
