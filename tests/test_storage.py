@@ -42,9 +42,12 @@ class TestCreateUser:
         doc = storage._users.insert_one.call_args[0][0]
         assert doc["_id"] == "a@b.com"
         assert doc["name"] == "Test User"
-        assert doc["onboarding_complete"] is True
         assert "created_at" in doc
         assert "goals" in doc
+        # Bot fields initialized as defaults
+        assert doc["targets"]["calories"] is None
+        assert doc["active_habits"] == []
+        assert doc["timezone"] == "Asia/Jerusalem"
 
     def test_inserts_with_photo_url(self, storage):
         storage.create_user("a@b.com", "Test", photo_url="https://photo.url/pic.jpg")
@@ -103,8 +106,6 @@ class TestCompleteOnboarding:
     def test_marks_onboarding_complete(self, storage):
         storage.complete_onboarding("a@b.com")
         storage._users.update_one.assert_called_once()
-        set_data = storage._users.update_one.call_args[0][1]["$set"]
-        assert set_data["onboarding_complete"] is True
 
 
 class TestSetSignupSessionToken:

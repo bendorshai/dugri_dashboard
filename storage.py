@@ -15,7 +15,7 @@ class DashboardStorage:
     def __init__(self, uri: str, db_name: str):
         self._client = MongoClient(uri)
         self._db = self._client[db_name]
-        self._users = self._db["dashboard_users"]
+        self._users = self._db["users"]
         logger.info("Dashboard MongoDB connected: %s / %s", uri.split("@")[-1], db_name)
 
     @staticmethod
@@ -43,14 +43,21 @@ class DashboardStorage:
             "consents": consents or {},
             "trial_started_at": None,
             "subscription_status": "trial_pending",
-            # Legacy fields kept for backward compat with existing users
+            # Profile fields
             "birth_year": None,
             "height_cm": None,
             "weight_kg": None,
             "goals": {},
-            "bot_key": "",
-            "onboarding_complete": True,
-            "terms_accepted": True,
+            # Bot fields — defaults until bot onboarding populates them
+            "gender": None,
+            "targets": {"calories": None, "protein": None, "sleep_time": None, "workouts_per_week": None},
+            "eating_window": None,
+            "timezone": "Asia/Jerusalem",
+            "onboarding": {"name_collected": False, "habits": {}},
+            "active_habits": [],
+            "pending_state": None,
+            "feedback_steering_prompt": None,
+            "last_feedback_offered_at": None,
             "created_at": now,
             "updated_at": now,
         }
