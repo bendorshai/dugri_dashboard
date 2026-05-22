@@ -1,0 +1,971 @@
+{% extends "dashboard/layout.html" %}
+
+{% block dashboard_content %}
+<style>
+/* === History Page Styles === */
+.history-header {
+    margin-bottom: 1.5rem;
+}
+
+.history-header h1 {
+    margin-bottom: 0.5rem;
+}
+
+.history-subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+/* Date Navigation */
+.history-date-nav {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.date-nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.date-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--white);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1.1rem;
+}
+
+.date-nav-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(166, 116, 72, 0.06);
+}
+
+.date-nav-current {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--primary-dark);
+    min-width: 180px;
+    text-align: center;
+}
+
+.date-filters {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.date-filter-input {
+    padding: 0.4rem 0.6rem;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-family: var(--font);
+    color: var(--text);
+    direction: ltr;
+    transition: border-color 0.2s;
+}
+
+.date-filter-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.date-filter-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.quick-filters {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+
+.quick-filter-btn {
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    border: 1.5px solid var(--border);
+    background: var(--white);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-filter-btn:hover,
+.quick-filter-btn.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(166, 116, 72, 0.06);
+}
+
+/* Loading state */
+.history-loading {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.history-loading .spinner {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.history-empty {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+.history-empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.history-empty p {
+    color: var(--text-muted);
+    font-size: 1.05rem;
+}
+
+/* Day Card */
+.history-day-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.history-day-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.day-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(166, 116, 72, 0.08), rgba(91, 168, 196, 0.06));
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.day-card-header:hover {
+    background: linear-gradient(135deg, rgba(166, 116, 72, 0.12), rgba(91, 168, 196, 0.08));
+}
+
+.day-card-date {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--primary-dark);
+}
+
+.day-card-date-emoji {
+    font-size: 1.2rem;
+}
+
+.day-card-badges {
+    display: flex;
+    gap: 0.4rem;
+    margin-right: auto;
+    flex-wrap: wrap;
+}
+
+.day-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.day-badge--cal {
+    background: rgba(166, 116, 72, 0.1);
+    color: var(--primary-dark);
+}
+
+.day-badge--prot {
+    background: rgba(91, 168, 196, 0.12);
+    color: var(--accent-dark);
+}
+
+.day-badge--workout {
+    background: rgba(143, 168, 118, 0.15);
+    color: #6B8F54;
+}
+
+.day-card-toggle {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+}
+
+.day-card-toggle.open {
+    transform: rotate(180deg);
+}
+
+.day-card-body {
+    padding: 1rem 1.5rem;
+}
+
+/* Meals section */
+.history-section {
+    margin-bottom: 1.25rem;
+}
+
+.history-section:last-child {
+    margin-bottom: 0;
+}
+
+.history-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid transparent;
+}
+
+.history-section-title--meals {
+    color: var(--primary-dark);
+    border-bottom-color: rgba(166, 116, 72, 0.2);
+}
+
+.history-section-title--workout {
+    color: #6B8F54;
+    border-bottom-color: rgba(143, 168, 118, 0.2);
+}
+
+.history-section-title--sleep {
+    color: var(--accent-dark);
+    border-bottom-color: rgba(91, 168, 196, 0.2);
+}
+
+.history-section-title--selfcare {
+    color: #B07CC8;
+    border-bottom-color: rgba(176, 124, 200, 0.2);
+}
+
+.history-section-emoji {
+    font-size: 1.1rem;
+}
+
+/* Meals table */
+.meals-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9rem;
+}
+
+.meals-table th {
+    text-align: right;
+    padding: 0.5rem 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.meals-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid rgba(224, 216, 204, 0.5);
+}
+
+.meals-table tr:last-child td {
+    border-bottom: none;
+}
+
+.meals-table tr:nth-child(even) {
+    background: rgba(237, 245, 248, 0.4);
+}
+
+.meals-table .meal-time {
+    color: var(--text-muted);
+    font-weight: 600;
+    white-space: nowrap;
+    direction: ltr;
+    text-align: right;
+}
+
+.meals-table .meal-desc {
+    font-weight: 500;
+}
+
+.meals-table .meal-cal {
+    font-weight: 700;
+    color: var(--primary-dark);
+    text-align: center;
+}
+
+.meals-table .meal-prot {
+    font-weight: 700;
+    color: var(--accent-dark);
+    text-align: center;
+}
+
+/* Meals total */
+.meals-total {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    background: rgba(166, 116, 72, 0.05);
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.meals-total-label {
+    color: var(--text-muted);
+}
+
+.meals-total-cal {
+    color: var(--primary-dark);
+}
+
+.meals-total-prot {
+    color: var(--accent-dark);
+}
+
+/* Progress bar */
+.progress-mini {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+}
+
+.progress-mini-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 120px;
+}
+
+.progress-mini-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.progress-mini-fill--good {
+    background: var(--success);
+}
+
+.progress-mini-fill--over {
+    background: var(--error);
+}
+
+.progress-mini-fill--low {
+    background: var(--accent);
+}
+
+.progress-mini-text {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* Habit items (workout, sleep, self-care) */
+.habit-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(237, 245, 248, 0.5);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    margin-bottom: 0.35rem;
+}
+
+.habit-item:last-child {
+    margin-bottom: 0;
+}
+
+.habit-item--empty {
+    color: var(--text-light);
+    font-style: italic;
+}
+
+/* Weekly summary card */
+.history-weekly-summary {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border-right: 4px solid var(--accent);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.weekly-summary-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--accent-dark);
+    margin-bottom: 1rem;
+}
+
+.weekly-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.weekly-stat {
+    padding: 0.75rem;
+    background: rgba(91, 168, 196, 0.06);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+.weekly-stat-value {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--primary-dark);
+    line-height: 1.2;
+}
+
+.weekly-stat-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-top: 0.2rem;
+}
+
+/* Mobile meals: stacked cards */
+.meals-mobile {
+    display: none;
+}
+
+.meal-mobile-card {
+    padding: 0.6rem 0.75rem;
+    background: rgba(237, 245, 248, 0.4);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.4rem;
+    border-right: 3px solid var(--primary-light);
+}
+
+.meal-mobile-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.meal-mobile-desc {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.meal-mobile-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    direction: ltr;
+}
+
+.meal-mobile-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.meal-mobile-cal {
+    color: var(--primary-dark);
+}
+
+.meal-mobile-prot {
+    color: var(--accent-dark);
+}
+
+@media (max-width: 600px) {
+    .meals-table-wrap {
+        display: none;
+    }
+
+    .meals-mobile {
+        display: block;
+    }
+
+    .day-card-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .day-card-body {
+        padding: 0.75rem 1rem;
+    }
+
+    .date-nav-row {
+        gap: 0.5rem;
+    }
+
+    .date-nav-current {
+        font-size: 0.95rem;
+        min-width: 150px;
+    }
+
+    .weekly-summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .meals-total {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+}
+</style>
+
+<div x-data="historyApp()" x-init="init()">
+    <!-- Header -->
+    <div class="history-header">
+        <h1>📋 היסטוריית פעילות</h1>
+        <p class="history-subtitle">כל מה שרשמת — ארוחות, אימונים, שינה ומשהו לעצמך</p>
+    </div>
+
+    <!-- Date Navigation -->
+    <div class="history-date-nav">
+        <!-- Single day nav -->
+        <div class="date-nav-row">
+            <button class="date-nav-btn" @click="navigateDay(1)" title="יום קודם">→</button>
+            <span class="date-nav-current" x-text="currentDateDisplay"></span>
+            <button class="date-nav-btn" @click="navigateDay(-1)" title="יום הבא"
+                    :disabled="isToday" :style="isToday ? 'opacity:0.3;cursor:default' : ''">←</button>
+        </div>
+
+        <!-- Quick filters -->
+        <div class="quick-filters">
+            <button class="quick-filter-btn" :class="{ active: activeFilter === 'today' }"
+                    @click="quickFilter('today')">היום</button>
+            <button class="quick-filter-btn" :class="{ active: activeFilter === 'week' }"
+                    @click="quickFilter('week')">השבוע</button>
+            <button class="quick-filter-btn" :class="{ active: activeFilter === 'lastweek' }"
+                    @click="quickFilter('lastweek')">שבוע שעבר</button>
+            <button class="quick-filter-btn" :class="{ active: activeFilter === 'month' }"
+                    @click="quickFilter('month')">חודש</button>
+        </div>
+
+        <!-- Date range -->
+        <div class="date-filters" style="margin-top: 0.5rem;">
+            <span class="date-filter-label">מ:</span>
+            <input type="date" class="date-filter-input" x-model="startDate" @change="fetchRange()">
+            <span class="date-filter-label">עד:</span>
+            <input type="date" class="date-filter-input" x-model="endDate" @change="fetchRange()">
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="history-loading" x-show="loading" x-transition>
+        <div class="spinner"></div>
+        <p style="margin-top: 0.75rem;">טוען נתונים...</p>
+    </div>
+
+    <!-- Empty state -->
+    <div class="history-empty" x-show="!loading && days.length === 0 && !hasAnyData" x-transition>
+        <div class="history-empty-icon">📭</div>
+        <p>אין נתונים לתקופה הזו.</p>
+        <p style="font-size: 0.85rem; margin-top: 0.5rem;">רשמו ארוחות, אימונים ושינה דרך הבוט בטלגרם — הכל יופיע כאן.</p>
+    </div>
+
+    <!-- Weekly Summary (shown for multi-day ranges) -->
+    <div class="history-weekly-summary" x-show="!loading && days.length > 1 && hasAnyData" x-transition>
+        <div class="weekly-summary-title">
+            <span>📊</span>
+            <span>סיכום התקופה</span>
+        </div>
+        <div class="weekly-summary-grid">
+            <div class="weekly-stat">
+                <div class="weekly-stat-value" x-text="formatNumber(weeklyTotals.avg_calories)"></div>
+                <div class="weekly-stat-label">⚡ ממוצע קלוריות</div>
+            </div>
+            <div class="weekly-stat">
+                <div class="weekly-stat-value" x-text="formatNumber(weeklyTotals.avg_protein) + 'g'"></div>
+                <div class="weekly-stat-label">💪 ממוצע חלבון</div>
+            </div>
+            <div class="weekly-stat">
+                <div class="weekly-stat-value" x-text="weeklyTotals.workout_count"></div>
+                <div class="weekly-stat-label">🏋️ אימונים</div>
+            </div>
+            <div class="weekly-stat">
+                <div class="weekly-stat-value" x-text="weeklyTotals.sleep_logged_days + '/' + weeklyTotals.total_days"></div>
+                <div class="weekly-stat-label">😴 ימי שינה</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Day Cards -->
+    <template x-for="(day, index) in days" :key="day.date">
+        <div class="history-day-card" x-show="!loading">
+            <!-- Day header -->
+            <div class="day-card-header" @click="toggleDay(index)">
+                <span class="day-card-date-emoji">📅</span>
+                <span class="day-card-date" x-text="day.date_display"></span>
+                <div class="day-card-badges">
+                    <span class="day-badge day-badge--cal" x-show="day.meals_total.calories > 0"
+                          x-text="formatNumber(day.meals_total.calories) + ' קל\''"></span>
+                    <span class="day-badge day-badge--prot" x-show="day.meals_total.protein > 0"
+                          x-text="day.meals_total.protein + 'g'"></span>
+                    <span class="day-badge day-badge--workout" x-show="day.workouts.length > 0">🏋️</span>
+                </div>
+                <span class="day-card-toggle" :class="{ open: openDays[index] }">▼</span>
+            </div>
+
+            <!-- Day body -->
+            <div class="day-card-body" x-show="openDays[index]" x-transition.duration.200ms>
+
+                <!-- Meals -->
+                <div class="history-section" x-show="day.meals.length > 0">
+                    <div class="history-section-title history-section-title--meals">
+                        <span class="history-section-emoji">🍽️</span>
+                        <span>ארוחות</span>
+                    </div>
+
+                    <!-- Desktop table -->
+                    <div class="meals-table-wrap">
+                        <table class="meals-table">
+                            <thead>
+                                <tr>
+                                    <th>שעה</th>
+                                    <th>תיאור</th>
+                                    <th>קלוריות</th>
+                                    <th>חלבון</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="meal in day.meals" :key="meal.time + meal.description">
+                                    <tr>
+                                        <td class="meal-time" x-text="meal.time"></td>
+                                        <td class="meal-desc" x-text="meal.description"></td>
+                                        <td class="meal-cal" x-text="formatNumber(meal.calories)"></td>
+                                        <td class="meal-prot" x-text="meal.protein + 'g'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Mobile cards -->
+                    <div class="meals-mobile">
+                        <template x-for="meal in day.meals" :key="meal.time + meal.description">
+                            <div class="meal-mobile-card">
+                                <div class="meal-mobile-top">
+                                    <span class="meal-mobile-desc" x-text="meal.description"></span>
+                                    <span class="meal-mobile-time" x-text="meal.time"></span>
+                                </div>
+                                <div class="meal-mobile-stats">
+                                    <span class="meal-mobile-cal">⚡ <span x-text="formatNumber(meal.calories)"></span> קל'</span>
+                                    <span class="meal-mobile-prot">💪 <span x-text="meal.protein"></span>g</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Totals -->
+                    <div class="meals-total">
+                        <span class="meals-total-label">סה"כ:</span>
+                        <span class="meals-total-cal">⚡ <span x-text="formatNumber(day.meals_total.calories)"></span> קלוריות</span>
+                        <span class="meals-total-prot">💪 <span x-text="day.meals_total.protein"></span>g חלבון</span>
+                    </div>
+
+                    <!-- Progress vs target -->
+                    <template x-if="targets.calories">
+                        <div class="progress-mini">
+                            <span class="progress-mini-text">קלוריות:</span>
+                            <div class="progress-mini-bar">
+                                <div class="progress-mini-fill"
+                                     :class="getProgressClass(day.meals_total.calories, targets.calories)"
+                                     :style="'width:' + Math.min(100, Math.round(day.meals_total.calories / targets.calories * 100)) + '%'"></div>
+                            </div>
+                            <span class="progress-mini-text" x-text="Math.round(day.meals_total.calories / targets.calories * 100) + '%'"></span>
+                        </div>
+                    </template>
+                    <template x-if="targets.protein">
+                        <div class="progress-mini">
+                            <span class="progress-mini-text">חלבון:</span>
+                            <div class="progress-mini-bar">
+                                <div class="progress-mini-fill"
+                                     :class="getProgressClass(day.meals_total.protein, targets.protein)"
+                                     :style="'width:' + Math.min(100, Math.round(day.meals_total.protein / targets.protein * 100)) + '%'"></div>
+                            </div>
+                            <span class="progress-mini-text" x-text="Math.round(day.meals_total.protein / targets.protein * 100) + '%'"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Workouts -->
+                <div class="history-section">
+                    <div class="history-section-title history-section-title--workout">
+                        <span class="history-section-emoji">🏋️</span>
+                        <span>אימון</span>
+                    </div>
+                    <template x-if="day.workouts.length > 0">
+                        <div>
+                            <template x-for="w in day.workouts" :key="w.note">
+                                <div class="habit-item">
+                                    <span>✅</span>
+                                    <span x-text="w.note || 'אימון נרשם'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <template x-if="day.workouts.length === 0">
+                        <div class="habit-item habit-item--empty">
+                            <span>—</span>
+                            <span>לא נרשם אימון</span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Sleep -->
+                <div class="history-section">
+                    <div class="history-section-title history-section-title--sleep">
+                        <span class="history-section-emoji">😴</span>
+                        <span>שינה</span>
+                    </div>
+                    <template x-if="day.sleep">
+                        <div class="habit-item">
+                            <span>🌙</span>
+                            <span>שעת שינה: <strong x-text="day.sleep.sleep_time"></strong></span>
+                        </div>
+                    </template>
+                    <template x-if="!day.sleep">
+                        <div class="habit-item habit-item--empty">
+                            <span>—</span>
+                            <span>לא נרשמה שינה</span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Self-care (shown when available) -->
+                <div class="history-section" x-show="day.self_care && day.self_care.length > 0">
+                    <div class="history-section-title history-section-title--selfcare">
+                        <span class="history-section-emoji">💆</span>
+                        <span>משהו לעצמי השבוע</span>
+                    </div>
+                    <template x-for="sc in (day.self_care || [])" :key="sc.description">
+                        <div class="habit-item">
+                            <span>✨</span>
+                            <span x-text="sc.description"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- No meals fallback -->
+                <div x-show="day.meals.length === 0 && day.workouts.length === 0 && !day.sleep"
+                     style="text-align: center; padding: 1rem; color: var(--text-light);">
+                    <p>📭 לא נרשמה פעילות ביום הזה</p>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+
+<script>
+function historyApp() {
+    return {
+        days: [],
+        weeklyTotals: { avg_calories: 0, avg_protein: 0, workout_count: 0, sleep_logged_days: 0, total_days: 0 },
+        targets: {},
+        loading: true,
+        openDays: {},
+        startDate: '',
+        endDate: '',
+        activeFilter: 'week',
+        currentDateDisplay: '',
+        currentSingleDate: null,
+
+        get isToday() {
+            if (!this.currentSingleDate) return true;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const current = new Date(this.currentSingleDate);
+            current.setHours(0, 0, 0, 0);
+            return current >= today;
+        },
+
+        get hasAnyData() {
+            return this.days.some(d =>
+                d.meals.length > 0 || d.workouts.length > 0 || d.sleep ||
+                (d.self_care && d.self_care.length > 0)
+            );
+        },
+
+        init() {
+            this.quickFilter('week');
+        },
+
+        formatNumber(n) {
+            if (!n) return '0';
+            return n.toLocaleString('he-IL');
+        },
+
+        getProgressClass(value, target) {
+            if (!target || !value) return 'progress-mini-fill--low';
+            const pct = value / target * 100;
+            if (pct > 115) return 'progress-mini-fill--over';
+            if (pct >= 70) return 'progress-mini-fill--good';
+            return 'progress-mini-fill--low';
+        },
+
+        formatDate(d) {
+            return d.toISOString().slice(0, 10);
+        },
+
+        quickFilter(type) {
+            this.activeFilter = type;
+            const today = new Date();
+            let start, end;
+
+            switch (type) {
+                case 'today':
+                    start = end = new Date(today);
+                    break;
+                case 'week': {
+                    // Sunday-based week (Israeli week)
+                    const dayOfWeek = today.getDay();
+                    start = new Date(today);
+                    start.setDate(today.getDate() - dayOfWeek);
+                    end = new Date(today);
+                    break;
+                }
+                case 'lastweek': {
+                    const dayOfWeek = today.getDay();
+                    end = new Date(today);
+                    end.setDate(today.getDate() - dayOfWeek - 1);
+                    start = new Date(end);
+                    start.setDate(end.getDate() - 6);
+                    break;
+                }
+                case 'month':
+                    start = new Date(today);
+                    start.setDate(today.getDate() - 30);
+                    end = new Date(today);
+                    break;
+            }
+
+            this.startDate = this.formatDate(start);
+            this.endDate = this.formatDate(end);
+            this.currentSingleDate = this.formatDate(end);
+            this.updateCurrentDisplay();
+            this.fetchRange();
+        },
+
+        navigateDay(direction) {
+            // direction: 1 = back, -1 = forward (RTL arrows)
+            const current = new Date(this.currentSingleDate || new Date());
+            current.setDate(current.getDate() - direction);
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (current > today) return;
+
+            this.currentSingleDate = this.formatDate(current);
+            this.startDate = this.currentSingleDate;
+            this.endDate = this.currentSingleDate;
+            this.activeFilter = '';
+            this.updateCurrentDisplay();
+            this.fetchRange();
+        },
+
+        updateCurrentDisplay() {
+            if (!this.startDate) return;
+            const hebrewDays = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת'];
+
+            if (this.startDate === this.endDate) {
+                const d = new Date(this.startDate);
+                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                this.currentDateDisplay = `${dd}/${mm} — ${hebrewDays[d.getDay()]}`;
+            } else {
+                const s = new Date(this.startDate);
+                const e = new Date(this.endDate);
+                const sd = String(s.getDate()).padStart(2, '0') + '/' + String(s.getMonth() + 1).padStart(2, '0');
+                const ed = String(e.getDate()).padStart(2, '0') + '/' + String(e.getMonth() + 1).padStart(2, '0');
+                this.currentDateDisplay = `${sd} — ${ed}`;
+            }
+        },
+
+        async fetchRange() {
+            this.loading = true;
+            this.updateCurrentDisplay();
+
+            try {
+                const params = new URLSearchParams({ start: this.startDate, end: this.endDate });
+                const resp = await fetch(`/api/activity-history?${params}`);
+                if (!resp.ok) throw new Error('fetch failed');
+                const data = await resp.json();
+
+                this.days = data.days || [];
+                this.weeklyTotals = data.weekly_totals || {};
+                this.targets = data.targets || {};
+
+                // Auto-expand single day, first 3 for multi-day
+                this.openDays = {};
+                if (this.days.length === 1) {
+                    this.openDays[0] = true;
+                } else {
+                    for (let i = 0; i < Math.min(3, this.days.length); i++) {
+                        this.openDays[i] = true;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch activity history:', e);
+                this.days = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        toggleDay(index) {
+            this.openDays[index] = !this.openDays[index];
+        }
+    };
+}
+</script>
+{% endblock %}

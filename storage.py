@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from pymongo import MongoClient
 
@@ -156,6 +156,58 @@ class DashboardStorage:
             }},
         )
         return old_targets
+
+    # -- Activity history --
+
+    def get_activity_history(
+        self, email: str, start_date: date, end_date: date,
+    ) -> dict:
+        """Get all activity data (food, workouts, sleep, self-care) for a date range.
+
+        Returns dict with keys: food, workouts, sleep, self_care, targets.
+        """
+        user = self._users.find_one({"_id": email})
+        if not user or not user.get("telegram_user_id"):
+            return {"food": [], "workouts": [], "sleep": [], "self_care": [], "targets": {}}
+
+        tid = user["telegram_user_id"]
+        targets = user.get("targets", {})
+
+        # Generate DD/MM/YYYY date strings for the range
+        date_strings = []
+        current = start_date
+        while current <= end_date:
+            date_strings.append(current.strftime("%d/%m/%Y"))
+            current += timedelta(days=1)
+
+        # Generate ISO week IDs for self-care (YYYY-Www)
+        week_ids = set()
+        current = start_date
+        while current <= end_date:
+            iso_year, iso_week, _ = current.isocalendar()
+            week_ids.add(f"{iso_year}-W{iso_week:02d}")
+            current += timedelta(days=1)
+
+        food = list(self._db["food_entries"].find(
+            {"telegram_user_id": tid, "date": {"$in": date_strings}},
+        ))
+        workouts = list(self._db["workout_logs"].find(
+            {"telegram_user_id": tid, "date": {"$in": date_strings}},
+        ))
+        sleep = list(self._db["sleep_logs"].find(
+            {"telegram_user_id": tid, "date": {"$in": date_strings}},
+        ))
+        self_care = list(self._db["self_care_logs"].find(
+            {"telegram_user_id": tid, "week_id": {"$in": list(week_ids)}},
+        ))
+
+        return {
+            "food": food,
+            "workouts": workouts,
+            "sleep": sleep,
+            "self_care": self_care,
+            "targets": targets,
+        }
 
     # -- Weekly summaries --
 

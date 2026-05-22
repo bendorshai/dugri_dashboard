@@ -154,6 +154,16 @@ def _notify_bot_target_change(email: str, old_targets: dict, new_targets: dict):
 
 
 # ------------------------------------------------------------------
+# Activity history
+# ------------------------------------------------------------------
+
+@dashboard_bp.route("/history")
+@login_required
+def history():
+    return render_template("dashboard/history.html", active_tab="history")
+
+
+# ------------------------------------------------------------------
 # Weekly summaries archive
 # ------------------------------------------------------------------
 
