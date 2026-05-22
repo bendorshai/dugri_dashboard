@@ -35,6 +35,7 @@ from services.qa_service import QaService
 from services.message_router_service import MessageRouterService
 from services.trial_service import TrialService
 from services.feedback_service import FeedbackService
+from services.toggle_service import ToggleService
 from handlers.start_handler import StartHandler
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
@@ -42,7 +43,7 @@ from keyboards import (
     CB_FEEDBACK,
 )
 from handlers import HealthHandlers
-from scheduler import schedule_eating_window_jobs
+from scheduler import schedule_eating_window_jobs, schedule_hooks_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,8 @@ def create_bot(
 
     # Services
     state_service = ConversationStateService(user_repo)
-    onboarding_service = OnboardingService(user_repo, state_service)
+    toggle_service = ToggleService(user_repo)
+    onboarding_service = OnboardingService(user_repo, state_service, toggle_service)
 
     # Message router (if habit repos are provided)
     message_router = None
@@ -129,6 +131,7 @@ def create_bot(
         message_router=message_router,
         trial_service=trial_service,
         feedback_service=feedback_service,
+        toggle_service=toggle_service,
         landing_page_url=landing_page_url,
     )
 
@@ -170,5 +173,14 @@ def create_bot(
             user_repo, food_repo, feedback_repo,
             analyzer, eating_day_service,
         )
+
+    # Schedule hooks for all users with active toggles
+    all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
+    for profile in all_users:
+        if profile.telegram_user_id:
+            hooks = schedule_hooks_for_user(
+                app.job_queue, profile.telegram_user_id, profile,
+                user_repo, toggle_service,
+            )
 
     return app

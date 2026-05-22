@@ -62,7 +62,8 @@ class WeeklyFeedbackResult(BaseModel):
 class MessageClassification(BaseModel):
     type: Literal[
         "meal", "correction", "sleep", "workout", "self_care",
-        "help", "answer_question", "feedback_request", "none",
+        "help", "answer_question", "feedback_request",
+        "toggle_cancel", "toggle_activate", "none",
     ]
     meal: FoodAnalysisResult | None = None
     correction: CorrectionResult | None = None
@@ -70,6 +71,7 @@ class MessageClassification(BaseModel):
     workout_note: str | None = None
     self_care_description: str | None = None
     question_text: str | None = None
+    toggle_name: str | None = None
 
 
 from prompts import (

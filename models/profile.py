@@ -47,16 +47,43 @@ class Targets(BaseModel):
 
 
 class HabitState(BaseModel):
+    """Legacy habit state — kept for backward compatibility during migration."""
     state: Literal["offered", "active", "declined", "pending"] = "pending"
     last_prompted_at: datetime | None = None
 
 
 class OnboardingHabits(BaseModel):
+    """Legacy onboarding habits — kept for backward compatibility during migration."""
     nutrition: HabitState = Field(default_factory=HabitState)
     eating_window: HabitState = Field(default_factory=HabitState)
     sleep: HabitState = Field(default_factory=HabitState)
     workouts: HabitState = Field(default_factory=HabitState)
     self_care: HabitState = Field(default_factory=HabitState)
+
+
+class ToggleState(BaseModel):
+    """State of a single habit toggle in the toggle system.
+
+    Three statuses:
+    - dormant: not yet offered or offered but not activated
+    - active: user opted in, hook runs at its cadence
+    - cancelled: user explicitly opted out, never offered again
+    """
+    status: Literal["dormant", "active", "cancelled"] = "dormant"
+    revealed_at: datetime | None = None
+    activated_at: datetime | None = None
+    last_asked_at: datetime | None = None
+    consecutive_unanswered: int = 0
+
+
+class Toggles(BaseModel):
+    """All habit toggles. weekly_summary is opt-out (born active); rest are opt-in (born dormant)."""
+    sleep: ToggleState = Field(default_factory=ToggleState)
+    eating_window: ToggleState = Field(default_factory=ToggleState)
+    workouts: ToggleState = Field(default_factory=ToggleState)
+    self_care: ToggleState = Field(default_factory=ToggleState)
+    target_data: ToggleState = Field(default_factory=ToggleState)
+    weekly_summary: ToggleState = Field(default_factory=lambda: ToggleState(status="active"))
 
 
 class Onboarding(BaseModel):
@@ -83,8 +110,13 @@ class User(BaseModel):
 
     onboarding: Onboarding = Field(default_factory=Onboarding)
     active_habits: list[str] = Field(default_factory=list)
+    toggles: Toggles = Field(default_factory=Toggles)
 
     pending_state: PendingState | None = None
+
+    dashboard_intro_shown: bool = False
+    target_retry_done: bool = False
+    eating_window_retry_done: bool = False
 
     feedback_steering_prompt: str | None = None
     last_feedback_offered_at: datetime | None = None
@@ -140,6 +172,35 @@ class User(BaseModel):
         # Remove any unknown legacy fields that would fail validation
         for legacy_key in ["chat_id", "onboarding_complete", "terms_accepted", "bot_key"]:
             doc.pop(legacy_key, None)
+
+        # Migrate old onboarding.habits to toggles (only if toggles not already set)
+        if "toggles" not in doc:
+            onboarding = doc.get("onboarding", {})
+            habits = onboarding.get("habits", {}) if isinstance(onboarding, dict) else {}
+            if habits:
+                state_map = {
+                    "pending": "dormant",
+                    "offered": "dormant",
+                    "active": "active",
+                    "declined": "cancelled",
+                }
+                toggles: dict = {}
+                # Map old habit names to new toggle names
+                habit_to_toggle = {
+                    "sleep": "sleep",
+                    "workouts": "workouts",
+                    "self_care": "self_care",
+                    "nutrition": "target_data",
+                    "eating_window": "eating_window",
+                }
+                for old_name, new_name in habit_to_toggle.items():
+                    habit = habits.get(old_name, {})
+                    if isinstance(habit, dict):
+                        old_state = habit.get("state", "pending")
+                        toggles[new_name] = {"status": state_map.get(old_state, "dormant")}
+                # weekly_summary defaults to active (opt-out)
+                toggles.setdefault("weekly_summary", {"status": "active"})
+                doc["toggles"] = toggles
 
         return cls.model_validate(doc)
 

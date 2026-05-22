@@ -35,8 +35,8 @@ def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def make_main_menu_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+def make_main_menu_keyboard(dashboard_url: str = "") -> InlineKeyboardMarkup:
+    buttons = [
         [InlineKeyboardButton("📋 סיכום יומי", callback_data=f"{CB_DAILY}summary")],
         [InlineKeyboardButton("📅 סיכום שבועי", callback_data=f"{CB_WEEKLY}summary")],
         [InlineKeyboardButton("💬 משוב על התזונה", callback_data=f"{CB_FEEDBACK}daily")],
@@ -45,7 +45,10 @@ def make_main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔧 תיקון כללי", callback_data=f"{CB_BULK_FIX}start")],
         [InlineKeyboardButton("👤 פרופיל ויעדים", callback_data=f"{CB_MENU}profile")],
         [InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings")],
-    ])
+    ]
+    if dashboard_url:
+        buttons.append([InlineKeyboardButton("📊 דשבורד", url=dashboard_url)])
+    return InlineKeyboardMarkup(buttons)
 
 
 def make_profile_keyboard() -> InlineKeyboardMarkup:

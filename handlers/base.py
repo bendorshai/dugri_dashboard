@@ -30,6 +30,7 @@ from services.onboarding_service import OnboardingService
 from services.message_router_service import MessageRouterService
 from services.trial_service import TrialService
 from services.feedback_service import FeedbackService
+from services.toggle_service import ToggleService
 from keyboards import (
     THUMBS_UP, OK_HAND,
     make_daily_summary_keyboard, make_main_menu_keyboard,
@@ -66,6 +67,7 @@ class HealthHandlers:
         message_router: MessageRouterService | None = None,
         trial_service: TrialService | None = None,
         feedback_service: FeedbackService | None = None,
+        toggle_service: ToggleService | None = None,
         landing_page_url: str = "https://dugri.up.railway.app",
     ):
         self.landing_page_url = landing_page_url
@@ -79,6 +81,7 @@ class HealthHandlers:
         self.message_router = message_router
         self.trial_service = trial_service
         self.feedback_service = feedback_service
+        self.toggle_service = toggle_service
 
     # ------------------------------------------------------------------
     # Profile helpers
@@ -160,6 +163,34 @@ class HealthHandlers:
             await message.reply_text(response)
             return True
 
+        # New toggle-based consent handling
+        if kind == "awaiting_target_consent" and self.onboarding_service:
+            text = message.text.strip().lower()
+            accepted = text in ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
+            response = self.onboarding_service.handle_target_consent(tid, accepted)
+            if response:
+                await message.reply_text(response)
+            return True
+
+        if kind == "awaiting_toggle_consent" and self.toggle_service:
+            import messages as M
+            text = message.text.strip().lower()
+            accepted = text in ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
+            toggle_name = dispatch.data.get("toggle_name", "")
+            if accepted:
+                self.toggle_service.activate_toggle(tid, toggle_name)
+                self.state_service.clear_pending(tid)
+                if toggle_name == "eating_window":
+                    self.state_service.set_pending(tid, "awaiting_eating_window")
+                    await message.reply_text("מתי חלון האכילה שלך? שלח בפורמט: HH:MM-HH:MM (למשל: 08:00-20:00)")
+                else:
+                    await message.reply_text("יפה, נרשמתי.")
+            else:
+                self.state_service.clear_pending(tid)
+                await message.reply_text(M.TOGGLE_DECLINED)
+            return True
+
+        # Legacy consent kinds (backward compat during transition)
         consent_kinds = {
             "awaiting_calorie_target_consent",
             "awaiting_eating_window_consent",
@@ -167,12 +198,16 @@ class HealthHandlers:
             "awaiting_workouts_consent",
             "awaiting_self_care_consent",
         }
-        if kind in consent_kinds and self.onboarding_service:
+        if kind in consent_kinds:
             text = message.text.strip().lower()
             accepted = text in ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
-            response = self.onboarding_service.handle_consent_response(tid, kind, accepted)
-            if response:
-                await message.reply_text(response)
+            if self.onboarding_service and hasattr(self.onboarding_service, 'handle_consent_response'):
+                response = self.onboarding_service.handle_consent_response(tid, kind, accepted)
+                if response:
+                    await message.reply_text(response)
+            else:
+                self.state_service.clear_pending(tid)
+                await message.reply_text("בסדר." if not accepted else "יפה, נרשמתי.")
             return True
 
         if kind == "awaiting_body_stats" and self.onboarding_service:
@@ -370,6 +405,30 @@ class HealthHandlers:
             await send_long_text(message, result.response_text, reply_markup=make_daily_summary_keyboard())
             return
 
+        if classification.type == "toggle_cancel" and self.toggle_service:
+            import messages as M
+            toggle_name = classification.toggle_name
+            if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "weekly_summary"}:
+                self.toggle_service.cancel_toggle(tid, toggle_name)
+                await message.reply_text(M.EXIT_DOOR_CANCELLED)
+            else:
+                await message.reply_text("לא הבנתי איזה מעקב לכבות. נסה שוב?")
+            return
+
+        if classification.type == "toggle_activate" and self.toggle_service:
+            toggle_name = classification.toggle_name
+            if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "weekly_summary"}:
+                if toggle_name == "eating_window":
+                    self.toggle_service.activate_toggle(tid, toggle_name)
+                    self.state_service.set_pending(tid, "awaiting_eating_window")
+                    await message.reply_text("מתי חלון האכילה שלך? שלח בפורמט: HH:MM-HH:MM (למשל: 08:00-20:00)")
+                else:
+                    self.toggle_service.activate_toggle(tid, toggle_name)
+                    await message.reply_text("יפה, נרשמתי. מעכשיו אני עוקב.")
+            else:
+                await message.reply_text("לא הבנתי איזה מעקב להדליק. נסה שוב?")
+            return
+
         if classification.type == "feedback_request":
             if self.feedback_service:
                 is_first = self.feedback_service.is_first_feedback(tid)
@@ -439,6 +498,113 @@ class HealthHandlers:
 
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
+
+        # Piggyback hooks: check if any hooks should fire after this meal
+        await self._check_piggyback_hooks(message, tid, profile)
+
+    # ------------------------------------------------------------------
+    # Piggyback hooks — fire pending hooks after a meal
+    # ------------------------------------------------------------------
+
+    async def _check_piggyback_hooks(self, message, tid: int, profile: UserProfile):
+        """After a meal is logged, check if any hooks should piggyback."""
+        if not self.toggle_service:
+            return
+
+        from scheduler import should_piggyback
+        import messages as M
+        import random
+
+        now = get_user_now(profile.timezone)
+        day_number = self.toggle_service.get_day_number(profile)
+
+        # Onboarding target offer (after first meal)
+        meal_count = len(self.food_repo.get_all_for_user(tid))
+        if self.onboarding_service and self.onboarding_service.should_offer_target(profile, meal_count):
+            offer_text = self.onboarding_service.offer_target(tid)
+            await message.reply_text(offer_text)
+            return  # Don't piggyback other hooks on the same message as target offer
+
+        # Day 9 target retry
+        if self.toggle_service.should_retry_target(profile, day_number):
+            self.user_repo.update_fields(tid, {"target_retry_done": True})
+            self.toggle_service.reveal_toggle(tid, "target_data")
+            self.state_service.set_pending(tid, "awaiting_target_consent")
+            await message.reply_text(M.TARGET_RETRY)
+            return
+
+        # Day 11 eating window retry
+        if self.toggle_service.should_retry_eating_window(profile):
+            self.user_repo.update_fields(tid, {"eating_window_retry_done": True})
+            self.state_service.set_pending(tid, "awaiting_toggle_consent",
+                                           data={"toggle_name": "eating_window"})
+            await message.reply_text(M.REVEAL_EATING_WINDOW)
+            return
+
+        # Day 16 dashboard intro
+        if self.toggle_service.should_show_dashboard_intro(profile, day_number):
+            self.user_repo.update_fields(tid, {"dashboard_intro_shown": True})
+            await message.reply_text(M.DASHBOARD_INTRO)
+            # Don't return — other hooks can still fire
+
+        # Toggle reveals (one-time offers)
+        weekday = now.weekday()
+
+        if self.toggle_service.should_reveal_sleep(profile):
+            self.toggle_service.reveal_toggle(tid, "sleep")
+            self.state_service.set_pending(tid, "awaiting_toggle_consent",
+                                           data={"toggle_name": "sleep"})
+            await message.reply_text(M.REVEAL_SLEEP)
+            return
+
+        if self.toggle_service.should_reveal_eating_window(profile):
+            self.toggle_service.reveal_toggle(tid, "eating_window")
+            self.state_service.set_pending(tid, "awaiting_toggle_consent",
+                                           data={"toggle_name": "eating_window"})
+            await message.reply_text(M.REVEAL_EATING_WINDOW)
+            return
+
+        if self.toggle_service.should_reveal_workouts(profile, weekday):
+            self.toggle_service.reveal_toggle(tid, "workouts")
+            self.state_service.set_pending(tid, "awaiting_toggle_consent",
+                                           data={"toggle_name": "workouts"})
+            await message.reply_text(M.REVEAL_WORKOUTS)
+            return
+
+        if self.toggle_service.should_reveal_self_care(profile, weekday):
+            self.toggle_service.reveal_toggle(tid, "self_care")
+            self.state_service.set_pending(tid, "awaiting_toggle_consent",
+                                           data={"toggle_name": "self_care"})
+            await message.reply_text(M.REVEAL_SELF_CARE)
+            return
+
+        # Recurring hooks piggyback
+        prompt_pools = {
+            "sleep": M.HOOK_SLEEP_PROMPTS,
+            "eating_window": M.HOOK_EATING_WINDOW_PROMPTS,
+            "workouts": M.HOOK_WORKOUTS_PROMPTS,
+            "self_care": M.HOOK_SELF_CARE_PROMPTS,
+        }
+
+        for toggle_name, pool in prompt_pools.items():
+            if should_piggyback(profile, toggle_name, now):
+                text = random.choice(pool)
+                if self.toggle_service.should_show_exit_door(profile, toggle_name):
+                    habit_names = {
+                        "sleep": "שינה", "eating_window": "חלון אכילה",
+                        "workouts": "אימונים", "self_care": "משהו לעצמי",
+                    }
+                    text += "\n\n" + M.EXIT_DOOR.format(habit=habit_names.get(toggle_name, ""))
+                self.toggle_service.record_asked(tid, toggle_name)
+                self.toggle_service.increment_unanswered(tid, profile, toggle_name)
+                await message.reply_text(text)
+                return  # Only one piggyback per meal
+
+        # Weekly summary piggyback
+        if should_piggyback(profile, "weekly_summary", now):
+            self.toggle_service.record_asked(tid, "weekly_summary")
+            self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
+            await message.reply_text(M.WEEKLY_SUMMARY_OFFER)
 
     async def _handle_correction(
         self, message, context, correction, last_entry: dict,

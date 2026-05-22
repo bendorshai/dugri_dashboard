@@ -1,23 +1,224 @@
 """
-scheduler.py — תזמון jobs של חלון אכילה.
+scheduler.py — תזמון jobs: חלון אכילה + hooks של מתגים.
 
-מתזמן התרעת 30 דקות לפני סגירת חלון וסיכום בסגירת חלון.
+מתזמן את כל ה-hooks הפרואקטיביים (שינה, אימונים, משהו טוב, סיכום שבועי,
+חלון אכילה) וגם את התרעות חלון האכילה.
 
-תלוי ב: repositories, services, analyzer, parsing.
+תלוי ב: repositories, services, analyzer, parsing, constants, messages.
 נצרך על ידי: bot.py, handlers/base.py.
 """
 
 from __future__ import annotations
 
 import logging
+import random
 from datetime import datetime, time, timedelta
 
 import pytz
 
-from models.profile import UserProfile
+from constants import (
+    SLEEP_HOOK_WINDOW,
+    EATING_WINDOW_HOOK_WINDOW,
+    WORKOUTS_HOOK_WINDOW,
+    SELF_CARE_HOOK_WINDOW,
+    WEEKLY_SUMMARY_HOOK_WINDOW,
+    WORKOUTS_ANCHOR_DAY,
+    SELF_CARE_ANCHOR_DAY,
+    WEEKLY_SUMMARY_ANCHOR_DAY,
+)
+from models.profile import User, UserProfile, ToggleState
 from parsing import parse_time_window
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Hook scheduling helpers
+# ---------------------------------------------------------------------------
+
+def random_time_in_window(start_hour: int, end_hour: int) -> time:
+    """Generate a random time within [start_hour, end_hour) range."""
+    hour = random.randint(start_hour, end_hour - 1)
+    minute = random.randint(0, 59)
+    return time(hour, minute)
+
+
+def should_piggyback(profile: User, toggle_name: str, now: datetime) -> bool:
+    """Should this hook piggyback on the current interaction?
+
+    True if the toggle is active and the hook hasn't fired today.
+    """
+    toggle: ToggleState = getattr(profile.toggles, toggle_name)
+    if toggle.status != "active":
+        return False
+    if toggle.last_asked_at is None:
+        return True
+    # Check if last_asked_at was today (comparing dates)
+    last_date = toggle.last_asked_at.date() if hasattr(toggle.last_asked_at, 'date') else None
+    now_date = now.date() if hasattr(now, 'date') else None
+    if last_date is None or now_date is None:
+        return True
+    return last_date < now_date
+
+
+def get_hooks_to_schedule(profile: User) -> list[dict]:
+    """Return list of hook descriptors for active toggles.
+
+    Each descriptor: {toggle_name, schedule_type, window, anchor_day}
+    """
+    hooks = []
+    toggle_configs = {
+        "sleep": {
+            "schedule_type": "daily",
+            "window": SLEEP_HOOK_WINDOW,
+        },
+        "eating_window": {
+            "schedule_type": "daily",
+            "window": EATING_WINDOW_HOOK_WINDOW,
+        },
+        "workouts": {
+            "schedule_type": "weekly",
+            "window": WORKOUTS_HOOK_WINDOW,
+            "anchor_day": WORKOUTS_ANCHOR_DAY,
+        },
+        "self_care": {
+            "schedule_type": "weekly",
+            "window": SELF_CARE_HOOK_WINDOW,
+            "anchor_day": SELF_CARE_ANCHOR_DAY,
+        },
+        "weekly_summary": {
+            "schedule_type": "weekly",
+            "window": WEEKLY_SUMMARY_HOOK_WINDOW,
+            "anchor_day": WEEKLY_SUMMARY_ANCHOR_DAY,
+        },
+    }
+
+    for toggle_name, config in toggle_configs.items():
+        toggle: ToggleState = getattr(profile.toggles, toggle_name)
+        if toggle.status == "active":
+            hooks.append({"toggle_name": toggle_name, **config})
+
+    return hooks
+
+
+def schedule_hooks_for_user(
+    job_queue,
+    telegram_user_id: int,
+    profile: User,
+    user_repo,
+    toggle_service,
+):
+    """Schedule all applicable hooks for a user based on their toggle states."""
+    # Cancel existing hook jobs for this user
+    for job in job_queue.get_jobs_by_name(f"hook_{telegram_user_id}"):
+        job.schedule_removal()
+
+    tz = pytz.timezone(profile.timezone)
+    hooks = get_hooks_to_schedule(profile)
+
+    for hook in hooks:
+        toggle_name = hook["toggle_name"]
+        window = hook["window"]
+        schedule_type = hook["schedule_type"]
+        rand_time = random_time_in_window(*window)
+        job_time = rand_time.replace(tzinfo=tz)
+        job_name = f"hook_{telegram_user_id}_{toggle_name}"
+
+        # Cancel any existing job for this specific hook
+        for job in job_queue.get_jobs_by_name(job_name):
+            job.schedule_removal()
+
+        data = {
+            "telegram_user_id": telegram_user_id,
+            "toggle_name": toggle_name,
+            "user_repo": user_repo,
+            "toggle_service": toggle_service,
+        }
+
+        if schedule_type == "daily":
+            job_queue.run_daily(
+                _hook_callback,
+                time=job_time,
+                chat_id=telegram_user_id,
+                name=job_name,
+                data=data,
+            )
+        elif schedule_type == "weekly":
+            days = (hook["anchor_day"],)
+            job_queue.run_daily(
+                _hook_callback,
+                time=job_time,
+                chat_id=telegram_user_id,
+                name=job_name,
+                data=data,
+                days=days,
+            )
+
+    logger.info(
+        "Scheduled %d hooks for user %d: %s",
+        len(hooks),
+        telegram_user_id,
+        [h["toggle_name"] for h in hooks],
+    )
+
+
+async def _hook_callback(context):
+    """Generic hook callback — sends the appropriate message for a toggle."""
+    data = context.job.data
+    tid = data["telegram_user_id"]
+    toggle_name = data["toggle_name"]
+    user_repo = data["user_repo"]
+    toggle_service = data["toggle_service"]
+
+    profile = user_repo.get(tid)
+    if profile is None:
+        return
+
+    toggle = getattr(profile.toggles, toggle_name)
+    if toggle.status != "active":
+        return
+
+    # Check if piggyback already fired today
+    now = datetime.now(pytz.timezone(profile.timezone))
+    if not should_piggyback(profile, toggle_name, now):
+        return
+
+    # Pick a random message from the rotating pool
+    import messages as M
+    prompt_pools = {
+        "sleep": M.HOOK_SLEEP_PROMPTS,
+        "eating_window": M.HOOK_EATING_WINDOW_PROMPTS,
+        "workouts": M.HOOK_WORKOUTS_PROMPTS,
+        "self_care": M.HOOK_SELF_CARE_PROMPTS,
+    }
+
+    if toggle_name == "weekly_summary":
+        text = M.WEEKLY_SUMMARY_OFFER
+    else:
+        pool = prompt_pools.get(toggle_name, [])
+        if not pool:
+            return
+        text = random.choice(pool)
+
+    # Check exit door
+    if toggle_service.should_show_exit_door(profile, toggle_name):
+        habit_names = {
+            "sleep": "שינה",
+            "eating_window": "חלון אכילה",
+            "workouts": "אימונים",
+            "self_care": "משהו לעצמי",
+            "weekly_summary": "סיכום שבועי",
+        }
+        text += "\n\n" + M.EXIT_DOOR.format(habit=habit_names.get(toggle_name, ""))
+
+    # Record that we asked
+    toggle_service.record_asked(tid, toggle_name)
+    toggle_service.increment_unanswered(tid, profile, toggle_name)
+
+    try:
+        await context.bot.send_message(chat_id=tid, text=text)
+    except Exception:
+        logger.exception("Failed to send hook message for %s", toggle_name)
 
 
 def schedule_eating_window_jobs(

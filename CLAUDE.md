@@ -176,7 +176,7 @@
 |----|-----|
 | "21 יום התנסות ללא עלות" | "חודש חינם!" |
 | "קלטתי" | "מעולה!!! נרשם בהצלחה!" |
-| "בלי בולשיט" | "פתרון מתקדם מבוסס AI" |
+| "בגובה העיניים" | "פתרון מתקדם מבוסס AI" |
 | "אנחנו לא נחפור בך" | "המאמן הדיגיטלי האישי שלך" |
 | "חבר" | "מאמן" / "אפליקציה" / "פלטפורמה" |
 
@@ -255,19 +255,29 @@ docs/decisions/YYYY-MM-DD-short-topic.md
 health_tracker/
 ├── main.py                 # Entry point: loads config, inits services, runs bot
 ├── bot.py                  # Creates Application with all handlers
+├── constants.py            # All timing/numeric parameters (gate days, windows, thresholds)
+├── messages.py             # All Hebrew text Dugri says (reveals, hooks, exits, summaries)
 ├── handlers/
-│   ├── base.py             # HealthHandlers — all command/message/callback handlers (~1000 lines)
+│   ├── base.py             # HealthHandlers — message/callback handlers + piggyback hooks
+│   ├── start_handler.py    # /start command routing
 │   └── utils.py            # Helpers: send_long_text, safe_react, safe_answer
 ├── analyzer.py             # FoodAnalyzer — OpenAI wrapper for food analysis, corrections, feedback
+├── internal_api.py         # Internal webhook for dashboard → bot target change notifications
 ├── repositories/           # MongoDB repositories (user, food, feedback, error, habits)
-├── scheduler.py            # Eating window scheduled jobs (30-min warning, window close summary)
+├── services/
+│   ├── toggle_service.py   # Toggle state management (dormant/active/cancelled)
+│   ├── onboarding_service.py # Minimal onboarding (name + target offer)
+│   ├── eating_day_service.py # Eating day logic
+│   └── ...                 # Other services
+├── scheduler.py            # Eating window alerts + proactive hook scheduling system
 ├── keyboards.py            # Inline keyboard definitions + formatting helpers
 ├── prompts.py              # GPT system prompts (reusable building blocks)
 ├── parsing.py              # Timezone, eating window logic utilities
 ├── config/
-│   ├── config.json         # Runtime config (tokens, API keys, sheet ID)
-│   ├── config.example.json
-│   └── google_credentials.json
+│   ├── config.json         # Runtime config (tokens, API keys)
+│   └── config.example.json
+├── scripts/
+│   └── migrate_toggles.py  # One-time migration: old habits → new toggles
 ├── start.sh                # Startup script (extracts env vars to config files)
 ├── Dockerfile
 ├── requirements.txt
@@ -292,17 +302,50 @@ An "eating day" is **not** a calendar day — it's defined by the eating window 
 
 ### Message handling & state
 
-`context.chat_data` stores pending states with 5-minute TTL:
+Profile-based pending states (in `user.pending_state`, 5-minute TTL):
+- `awaiting_name` — onboarding name collection
+- `awaiting_target_consent` — yes/no to target calculation offer
+- `awaiting_body_stats` — height, weight, birth year for target calculation
+- `awaiting_toggle_consent` — yes/no to toggle reveal (data: {toggle_name})
+- `awaiting_eating_window` — HH:MM-HH:MM input
+- `awaiting_feedback_reaction` — reaction to weekly feedback
+
+Context-based pending states (in `context.chat_data`):
 - `pending_edit` — awaiting profile field input
 - `pending_question` — awaiting Q&A
 - `pending_correction` — awaiting food edit text
 - `pending_bulk_fix` — awaiting bulk correction description
-- `correction_histories[row]` — tracks chained corrections per sheet row
+
+### Toggle system (מנגנון המתגים)
+
+Habits are managed via a 3-state toggle system: `dormant` → `active` → `cancelled`.
+- **Opt-in toggles** (sleep, eating_window, workouts, self_care): born dormant, revealed gradually
+- **Data-toggle** (target_data): born dormant, one retry on day 9
+- **Opt-out default** (weekly_summary): born active, user can cancel
+
+Toggle state lives in `user.toggles` in MongoDB, controlled by `ToggleService`. All reveal timing and gate logic is in `toggle_service.py`, all numeric parameters in `constants.py`.
+
+### Proactive hooks (scheduled + piggyback)
+
+Each active toggle has a proactive hook that fires on its cadence:
+- **Sleep:** daily, random 08:00-10:00
+- **Eating window:** daily, random 18:00-22:00
+- **Workouts:** every Thursday, random 16:00-20:00
+- **Self-care:** every Friday, random 10:00-14:00
+- **Weekly summary:** every Sunday, random 09:00-11:00
+
+**Piggyback principle:** If the user logs a meal before the scheduled time, the hook question is attached to the meal response (piggyback). The scheduled job is then skipped. Piggyback always takes priority; random scheduling is the safety net.
+
+**Exit door:** On the 2nd consecutive unanswered hook, Dugri offers once to cancel the toggle. After that, regular short prompts resume.
+
+### Rotating message pattern
+
+For recurring hooks, Dugri uses 5 random phrasings per toggle (in `messages.py`) to avoid sounding like an automated timer. For target changes from the dashboard, GPT generates a natural-language validation message (context-aware, not canned).
 
 ### Scheduled jobs
 
-- **30 min before eating window close:** Shows current daily totals vs targets
-- **At window close:** Final summary + AI coaching feedback from the full week's data
+- **Eating window:** 30-min warning + close summary (unchanged)
+- **Hook system:** All toggle hooks scheduled on bot startup via `schedule_hooks_for_user`
 
 ### GPT integration patterns
 
@@ -323,9 +366,17 @@ An "eating day" is **not** a calendar day — it's defined by the eating window 
 
 On Railway: injected via `CONFIG2_JSON` and `GOOGLE_CREDENTIALS_JSON` env vars, extracted by `start.sh`.
 
+### Content and configuration separation
+
+- **`messages.py`** — All Hebrew text Dugri says. Phrasings, reveals, hooks, exits, summaries. Change how Dugri talks in one file.
+- **`constants.py`** — All timing parameters. Gate days, anchor days, random windows, retry thresholds. Change Dugri's cadence in one file.
+- **Never hard-code Hebrew or timing values in logic code.** Always import from these modules.
+
 ### Interaction with dashboard
 
 Both projects share the unified `users` collection (PK=email). When a user sends `/start {token}`, the bot looks up the token in `users`, sets `telegram_user_id` on the doc, and starts the trial.
+
+The dashboard notifies the bot of target changes via an internal webhook (`POST /internal/notify-target-update`). The bot generates a GPT-powered validation message and sends it to the user immediately.
 
 ---
 
