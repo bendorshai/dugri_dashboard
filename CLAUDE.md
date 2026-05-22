@@ -310,7 +310,6 @@ Primary key: `_id` = user email. Key fields:
   "google_oauth": { "client_id": "...", "client_secret": "..." },
   "openai": { "api_key": "..." },
   "mongodb": { "uri": "mongodb://...", "db_name": "health_tracker" },
-  "telegram_bot_url": "https://t.me/skinny_slimmy_bot",
   "dugri_bot_username": "skinny_slimmy_bot",
   "contact_email": "bendorshai@gmail.com"
 }
