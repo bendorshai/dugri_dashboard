@@ -1,240 +1,26 @@
-# CLAUDE.md — דוגרי
+# CLAUDE.md - דוגרי (Telegram bot)
 
-הקובץ הזה הוא ההקשר הקבוע של הפרויקט. תקרא אותו בתחילת כל סשן ולפני כל החלטה משמעותית. עדכונים שוטפים והחלטות נקודתיות נמצאים תחת `docs/decisions/`.
-
----
+> **בכל push יש לעדכן את מספר הגרסה ואת הודעת הגרסה.**
 
 ## מה זה דוגרי
 
-דוגרי הוא בוט טלגרם למעקב הרגלי בריאות בעברית. המודל: השירות עצמו חי בטלגרם; האתר נועד רק להרשמה, תשלום, וניהול חשבון.
+בוט טלגרם למעקב הרגלי בריאות בעברית. חבר ישראלי בגובה העיניים שלא נותן לך לרמות את עצמך, ולא חופר בך.
 
-**הפוזיציה השיווקית במשפט אחד:** דוגרי הוא חבר ישראלי בגובה העיניים שלא נותן לך לרמות את עצמך, ולא חופר בך.
-
-**הסלוגן:** איתך על ההרגלים.
-
----
-
-## חמשת ההרגלים
-
-המוצר עוקב אחרי **חמישה** הרגלים בלבד. לא ארבעה ולא שישה. הפשטות היא חלק מהמותג, לא מקרית.
-
-1. **תזונה** — קלוריות וחלבון יחד, הרגל אחד עם שני מדדים. תיעוד בשיחה חופשית בעברית.
-2. **חלון אכילה** — למשל 14:8 או 16:8.
-3. **שעת שינה** — תיעוד יומי של שעת ההירדמות.
-4. **אימונים בשבוע** — מספר אימונים, לא דקות או חזרות.
-5. **משהו לעצמי השבוע** — הרגל שבועי של עשייה לעצמך (טיפול, טיול, ספר, שקיעה בים). זה הבידול המהותי מכל המתחרים.
-
-**שום הרגל אחר אינו רלוונטי.** לא קפה, לא מים, לא צעדים, לא מצב רוח. אם מישהו (משתמש או קוד) מציע להוסיף — לפנות אלי קודם.
-
----
-
-## אישיות המותג
-
-שלוש שכבות, לפי סדר חשיבות:
-
-1. **חבר בגובה העיניים** — לא מאמן, לא מטפל, לא מורם מעם. עברית טבעית ישראלית, בלי טון של מקצוען.
-2. **לא נותן לך לרמות את עצמך** — לא חוקר, לא מטיל ספק, לא נוזף. מציג נתונים בקור רוח. הכנות נוצרת מהמספרים, לא מהדיאלוג.
-3. **פשטות רדיקלית** — בוט בטלגרם, חמישה הרגלים, אין UI ללמוד.
-
----
+**חמישה הרגלים בלבד** (לא להוסיף בלי אישור):
+1. **תזונה** - קלוריות וחלבון, תיעוד בשיחה חופשית
+2. **חלון אכילה** - למשל 16:8
+3. **שעת שינה** - תיעוד יומי
+4. **אימונים בשבוע** - מספר אימונים
+5. **משהו לעצמי השבוע** - הרגל שבועי (טיפול, טיול, ספר)
 
 ## טון הדיבור
 
-**עקרונות:**
-- ישראלי בגובה העיניים — "קלטתי", "או, חזרת", "בוא נמשיך".
-- פרקטי, לא רגשי — לא שואל "מה הרגשת", לא מזמין שיתוף.
-- נותן תוקף, לא נוזף ולא מתחנף.
-- המספרים הם הכנות — דוגרי לא מטיל ספק במה שכתבת, רק מציג חישוב.
+ישראלי, פרקטי, בגובה העיניים. לא חופר, לא מתחנף, לא נוזף. המספרים הם הכנות.
 
-**דוגרי לא יגיד:**
-- "איך אתה מרגיש עם זה?" (חופר)
-- "כל הכבוד!!! מצוין!!!" (מתחנף)
-- "אתה בטוח שזה הכל?" (מטיל ספק)
-- "שמת לב שאתה חורג מהיעד?" (נוזף)
-- "להגיע ליעד הקלורי שלך זה צעד חשוב..." (קלישאה אימונית)
+- כן: "קלטתי. שווארמה בלאפה. ≈ 720 קלוריות, 38 ג' חלבון."
+- לא: "כל הכבוד!!!", "אתה בטוח?", "איך אתה מרגיש עם זה?"
 
-**דוגרי כן יגיד:**
-- "קלטתי. שווארמה בלאפה עם הרבה טחינה. ≈ 720 קלוריות, 38 ג' חלבון. סך הכל היום: 1,840."
-- "היי, חזרת. בוא נמשיך — מה אכלת היום?"
-- "יפה. רשמתי 'משהו לעצמי' השבוע."
-
----
-
-## כתיבה מגדרית
-
-**הטקסט הציבורי (אתר, עמוד נחיתה) מנוסח בגוף ראשון רבים** — "פתחנו", "הבטחנו", "הורדנו". המסר: אנחנו ביחד בזה. דוגרי לא מטיף, הוא מצטרף לכאב.
-
-**בתוך הבוט** — הטקסטים שמורים בנפרד; דוגרי מדבר עם המשתמש בגוף שני נקבה/זכר לפי העדפת המשתמש (יוגדר באונבורדינג).
-
-**לא להשתמש ב-"/ה" בתוך טקסט שיווקי באתר.** מכוער ויזואלית. גוף ראשון רבים פותר את זה אלגנטית. ה-"/ה" יופיע רק בצ'קבוקסים משפטיים (שם זה תקן ולא מפריע).
-
----
-
-## פלטת צבעים
-
-| תפקיד | צבע | קוד |
-|-------|-----|-----|
-| צבע הזהות (לוגו, כפתורים ראשיים, כותרות) | קינמון | `#A67448` |
-| צבע אוויר (רקעי אזורים, גרפים) | תכלת ים תיכוני | `#5BA8C4` |
-| רקע ראשי | שמנת | `#FAF7F2` |
-| טקסט | אפור חמים | `#5A554D` |
-| סטטוס חיובי | זית | `#8FA876` |
-| סטטוס שלילי/התראה | טרקוטה | `#C97A6B` |
-
-**אסור:**
-- לבן צורם — תמיד שמנת.
-- שחור — תמיד אפור חמים.
-- ירוקים אנרגטיים-מסחריים (סגנון אפליקציות כושר).
-- גרדיאנטים צעקניים.
-
----
-
-## לוגו
-
-הלוגו הוא בועת דיבור עם המילה "דוגרי" בעברית ומתחתיה "איתך על ההרגלים".
-
-**שתי גרסאות רשמיות:**
-1. **ראשית** — רקע שמנת, מסגרת וטקסט קינמון. לאתר, מסמכים, חתימות מייל, מצגות.
-2. **משנית** — בועה ממולאת בקינמון, טקסט שמנת. לאווטר טלגרם, favicon, אייקון אפליקציה — כל מקום שצריך נוכחות בולטת בגודל קטן.
-
-**אסור:**
-- לשנות צבעים — אין גרסת תכלת ללוגו.
-- להטות, להוסיף אפקטים, גרדיאנטים.
-- לערוך את הפרופורציות.
-
----
-
-## פיסיון של המייסד
-
-המייסד (שי בן-דור מאיר) **נוכח רק בשולי משפך השיווק**, לא במוצר.
-
-**איפה שי מופיע:**
-- בעמוד "מי עומד מאחורי דוגרי" (אם קיים).
-- בתחתית עמוד המכירה כסיפור קצר.
-- בפוסטים אישיים בפייסבוק.
-
-**איפה שי לא מופיע:**
-- בליבת עמוד הנחיתה.
-- בתוך הבוט — דוגרי הוא דוגרי, לא דובר של שי.
-- בדשבורד.
-- בצ'קבוקסים המשפטיים ("דברי פרסומת מדוגרי", לא "מדוגרי או משי").
-
-**הסיבה:** הפרדה מגנה על שי מביקורת אישית, ושומרת על דוגרי כמותג עצמאי.
-
----
-
-## עקרונות מוצריים קריטיים
-
-### עיקרון 1: אנחנו לא חופרים
-- אין שאלון אונבורדינג של 7-10 מסכים. ההיכרות עם המשתמש מתפתחת בקצב שלו, בתוך הבוט.
-- אין שדות חובה מיותרים.
-- אם משהו יכול להיכנס לבוט ולא לאתר — הוא נכנס לבוט.
-
-### עיקרון 2: שיחה, לא טופס
-- המשתמש כותב "אכלתי שווארמה בלאפה" — דוגרי מבין.
-- לא רשימות נפתחות. לא חיפוש מנות. לא ספריות מאכלים.
-
-### עיקרון 3: המספרים הם הכנות
-- דוגרי מציג חישוב, לא ביקורת.
-- אם המשתמש כתב 200 קלוריות בארוחה של 800 — דוגרי לא חוקר. הוא רושם 800 (לפי ההערכה שלו) ומציג. אם המשתמש רוצה לתקן — הוא מתקן.
-
-### עיקרון 4: פשטות רדיקלית
-- חמישה הרגלים, לא חמישה-עשר.
-- אין אינטגרציות, אין שעונים חכמים, אין סטטיסטיקות מורכבות.
-- אם פיצ'ר לא חיוני — הוא מסיח. מסירים.
-
----
-
-## עקרונות עיצוב ל-UI ולעמוד הנחיתה
-
-- **רקע שמנת**, לא לבן.
-- **קינמון** לפעולות עיקריות (CTA, כותרות מרכזיות).
-- **תכלת** לאוויר, גרפים, פרטים נושמים.
-- **טיפוגרפיה ישראלית** — נחרצת, נושמת, לא תוקפנית.
-- **חלל לבן (cream space)** — נדיבות במרווחים, לא דחיסות.
-- **קישורים משפטיים** — תמיד `target="_blank" rel="noopener noreferrer"`, נפתחים בחלון חדש.
-
----
-
-## מצב מודל התשלום
-
-- **תקופת התנסות:** 21 יום ללא עלות, ללא צורך בכרטיס אשראי בהתחלה.
-- **לאחר 21 יום:** המשתמש מזין פרטי אשראי דרך מסך סליקה.
-- **מחיר:** 47 ₪ לחודש, כולל מע"מ.
-- **חיוב מתחדש אוטומטית** — עם הסכמה מפורשת בעת הזנת פרטי האשראי.
-- **ביטול** — בלחיצה. אפשר דרך הבוט, דרך האתר, או במייל.
-
-**הקופי הציבורי על התשלום:**
-- "21 יום התנסות ללא עלות. אחר כך 47 ₪ לחודש — אפשר לבטל בלחיצה."
-- **לא** "חודש חינם". לא "ניסיון חופשי". לא "בלי חיוב".
-
----
-
-## מיתוג מול שפת קופי
-
-| כן | לא |
-|----|-----|
-| "21 יום התנסות ללא עלות" | "חודש חינם!" |
-| "קלטתי" | "מעולה!!! נרשם בהצלחה!" |
-| "בגובה העיניים" | "פתרון מתקדם מבוסס AI" |
-| "אנחנו לא נחפור בך" | "המאמן הדיגיטלי האישי שלך" |
-| "חבר" | "מאמן" / "אפליקציה" / "פלטפורמה" |
-
----
-
-## אזורים רגישים שדורשים זהירות
-
-### בריאות נפשית והפרעות אכילה
-דוגרי נוגע במשקל ובאכילה. זה תחום שיכול לפגוע. **בכל החלטת מוצר** — לבדוק שהיא לא דוחפת לכיוון אובססיבי, לא חוגגת ירידה במשקל מהירה, לא מעודדת ספירת קלוריות כפייתית.
-
-**דוגרי הוא כלי למודעות, לא להקצנה.** אם פיצ'ר עלול להזיק למישהי עם הפרעת אכילה — לא להוסיף אותו.
-
-### פרטיות
-- נתוני בריאות נחשבים מידע רגיש לפי חוק הגנת הפרטיות הישראלי.
-- כל אינטגרציה חדשה צריכה הסכמה מפורשת.
-- שמירת מידע: עד 18 חודשים אחרי חוסר פעילות. אחר כך נמחק אוטומטית.
-
-### תוכן שיווקי
-- אסור לשלוח דברי פרסומת ללא הסכמה מפורשת, או בלי לעמוד בתנאי החריג של "לקוח קיים" (סעיף 30א(ג) לחוק התקשורת).
-- כל מייל שיווקי חייב לכלול: המילה "פרסומת" בכותרת, פרטי המפרסם, וקישור הסרה.
-
----
-
-## תהליך עבודה עם Claude Code
-
-### לפני כל שינוי משמעותי
-1. לקרוא את הקובץ הזה (CLAUDE.md).
-2. לבדוק תחת `docs/decisions/` אם יש החלטה רלוונטית.
-3. אם השינוי סותר משהו פה — לעצור ולשאול את המשתמש.
-
-### אחרי כל שינוי משמעותי
-- לעדכן את `docs/decisions/` אם זה רלוונטי.
-- לא לעדכן את CLAUDE.md אלא אם המשתמש ביקש במפורש (זה ההקשר הקבוע, לא יומן).
-
-### תיעוד החלטות
-החלטות נקודתיות נכתבות לקובץ נפרד בפורמט:
-```
-docs/decisions/YYYY-MM-DD-short-topic.md
-```
-
-לדוגמה:
-- `docs/decisions/2026-05-20-signup-page-legal-and-copy.md`
-- `docs/decisions/2026-05-22-onboarding-flow.md`
-
----
-
-## אנשי קשר ואחריות
-
-- **מייסד ובעלים:** שי בן-דור מאיר
-- **תפקידו של Claude Code:** מימוש טכני בלבד. החלטות מוצריות, שיווקיות, ומשפטיות — דרך השיחה עם שי.
-- **דברים שמחייבים אישור מפורש משי לפני שינוי:**
-  - תוכן צ'קבוקסים משפטיים.
-  - מספר ההרגלים.
-  - מודל התמחור.
-  - פלטת הצבעים.
-  - הסלוגן והפוזיציה.
-
----
+מגדר: דוגרי מדבר בגוף שני נקבה/זכר לפי העדפת המשתמש.
 
 ---
 
@@ -244,142 +30,74 @@ docs/decisions/YYYY-MM-DD-short-topic.md
 
 - **Bot framework:** python-telegram-bot 21.6 (async, webhook on Railway / polling locally)
 - **AI:** OpenAI GPT-4o (photos), GPT-4o-mini (text analysis, coaching)
-- **Database:** MongoDB (pymongo) — unified `users` collection (PK=email), `food_entries`, `weekly_feedback`, `error_logs`, habit logs
+- **Database:** MongoDB (pymongo) - unified `users` collection (PK=email), `food_entries`, `weekly_feedback`, `error_logs`, habit logs
 - **Validation:** Pydantic v2 for structured GPT response parsing
-- **Scheduling:** Built-in job queue for eating window alerts
 - **Deployment:** Docker + Railway (webhook mode via `RAILWAY_PUBLIC_DOMAIN`)
 
 ### Project structure
 
 ```
 health_tracker/
-├── main.py                 # Entry point: loads config, inits services, runs bot
-├── bot.py                  # Creates Application with all handlers
-├── constants.py            # All timing/numeric parameters (gate days, windows, thresholds)
-├── messages.py             # All Hebrew text Dugri says (reveals, hooks, exits, summaries)
+├── main.py                 # Entry point
+├── bot.py                  # Application with all handlers
+├── constants.py            # All timing/numeric parameters
+├── messages.py             # All Hebrew text Dugri says
 ├── handlers/
-│   ├── base.py             # HealthHandlers — message/callback handlers + piggyback hooks
+│   ├── base.py             # Message/callback handlers + piggyback hooks
 │   ├── start_handler.py    # /start command routing
-│   └── utils.py            # Helpers: send_long_text, safe_react, safe_answer
-├── analyzer.py             # FoodAnalyzer — OpenAI wrapper for food analysis, corrections, feedback
-├── internal_api.py         # Internal webhook for dashboard → bot target change notifications
-├── repositories/           # MongoDB repositories (user, food, feedback, error, habits)
+│   └── utils.py            # send_long_text, safe_react, safe_answer
+├── analyzer.py             # OpenAI wrapper for food analysis
+├── internal_api.py         # Dashboard -> bot webhook
+├── repositories/           # MongoDB repositories
 ├── services/
-│   ├── toggle_service.py   # Toggle state management (dormant/active/cancelled)
-│   ├── onboarding_service.py # Minimal onboarding (name + target offer)
-│   ├── eating_day_service.py # Eating day logic
-│   └── ...                 # Other services
-├── scheduler.py            # Eating window alerts + proactive hook scheduling system
-├── keyboards.py            # Inline keyboard definitions + formatting helpers
-├── prompts.py              # GPT system prompts (reusable building blocks)
-├── parsing.py              # Timezone, eating window logic utilities
-├── config/
-│   ├── config.json         # Runtime config (tokens, API keys)
-│   └── config.example.json
-├── scripts/
-│   └── migrate_toggles.py  # One-time migration: old habits → new toggles
-├── start.sh                # Startup script (extracts env vars to config files)
+│   ├── toggle_service.py   # Toggle state management
+│   ├── onboarding_service.py
+│   ├── eating_day_service.py
+│   └── ...
+├── scheduler.py            # Eating window alerts + proactive hooks
+├── keyboards.py            # Inline keyboards + formatting
+├── prompts.py              # GPT system prompts (composable blocks)
+├── parsing.py              # Timezone, eating window utilities
+├── config/config.json      # Runtime config (tokens, API keys)
+├── start.sh                # Startup (extracts env vars to config)
 ├── Dockerfile
 ├── requirements.txt
 └── tests/
 ```
 
-### Current state: multi-user
+### Key concepts
 
-The bot is multi-user, sharing a unified `users` collection (PK=email) with the dashboard. Users are identified by `telegram_user_id` in bot context.
+**Eating day:** Not a calendar day - defined by eating window (e.g., 08:00-20:00). A meal at 22:00 still belongs to "today." Source of truth: `EatingDayService`.
 
-### Core food logging flow
+**Toggle system:** 3-state (`dormant` -> `active` -> `cancelled`). Opt-in toggles (sleep, eating_window, workouts, self_care) born dormant, revealed gradually. `weekly_summary` born active. All timing in `constants.py`, state in `ToggleService`.
 
-1. User sends text ("שווארמה בלאפה") or photo of food
-2. `FoodAnalyzer` calls GPT → returns structured items (calories, protein per item)
-3. Bot saves entry to MongoDB `food_entries` collection
-4. Bot reads back daily totals and displays progress vs targets
-5. User can edit, delete, duplicate entries via inline buttons
+**Proactive hooks:** Each active toggle has scheduled + piggyback hooks. Piggyback (attached to meal response) always takes priority over scheduled. On 2nd consecutive unanswered hook, Dugri offers to cancel the toggle. 5 random phrasings per toggle in `messages.py`.
 
-### Critical concept: eating day
+**Pending states:** Profile-based (`user.pending_state`, 5-min TTL): `awaiting_name`, `awaiting_target_consent`, `awaiting_body_stats`, `awaiting_toggle_consent`, `awaiting_eating_window`, `awaiting_feedback_reaction`. Context-based (`context.chat_data`): `pending_edit`, `pending_question`, `pending_correction`, `pending_bulk_fix`.
 
-An "eating day" is **not** a calendar day — it's defined by the eating window (e.g., 08:00-20:00). A meal at 22:00 still belongs to "today's" eating day. The `EatingDayService` is the source of truth for this logic.
+### Content separation
 
-### Message handling & state
+- **`messages.py`** - All Hebrew text. Never hard-code Hebrew in logic code.
+- **`constants.py`** - All timing parameters. Never hard-code timing values in logic code.
 
-Profile-based pending states (in `user.pending_state`, 5-minute TTL):
-- `awaiting_name` — onboarding name collection
-- `awaiting_target_consent` — yes/no to target calculation offer
-- `awaiting_body_stats` — height, weight, birth year for target calculation
-- `awaiting_toggle_consent` — yes/no to toggle reveal (data: {toggle_name})
-- `awaiting_eating_window` — HH:MM-HH:MM input
-- `awaiting_feedback_reaction` — reaction to weekly feedback
+### GPT patterns
 
-Context-based pending states (in `context.chat_data`):
-- `pending_edit` — awaiting profile field input
-- `pending_question` — awaiting Q&A
-- `pending_correction` — awaiting food edit text
-- `pending_bulk_fix` — awaiting bulk correction description
+- `beta.chat.completions.parse()` with Pydantic response models
+- Temperature 0 for analysis, 0.7 for feedback/suggestions
+- Composable system prompts in `prompts.py`
 
-### Toggle system (מנגנון המתגים)
+### Dashboard interaction
 
-Habits are managed via a 3-state toggle system: `dormant` → `active` → `cancelled`.
-- **Opt-in toggles** (sleep, eating_window, workouts, self_care): born dormant, revealed gradually
-- **Data-toggle** (target_data): born dormant, one retry on day 9
-- **Opt-out default** (weekly_summary): born active, user can cancel
+Shared `users` collection (PK=email). `/start {token}` links Telegram user to dashboard account. Dashboard notifies bot of target changes via `POST /internal/notify-target-update`.
 
-Toggle state lives in `user.toggles` in MongoDB, controlled by `ToggleService`. All reveal timing and gate logic is in `toggle_service.py`, all numeric parameters in `constants.py`.
-
-### Proactive hooks (scheduled + piggyback)
-
-Each active toggle has a proactive hook that fires on its cadence:
-- **Sleep:** daily, random 08:00-10:00
-- **Eating window:** daily, random 18:00-22:00
-- **Workouts:** every Thursday, random 16:00-20:00
-- **Self-care:** every Friday, random 10:00-14:00
-- **Weekly summary:** every Sunday, random 09:00-11:00
-
-**Piggyback principle:** If the user logs a meal before the scheduled time, the hook question is attached to the meal response (piggyback). The scheduled job is then skipped. Piggyback always takes priority; random scheduling is the safety net.
-
-**Exit door:** On the 2nd consecutive unanswered hook, Dugri offers once to cancel the toggle. After that, regular short prompts resume.
-
-### Rotating message pattern
-
-For recurring hooks, Dugri uses 5 random phrasings per toggle (in `messages.py`) to avoid sounding like an automated timer. For target changes from the dashboard, GPT generates a natural-language validation message (context-aware, not canned).
-
-### Scheduled jobs
-
-- **Eating window:** 30-min warning + close summary (unchanged)
-- **Hook system:** All toggle hooks scheduled on bot startup via `schedule_hooks_for_user`
-
-### GPT integration patterns
-
-- All calls use `beta.chat.completions.parse()` with Pydantic response models
-- Temperature 0 for analysis/corrections (deterministic), 0.7 for feedback/suggestions (creative)
-- System prompts built from composable blocks in `prompts.py`
-- Photo analysis uses GPT-4o; text analysis uses GPT-4o-mini
-
-### Config format (`config/config.json`)
+### Config (`config/config.json`)
 
 ```json
 {
   "telegram": { "bot_token": "..." },
   "openai": { "api_key": "..." },
-  "mongodb": { "uri": "mongodb://...", "db_name": "health_tracker" }
+  "mongodb": { "uri": "...", "db_name": "health_tracker" }
 }
 ```
 
-On Railway: injected via `CONFIG2_JSON` and `GOOGLE_CREDENTIALS_JSON` env vars, extracted by `start.sh`.
-
-### Content and configuration separation
-
-- **`messages.py`** — All Hebrew text Dugri says. Phrasings, reveals, hooks, exits, summaries. Change how Dugri talks in one file.
-- **`constants.py`** — All timing parameters. Gate days, anchor days, random windows, retry thresholds. Change Dugri's cadence in one file.
-- **Never hard-code Hebrew or timing values in logic code.** Always import from these modules.
-
-### Interaction with dashboard
-
-Both projects share the unified `users` collection (PK=email). When a user sends `/start {token}`, the bot looks up the token in `users`, sets `telegram_user_id` on the doc, and starts the trial.
-
-The dashboard notifies the bot of target changes via an internal webhook (`POST /internal/notify-target-update`). The bot generates a GPT-powered validation message and sends it to the user immediately.
-
----
-
-## עדכון אחרון
-
-22.05.2026
+On Railway: injected via `CONFIG2_JSON` env var, extracted by `start.sh`.
