@@ -43,6 +43,28 @@ def _parse_dt(val) -> datetime | None:
     return None
 
 
+def _created_at_gte(cutoff: datetime) -> dict:
+    """Build a $match filter for created_at that handles both BSON datetime and ISO string."""
+    naive = cutoff.replace(tzinfo=None) if cutoff.tzinfo else cutoff
+    iso = cutoff.isoformat()
+    return {"$or": [
+        {"created_at": {"$gte": naive, "$type": "date"}},
+        {"created_at": {"$gte": iso, "$type": "string"}},
+    ]}
+
+
+def _created_at_range(start: datetime, end: datetime) -> dict:
+    """Build a $match filter for created_at range, handling both BSON datetime and ISO string."""
+    naive_start = start.replace(tzinfo=None) if start.tzinfo else start
+    naive_end = end.replace(tzinfo=None) if end.tzinfo else end
+    iso_start = start.isoformat()
+    iso_end = end.isoformat()
+    return {"$or": [
+        {"created_at": {"$gte": naive_start, "$lt": naive_end, "$type": "date"}},
+        {"created_at": {"$gte": iso_start, "$lt": iso_end, "$type": "string"}},
+    ]}
+
+
 class AdminStorage:
     def __init__(self, uri: str, db_name: str):
         self._client = MongoClient(uri)
@@ -67,7 +89,7 @@ class AdminStorage:
         def _fetch():
             cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             pipeline = [
-                {"$match": {"created_at": {"$gte": cutoff}}},
+                {"$match": _created_at_gte(cutoff)},
                 {"$group": {"_id": "$telegram_user_id"}},
                 {"$count": "n"},
             ]
@@ -128,7 +150,7 @@ class AdminStorage:
             cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
             entries = list(self._food.find(
-                {"created_at": {"$gte": cutoff}},
+                _created_at_gte(cutoff),
                 {"telegram_user_id": 1, "created_at": 1},
             ))
 
@@ -243,7 +265,7 @@ class AdminStorage:
         def _fetch():
             cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             entries = list(self._food.find(
-                {"created_at": {"$gte": cutoff}},
+                _created_at_gte(cutoff),
                 {"telegram_user_id": 1, "created_at": 1},
             ))
             from collections import defaultdict
@@ -260,7 +282,7 @@ class AdminStorage:
             cutoff = datetime.now(timezone.utc) - timedelta(days=3)
 
             entries = list(self._food.find(
-                {"created_at": {"$gte": cutoff}},
+                _created_at_gte(cutoff),
                 {"telegram_user_id": 1, "created_at": 1},
             ))
 
@@ -336,7 +358,7 @@ class AdminStorage:
             cutoff_old = datetime.now(timezone.utc) - timedelta(days=30)
 
             old_entries = list(self._food.find(
-                {"created_at": {"$gte": cutoff_old, "$lt": cutoff_recent}},
+                _created_at_range(cutoff_old, cutoff_recent),
                 {"telegram_user_id": 1, "created_at": 1},
             ))
 
@@ -351,9 +373,10 @@ class AdminStorage:
             if not formerly_active:
                 return []
 
+            gte_filter = _created_at_gte(cutoff_recent)
+            gte_filter["telegram_user_id"] = {"$in": list(formerly_active)}
             recent_entries = list(self._food.find(
-                {"created_at": {"$gte": cutoff_recent},
-                 "telegram_user_id": {"$in": list(formerly_active)}},
+                gte_filter,
                 {"telegram_user_id": 1},
             ))
             still_active = {e["telegram_user_id"] for e in recent_entries}
