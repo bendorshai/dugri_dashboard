@@ -20,7 +20,7 @@ def _make_service():
 
 
 def _make_profile(**kwargs):
-    defaults = {"telegram_user_id": 123}
+    defaults = {"email": "test@test.com", "telegram_user_id": 123}
     defaults.update(kwargs)
     return UserProfile(**defaults)
 

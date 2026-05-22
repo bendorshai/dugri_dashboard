@@ -29,6 +29,7 @@ from models.food import FoodEntry
 
 def _make_profile(**kwargs):
     defaults = {
+        "email": "test@test.com",
         "telegram_user_id": 123,
         "eating_window": EatingWindow(start="08:00", end="20:00"),
         "targets": Targets(calories=2000, protein=150),

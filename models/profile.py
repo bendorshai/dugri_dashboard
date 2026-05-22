@@ -1,8 +1,8 @@
 """
-profile.py — מודל הפרופיל של משתמש דוגרי.
+profile.py — מודל המשתמש המאוחד של דוגרי.
 
-הקובץ הזה מגדיר את UserProfile ותתי-המודלים שלו. הפרופיל נוצר באתר
-ומתעדכן גם מהבוט. ה-_id במונגו הוא telegram_user_id.
+הקובץ הזה מגדיר את User ותתי-המודלים שלו. המשתמש נוצר באתר (PK=email)
+ומתעדכן מהבוט כשמקשרים telegram_user_id.
 
 תלוי ב: pydantic בלבד.
 נצרך על ידי: repositories/user_repository, services, handlers.
@@ -70,11 +70,12 @@ class PendingState(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class UserProfile(BaseModel):
-    telegram_user_id: int
-    email: str | None = None
+class User(BaseModel):
+    email: str
+    telegram_user_id: int | None = None
     name: str | None = None
     gender: Literal["male", "female"] | None = None
+    photo_url: str | None = None
 
     targets: Targets = Field(default_factory=Targets)
     eating_window: EatingWindow | None = None
@@ -94,25 +95,32 @@ class UserProfile(BaseModel):
     signup_session_token: str | None = None
     signup_session_token_expires_at: datetime | None = None
 
+    # Dashboard fields
+    consents: dict = Field(default_factory=dict)
+    goals: dict = Field(default_factory=dict)
+    birth_year: int | None = None
+    height_cm: float | None = None
+    weight_kg: float | None = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_mongo_dict(self) -> dict:
-        """Convert to MongoDB document. Maps telegram_user_id to _id."""
+        """Convert to MongoDB document. Maps email to _id."""
         d = self.model_dump(mode="json")
-        d["_id"] = d.pop("telegram_user_id")
+        d["_id"] = d.pop("email")
         return d
 
     @classmethod
-    def from_mongo_dict(cls, doc: dict) -> UserProfile:
-        """Create from MongoDB document. Maps _id back to telegram_user_id.
+    def from_mongo_dict(cls, doc: dict) -> User:
+        """Create from MongoDB document. Maps _id back to email.
 
         Handles legacy flat-field profiles (target_calories, eating_window_start, etc.)
         by migrating them to the nested structure.
         """
         doc = dict(doc)
         if "_id" in doc:
-            doc["telegram_user_id"] = doc.pop("_id")
+            doc["email"] = doc.pop("_id")
 
         # Migrate legacy flat fields to nested structure
         if "target_calories" in doc or "target_protein" in doc:
@@ -134,3 +142,7 @@ class UserProfile(BaseModel):
             doc.pop(legacy_key, None)
 
         return cls.model_validate(doc)
+
+
+# Backward-compat alias — will be removed after all imports are updated
+UserProfile = User

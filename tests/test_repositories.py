@@ -32,6 +32,7 @@ def _make_mock_collection():
 
 
 def _make_profile(tid: int = 123, **kwargs) -> UserProfile:
+    kwargs.setdefault("email", "test@test.com")
     return UserProfile(telegram_user_id=tid, **kwargs)
 
 
@@ -61,12 +62,13 @@ class TestUserRepository:
 
         result = repo.get(999)
         assert result is None
-        col.find_one.assert_called_once_with({"_id": 999})
+        col.find_one.assert_called_once_with({"telegram_user_id": 999})
 
     def test_get_returns_profile(self):
         col = _make_mock_collection()
         col.find_one.return_value = {
-            "_id": 123,
+            "_id": "test@test.com",
+            "telegram_user_id": 123,
             "timezone": "Asia/Jerusalem",
         }
         repo = UserRepository(col)
@@ -74,7 +76,21 @@ class TestUserRepository:
         result = repo.get(123)
         assert result is not None
         assert result.telegram_user_id == 123
+        assert result.email == "test@test.com"
         assert result.timezone == "Asia/Jerusalem"
+
+    def test_get_by_email(self):
+        col = _make_mock_collection()
+        col.find_one.return_value = {
+            "_id": "test@test.com",
+            "telegram_user_id": 123,
+        }
+        repo = UserRepository(col)
+
+        result = repo.get_by_email("test@test.com")
+        assert result is not None
+        assert result.email == "test@test.com"
+        col.find_one.assert_called_once_with({"_id": "test@test.com"})
 
     def test_save_does_upsert(self):
         col = _make_mock_collection()
@@ -84,24 +100,36 @@ class TestUserRepository:
         repo.save(profile)
         col.replace_one.assert_called_once()
         args, kwargs = col.replace_one.call_args
-        assert args[0] == {"_id": 123}
+        assert args[0] == {"_id": "test@test.com"}
         assert kwargs["upsert"] is True
 
-    def test_update_fields_is_atomic(self):
+    def test_update_fields_by_telegram_id(self):
         col = _make_mock_collection()
         repo = UserRepository(col)
 
         repo.update_fields(123, {"name": "שי"})
         col.update_one.assert_called_once()
         args = col.update_one.call_args[0]
-        assert args[0] == {"_id": 123}
+        assert args[0] == {"telegram_user_id": 123}
+        assert "name" in args[1]["$set"]
+        assert "updated_at" in args[1]["$set"]
+
+    def test_update_fields_by_email(self):
+        col = _make_mock_collection()
+        repo = UserRepository(col)
+
+        repo.update_fields_by_email("test@test.com", {"name": "שי"})
+        col.update_one.assert_called_once()
+        args = col.update_one.call_args[0]
+        assert args[0] == {"_id": "test@test.com"}
         assert "name" in args[1]["$set"]
         assert "updated_at" in args[1]["$set"]
 
     def test_get_by_signup_token_filters_correctly(self):
         col = _make_mock_collection()
         col.find_one.return_value = {
-            "_id": 123,
+            "_id": "test@test.com",
+            "telegram_user_id": 123,
             "signup_session_token": FAKE_OID,
         }
         repo = UserRepository(col)

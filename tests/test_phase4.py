@@ -24,7 +24,7 @@ from repositories.feedback_repository import WeeklyFeedbackRepository
 
 
 def _make_profile(**kwargs):
-    defaults = {"telegram_user_id": 123, "targets": Targets(calories=2000, protein=150)}
+    defaults = {"email": "test@test.com", "telegram_user_id": 123, "targets": Targets(calories=2000, protein=150)}
     defaults.update(kwargs)
     return UserProfile(**defaults)
 

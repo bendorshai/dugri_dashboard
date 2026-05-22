@@ -79,8 +79,8 @@ def main():
     mongo_client = MongoClient(mongo_uri)
     db = mongo_client[mongo_cfg["db_name"]]
 
-    # Repositories
-    user_repo = UserRepository(db["user_profiles"])
+    # Repositories — single "users" collection for both dashboard and bot
+    user_repo = UserRepository(db["users"])
     food_repo = FoodRepository(db["food_entries"])
     feedback_repo = WeeklyFeedbackRepository(db["weekly_feedback"])
     error_repo = ErrorRepository(db["error_logs"])
@@ -98,9 +98,6 @@ def main():
     # Landing page URL
     landing_page_url = cfg.get("landing_page_url", "https://dugri.up.railway.app")
 
-    # Dashboard collection for linking
-    dashboard_users = db["dashboard_users"]
-
     # Create bot
     app = create_bot(
         token=tg["bot_token"],
@@ -110,7 +107,6 @@ def main():
         feedback_repo=feedback_repo,
         error_repo=error_repo,
         eating_day_service=eating_day_service,
-        dashboard_users_collection=dashboard_users,
         sleep_repo=sleep_repo,
         workout_repo=workout_repo,
         self_care_repo=self_care_repo,

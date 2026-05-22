@@ -94,7 +94,6 @@ def create_bot(
     feedback_repo: WeeklyFeedbackRepository,
     error_repo: ErrorRepository,
     eating_day_service: EatingDayService,
-    dashboard_users_collection=None,
     sleep_repo=None,
     workout_repo=None,
     self_care_repo=None,
@@ -134,12 +133,9 @@ def create_bot(
     )
 
     # Start handler with linking
-    if dashboard_users_collection is not None:
-        linking_service = LinkingService(user_repo, dashboard_users_collection)
-        start_handler = StartHandler(linking_service, onboarding_service, landing_page_url)
-        app.add_handler(CommandHandler("start", start_handler.handle_start))
-    else:
-        app.add_handler(CommandHandler("start", h.handle_start_command))
+    linking_service = LinkingService(user_repo)
+    start_handler = StartHandler(linking_service, onboarding_service, landing_page_url)
+    app.add_handler(CommandHandler("start", start_handler.handle_start))
 
     # Command handlers
     app.add_handler(CommandHandler("menu", h.handle_menu_command))

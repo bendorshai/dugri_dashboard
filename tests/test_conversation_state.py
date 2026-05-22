@@ -20,13 +20,13 @@ def _make_service():
 class TestConversationStateService:
     def test_get_pending_returns_none_when_no_state(self):
         svc, _ = _make_service()
-        profile = UserProfile(telegram_user_id=123, pending_state=None)
+        profile = UserProfile(email="t@t.com", telegram_user_id=123, pending_state=None)
         assert svc.get_pending(profile) is None
 
     def test_get_pending_returns_state_when_fresh(self):
         svc, _ = _make_service()
         state = PendingState(kind="awaiting_name", created_at=datetime.now(timezone.utc))
-        profile = UserProfile(telegram_user_id=123, pending_state=state)
+        profile = UserProfile(email="t@t.com", telegram_user_id=123, pending_state=state)
         result = svc.get_pending(profile)
         assert result is not None
         assert result.kind == "awaiting_name"
@@ -35,7 +35,7 @@ class TestConversationStateService:
         svc, repo = _make_service()
         old_time = datetime.now(timezone.utc) - timedelta(seconds=PENDING_TTL_SECONDS + 10)
         state = PendingState(kind="awaiting_name", created_at=old_time)
-        profile = UserProfile(telegram_user_id=123, pending_state=state)
+        profile = UserProfile(email="t@t.com", telegram_user_id=123, pending_state=state)
         result = svc.get_pending(profile)
         assert result is None
         repo.update_fields.assert_called_once()
@@ -60,7 +60,7 @@ class TestConversationStateService:
     def test_dispatch_returns_result_when_pending(self):
         svc, _ = _make_service()
         state = PendingState(kind="awaiting_name", data={"x": 1})
-        profile = UserProfile(telegram_user_id=123, pending_state=state)
+        profile = UserProfile(email="t@t.com", telegram_user_id=123, pending_state=state)
         result = svc.dispatch(profile, "hello")
         assert result is not None
         assert result.kind == "awaiting_name"
@@ -68,6 +68,6 @@ class TestConversationStateService:
 
     def test_dispatch_returns_none_when_no_pending(self):
         svc, _ = _make_service()
-        profile = UserProfile(telegram_user_id=123, pending_state=None)
+        profile = UserProfile(email="t@t.com", telegram_user_id=123, pending_state=None)
         result = svc.dispatch(profile, "hello")
         assert result is None
