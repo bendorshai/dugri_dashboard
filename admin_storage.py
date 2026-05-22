@@ -24,19 +24,23 @@ def _cached(key: str, fetch_fn):
 
 
 def _parse_dt(val) -> datetime | None:
-    """Parse a datetime that may be BSON datetime or ISO string."""
+    """Parse a datetime that may be BSON datetime or ISO string.
+
+    Always returns a UTC-aware datetime so subtraction never fails
+    on naive-vs-aware mismatch.
+    """
     if val is None:
         return None
     if isinstance(val, datetime):
+        if val.tzinfo is None:
+            return val.replace(tzinfo=timezone.utc)
         return val
     if isinstance(val, str):
-        return datetime.fromisoformat(val)
+        dt = datetime.fromisoformat(val)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
     return None
-
-
-def _iso(dt: datetime) -> str:
-    """Format datetime as ISO string for string comparison against stored values."""
-    return dt.isoformat()
 
 
 class AdminStorage:
@@ -61,7 +65,7 @@ class AdminStorage:
 
     def get_active_this_week(self) -> int:
         def _fetch():
-            cutoff = _iso(datetime.now(timezone.utc) - timedelta(days=7))
+            cutoff = datetime.now(timezone.utc) - timedelta(days=7)
             pipeline = [
                 {"$match": {"created_at": {"$gte": cutoff}}},
                 {"$group": {"_id": "$telegram_user_id"}},
@@ -121,23 +125,20 @@ class AdminStorage:
 
     def get_dau_30_days(self) -> list[dict]:
         def _fetch():
-            cutoff = _iso(datetime.now(timezone.utc) - timedelta(days=30))
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
-            # Since created_at is stored as ISO string, use string comparison
-            # and extract date portion (first 10 chars) in Python
             entries = list(self._food.find(
                 {"created_at": {"$gte": cutoff}},
                 {"telegram_user_id": 1, "created_at": 1},
             ))
 
-            # Group by date, count distinct users
             from collections import defaultdict
             day_users: dict[str, set] = defaultdict(set)
             for e in entries:
-                ct = e.get("created_at")
+                ct = _parse_dt(e.get("created_at"))
                 if not ct:
                     continue
-                date_str = str(ct)[:10]  # "YYYY-MM-DD" from ISO string or datetime
+                date_str = ct.strftime("%Y-%m-%d")
                 day_users[date_str].add(e["telegram_user_id"])
 
             # Fill 30-day range with zeros
@@ -239,9 +240,8 @@ class AdminStorage:
 
     def get_super_active_users(self) -> list[dict]:
         def _fetch():
-            cutoff = _iso(datetime.now(timezone.utc) - timedelta(days=3))
+            cutoff = datetime.now(timezone.utc) - timedelta(days=3)
 
-            # Fetch recent entries and group in Python (created_at is ISO string)
             entries = list(self._food.find(
                 {"created_at": {"$gte": cutoff}},
                 {"telegram_user_id": 1, "created_at": 1},
@@ -253,8 +253,8 @@ class AdminStorage:
             for e in entries:
                 tid = e["telegram_user_id"]
                 tid_counts[tid] += 1
-                ct = e.get("created_at")
-                if ct and (tid not in tid_last or str(ct) > str(tid_last[tid])):
+                ct = _parse_dt(e.get("created_at"))
+                if ct and (tid not in tid_last or ct > tid_last[tid]):
                     tid_last[tid] = ct
 
             active_tids = [
@@ -268,10 +268,9 @@ class AdminStorage:
 
     def get_churning_users(self) -> list[dict]:
         def _fetch():
-            cutoff_recent = _iso(datetime.now(timezone.utc) - timedelta(days=5))
-            cutoff_old = _iso(datetime.now(timezone.utc) - timedelta(days=30))
+            cutoff_recent = datetime.now(timezone.utc) - timedelta(days=5)
+            cutoff_old = datetime.now(timezone.utc) - timedelta(days=30)
 
-            # Fetch entries from 5-30 days ago, group by user and count distinct days
             old_entries = list(self._food.find(
                 {"created_at": {"$gte": cutoff_old, "$lt": cutoff_recent}},
                 {"telegram_user_id": 1, "created_at": 1},
@@ -280,9 +279,9 @@ class AdminStorage:
             from collections import defaultdict
             tid_days: dict[int, set] = defaultdict(set)
             for e in old_entries:
-                ct = e.get("created_at")
+                ct = _parse_dt(e.get("created_at"))
                 if ct:
-                    tid_days[e["telegram_user_id"]].add(str(ct)[:10])
+                    tid_days[e["telegram_user_id"]].add(ct.strftime("%Y-%m-%d"))
 
             formerly_active = {tid for tid, days in tid_days.items() if len(days) >= 7}
             if not formerly_active:
