@@ -54,7 +54,7 @@
         </a>
     </nav>
 
-    <main class="dashboard-content">
+    <main class="dashboard-content {% if active_tab == 'admin' %}dashboard-content--wide{% endif %}">
         {% block dashboard_content %}{% endblock %}
     </main>
 </div>

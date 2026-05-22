@@ -1007,6 +1007,11 @@ a:hover {
     flex: 1;
     padding: 2rem;
     max-width: 720px;
+    min-width: 0;
+}
+
+.dashboard-content--wide {
+    max-width: none;
 }
 
 .dashboard-content h1 {
@@ -1237,10 +1242,6 @@ a:hover {
    Admin Dashboard (LTR, English)
    ============================================================ */
 
-.dashboard-content:has(.admin-dashboard) {
-    max-width: none;
-}
-
 .admin-dashboard {
     direction: ltr;
     text-align: left;
@@ -1353,6 +1354,7 @@ a:hover {
     padding: 1.5rem 2rem 2rem;
     box-shadow: var(--shadow);
     min-height: 320px;
+    min-width: 0;
     display: flex;
     flex-direction: column;
 }
