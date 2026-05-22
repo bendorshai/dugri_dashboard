@@ -40,6 +40,13 @@
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg>
             <span>עזרה</span>
         </a>
+        {% if is_admin %}
+        <a href="{{ url_for('admin.dashboard') }}"
+           class="dashboard-nav-item {% if active_tab == 'admin' %}dashboard-nav-item--active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+            <span>Admin</span>
+        </a>
+        {% endif %}
         <a href="{{ url_for('auth.logout') }}"
            class="dashboard-nav-item dashboard-nav-item--danger">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

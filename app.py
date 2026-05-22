@@ -74,6 +74,12 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
 
+    @app.context_processor
+    def inject_admin_flag():
+        from flask import session as s
+        admin_emails = config.get("admin_emails", [])
+        return {"is_admin": s.get("user_email") in admin_emails}
+
     @app.after_request
     def set_cache_headers(response):
         if response.content_type and "text/html" in response.content_type:

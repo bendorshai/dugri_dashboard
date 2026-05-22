@@ -61,4 +61,5 @@ def dashboard():
         churning=churning,
         stuck=stuck,
         outreach_templates=OUTREACH_TEMPLATES,
+        active_tab="admin",
     )

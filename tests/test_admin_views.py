@@ -41,7 +41,7 @@ class TestAdminAuth:
 
         resp = client.get("/admin/")
         assert resp.status_code == 200
-        assert b"Dugri Admin" in resp.data
+        assert b"Admin" in resp.data
 
     @patch("admin_views.AdminStorage")
     def test_kpi_values_rendered(self, mock_storage_cls, client):

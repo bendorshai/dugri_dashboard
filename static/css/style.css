@@ -1236,52 +1236,6 @@ a:hover {
 .admin-dashboard {
     direction: ltr;
     text-align: left;
-    background: #FAF7F2;
-    font-family: var(--font);
-    color: var(--text);
-    min-height: 100vh;
-}
-
-.admin-header {
-    background: var(--primary);
-    color: #fff;
-    padding: 0 2rem;
-}
-
-.admin-header-inner {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    height: 56px;
-}
-
-.admin-header h1 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-}
-
-.admin-logout {
-    color: rgba(255,255,255,0.85);
-    text-decoration: none;
-    font-size: 0.875rem;
-    padding: 0.35rem 0.75rem;
-    border: 1px solid rgba(255,255,255,0.4);
-    border-radius: var(--radius-sm);
-    transition: background 0.15s;
-}
-
-.admin-logout:hover {
-    background: rgba(255,255,255,0.15);
-    color: #fff;
-}
-
-.admin-main {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 1.5rem 2rem 3rem;
 }
 
 /* -- KPI Cards -- */
