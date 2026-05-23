@@ -3,5 +3,3 @@ openai==1.66.3
 pymongo==4.11.3
 pytz==2024.2
 pydantic==2.11.3
-starlette==0.45.3
-uvicorn==0.34.2
