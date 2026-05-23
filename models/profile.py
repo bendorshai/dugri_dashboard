@@ -74,6 +74,7 @@ class ToggleState(BaseModel):
     activated_at: datetime | None = None
     last_asked_at: datetime | None = None
     consecutive_unanswered: int = 0
+    edu_intro_shown: bool = False
 
 
 class Toggles(BaseModel):

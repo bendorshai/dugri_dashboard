@@ -1,6 +1,8 @@
 # CLAUDE.md - דוגרי (Telegram bot)
 
-> **בכל push יש לעדכן את מספר הגרסה ואת הודעת הגרסה.**
+> BEFORE YOU PUSH A VERSION YOU MUST UPDATE THESE VALUES IN main.py:
+1. VERSION = ... 
+2. VERSION_NOTES = ...
 
 ## מה זה דוגרי
 

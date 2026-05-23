@@ -110,6 +110,17 @@ class HealthHandlers:
     def _target_prot(self, profile: UserProfile) -> int:
         return profile.targets.protein or 150
 
+    def _get_education_intro(self, tid: int, toggle_name: str, profile: UserProfile) -> str | None:
+        """Return education intro if not yet shown for this toggle. Mark as shown."""
+        toggle = getattr(profile.toggles, toggle_name, None)
+        if toggle is None or toggle.edu_intro_shown:
+            return None
+        from dugri_messages import EDU_INTRO_FIRST_LOG
+        text = EDU_INTRO_FIRST_LOG.get(toggle_name)
+        if text:
+            self.user_repo.update_fields(tid, {f"toggles.{toggle_name}.edu_intro_shown": True})
+        return text
+
     def _build_food_response(
         self, items_text: str, total_cal: int, total_protein: int, profile: UserProfile,
     ) -> str:
@@ -370,19 +381,25 @@ class HealthHandlers:
 
         if classification.type == "sleep" and self.message_router:
             result = self.message_router.route_sleep(tid, classification.sleep_time or time_str, today_str)
-            await message.reply_text(result.response_text)
+            edu = self._get_education_intro(tid, "sleep", profile)
+            text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
+            await message.reply_text(text)
             return
 
         if classification.type == "workout" and self.message_router:
             result = self.message_router.route_workout(tid, today_str, classification.workout_note)
-            await message.reply_text(result.response_text)
+            edu = self._get_education_intro(tid, "workouts", profile)
+            text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
+            await message.reply_text(text)
             return
 
         if classification.type == "self_care" and self.message_router:
             from datetime import datetime as dt
             week_id = dt.strptime(today_str, "%d/%m/%Y").strftime("%G-W%V")
             result = self.message_router.route_self_care(tid, classification.self_care_description or message.text, week_id)
-            await message.reply_text(result.response_text)
+            edu = self._get_education_intro(tid, "self_care", profile)
+            text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
+            await message.reply_text(text)
             return
 
         if classification.type == "help" and self.message_router:
@@ -413,6 +430,9 @@ class HealthHandlers:
             if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "weekly_summary"}:
                 if toggle_name == "eating_window":
                     self.toggle_service.activate_toggle(tid, toggle_name)
+                    edu = self._get_education_intro(tid, "eating_window", profile)
+                    if edu:
+                        await message.reply_text(edu)
                     self.state_service.set_pending(tid, "awaiting_eating_window")
                     await message.reply_text("מתי חלון האכילה שלך? שלח בפורמט: HH:MM-HH:MM (למשל: 08:00-20:00)")
                 else:
@@ -491,6 +511,13 @@ class HealthHandlers:
 
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
+
+        # Protein education on first meal ever
+        if len(self.food_repo.get_all_for_user(tid)) == 1:
+            from dugri_messages import EDU_INTRO_FIRST_LOG
+            edu = EDU_INTRO_FIRST_LOG.get("protein")
+            if edu:
+                await message.reply_text(edu)
 
         # Recompute eating window from actual meal history
         await self._recompute_eating_window(context, tid, profile)
