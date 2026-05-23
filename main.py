@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.1.1"
-VERSION_NOTES = "debug - בדיקת restart loop"
+VERSION = "2.1.2"
+VERSION_NOTES = "fix - תיקון crash loop מ-within_window חסר"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -28,7 +28,7 @@ class FoodEntry(BaseModel):
     description: str
     calories: int
     protein: int
-    within_window: bool
+    within_window: bool = True
     correction_history: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
