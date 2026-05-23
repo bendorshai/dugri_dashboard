@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.1.2"
-VERSION_NOTES = "fix - תיקון crash loop מ-within_window חסר"
+VERSION = "2.1.3"
+VERSION_NOTES = "debug - crash logging to MongoDB"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -147,4 +147,25 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Log startup crash to MongoDB so we can diagnose remotely
+        import traceback
+        tb = traceback.format_exc()
+        logger.critical("STARTUP CRASH:\n%s", tb)
+        try:
+            cfg = load_config()
+            mc = MongoClient(cfg["mongodb"]["uri"])
+            from datetime import datetime, timezone
+            mc[cfg["mongodb"]["db_name"]]["error_logs"].insert_one({
+                "handler": "startup",
+                "error_type": "StartupCrash",
+                "error_message": str(tb)[-500:],
+                "traceback": tb,
+                "version": VERSION,
+                "timestamp": datetime.now(timezone.utc),
+            })
+        except Exception:
+            pass
+        raise
