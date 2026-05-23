@@ -68,11 +68,16 @@ def preferences_post():
         status = request.form.get(f"{name}_status")
         if status in ("dormant", "active", "cancelled"):
             toggles[name] = {**existing, "status": status}
+            # Education flag: reset on re-suggest (dormant), skip on dashboard activation
+            if status == "dormant":
+                toggles[name]["edu_intro_shown"] = False
+            elif status == "active":
+                toggles[name]["edu_intro_shown"] = True
         else:
             # Fallback: infer from checkbox
             enabled = request.form.get(f"{name}_enabled")
             if enabled:
-                toggles[name] = {**existing, "status": "active"}
+                toggles[name] = {**existing, "status": "active", "edu_intro_shown": True}
             else:
                 toggles[name] = existing or {"status": "dormant"}
 
