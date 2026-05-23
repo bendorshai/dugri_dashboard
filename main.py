@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.1.4"
-VERSION_NOTES = "fix - webhooks extra חסר ב-requirements"
+VERSION = "2.1.5"
+VERSION_NOTES = "fix - polling mode on Railway with health check"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -128,21 +128,43 @@ def main():
 
     app.post_init = post_init
 
-    # Startup
+    # Startup — webhook if public domain is set, polling otherwise.
+    # On Railway (PORT set) without a public domain, we still need to
+    # bind the port so Railway's health check doesn't kill the process.
     webhook_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+    port = os.environ.get("PORT", "")
 
     if webhook_domain:
-        port = int(os.environ.get("PORT", 8443))
+        port_num = int(port or 8443)
         webhook_url = f"https://{webhook_domain}/webhook"
-        logger.info("Bot starting — webhook mode at %s (port %d)", webhook_url, port)
+        logger.info("Bot starting — webhook mode at %s (port %d)", webhook_url, port_num)
         app.run_webhook(
             listen="0.0.0.0",
-            port=port,
+            port=port_num,
             url_path="webhook",
             webhook_url=webhook_url,
         )
+    elif port:
+        # Railway without public domain — polling + health check server
+        import asyncio
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import threading
+
+        class _HealthHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"ok")
+            def log_message(self, *args):
+                pass  # suppress request logs
+
+        port_num = int(port)
+        health_server = HTTPServer(("0.0.0.0", port_num), _HealthHandler)
+        threading.Thread(target=health_server.serve_forever, daemon=True).start()
+        logger.info("Bot starting — polling mode + health check on port %d", port_num)
+        app.run_polling(drop_pending_updates=True)
     else:
-        logger.info("Bot starting — polling mode")
+        logger.info("Bot starting — polling mode (local)")
         app.run_polling(drop_pending_updates=True)
 
 
