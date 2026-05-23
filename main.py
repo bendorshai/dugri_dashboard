@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.1.3"
-VERSION_NOTES = "debug - crash logging to MongoDB"
+VERSION = "2.1.4"
+VERSION_NOTES = "fix - webhooks extra חסר ב-requirements"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

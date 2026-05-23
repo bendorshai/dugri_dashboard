@@ -1,4 +1,4 @@
-python-telegram-bot[job-queue]==21.6
+python-telegram-bot[job-queue,webhooks]==21.6
 openai==1.66.3
 pymongo==4.11.3
 pytz==2024.2
