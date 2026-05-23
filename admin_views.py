@@ -81,26 +81,42 @@ def send_outreach():
         return jsonify({"error": "missing telegram_user_id"}), 400
 
     cfg = current_app.config["APP_CONFIG"]
-    bot_url = cfg.get("bot_internal_url", "")
-    secret = cfg.get("internal_secret", "")
-    if not bot_url:
-        return jsonify({"error": "bot_internal_url not configured"}), 500
+    bot_token = cfg.get("telegram_bot_token")
+    founder_username = cfg.get("founder_telegram_username", "")
+    if not bot_token:
+        return jsonify({"error": "telegram_bot_token not configured"}), 500
+
+    telegram_user_id = data["telegram_user_id"]
+    user_name = data.get("name", "")
+
+    greeting = f"היי {user_name}, " if user_name else "היי, "
+    text = (
+        f"{greeting}"
+        "שי, היזם של דוגרי, רוצה להתחבר איתך כדי ללמוד על שביעות הרצון שלך מדוגרי. "
+        "אם בא לך, לחצ/י על הכפתור למטה ותפתח שיחה ישירות איתו 👇"
+    )
+
+    payload = {
+        "chat_id": telegram_user_id,
+        "text": text,
+    }
+    if founder_username:
+        payload["reply_markup"] = json.dumps({
+            "inline_keyboard": [[
+                {"text": "💬 פתח שיחה עם שי", "url": f"https://t.me/{founder_username}"},
+            ]],
+        })
 
     try:
         resp = requests.post(
-            f"{bot_url}/internal/admin-outreach",
-            json={
-                "telegram_user_id": data["telegram_user_id"],
-                "name": data.get("name", ""),
-                "founder_telegram_username": cfg.get("founder_telegram_username", ""),
-            },
-            headers={"X-Internal-Secret": secret},
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json=payload,
             timeout=10,
         )
         if resp.status_code == 200:
             return jsonify({"ok": True})
-        logger.error("Bot internal API error: %s", resp.text)
-        return jsonify({"error": "outreach failed"}), 502
+        logger.error("Telegram API error: %s", resp.text)
+        return jsonify({"error": "telegram send failed"}), 502
     except Exception:
-        logger.exception("Failed to send outreach via bot")
-        return jsonify({"error": "outreach failed"}), 502
+        logger.exception("Failed to send outreach message")
+        return jsonify({"error": "telegram send failed"}), 502
