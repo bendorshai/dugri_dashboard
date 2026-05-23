@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.1.5"
-VERSION_NOTES = "fix - polling mode on Railway with health check"
+VERSION = "2.1.6"
+VERSION_NOTES = "fix - force rebuild for polling + health check"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -43,7 +43,8 @@ def _parse_last_json(text: str) -> dict:
     while pos < len(text):
         try:
             obj, end = decoder.raw_decode(text, pos)
-            result = obj
+            if isinstance(obj, dict):
+                result = obj
             pos = end
         except json.JSONDecodeError:
             pos += 1
