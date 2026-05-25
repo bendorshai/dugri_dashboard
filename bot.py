@@ -43,7 +43,7 @@ from keyboards import (
     CB_FEEDBACK,
 )
 from handlers import HealthHandlers
-from scheduler import schedule_eating_window_jobs, schedule_hooks_for_user
+from scheduler import schedule_eating_window_jobs, schedule_global_hook_poller
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +77,6 @@ def _make_error_handler(error_repo: ErrorRepository):
             )
         except Exception:
             logger.exception("Failed to log error to MongoDB")
-
-        if isinstance(update, Update) and update.effective_message:
-            try:
-                await update.effective_message.reply_text("❌ שגיאה פנימית. נסה שוב.")
-            except Exception:
-                pass
 
     return _error_handler
 
@@ -174,13 +168,7 @@ def create_bot(
             analyzer, eating_day_service,
         )
 
-    # Schedule hooks for all users with active toggles
-    all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
-    for profile in all_users:
-        if profile.telegram_user_id:
-            hooks = schedule_hooks_for_user(
-                app.job_queue, profile.telegram_user_id, profile,
-                user_repo, toggle_service,
-            )
+    # Schedule global hook poller (replaces per-user scheduling)
+    schedule_global_hook_poller(app.job_queue, user_repo, toggle_service)
 
     return app

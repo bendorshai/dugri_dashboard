@@ -63,3 +63,28 @@ class UserRepository(BaseRepository[User]):
         """Atomic partial update by email / _id (dashboard callers)."""
         fields["updated_at"] = datetime.now(timezone.utc).isoformat()
         self.update_by_id(email, fields)
+
+    def push_messages(self, telegram_user_id: int, messages: list[dict], max_messages: int = 8) -> None:
+        """Atomically append messages and trim to last max_messages."""
+        self._collection.update_one(
+            {"telegram_user_id": telegram_user_id},
+            {
+                "$push": {
+                    "recent_messages": {
+                        "$each": messages,
+                        "$slice": -max_messages,
+                    }
+                },
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
+            },
+        )
+
+    def get_recent_messages(self, telegram_user_id: int, limit: int = 8) -> list[dict]:
+        """Fetch recent_messages array for a user."""
+        doc = self._collection.find_one(
+            {"telegram_user_id": telegram_user_id},
+            {"recent_messages": 1},
+        )
+        if doc is None:
+            return []
+        return (doc.get("recent_messages") or [])[-limit:]

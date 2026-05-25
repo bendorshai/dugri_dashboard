@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 _DATE_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
-_TIME_RE = re.compile(r"^\d{2}:\d{2}$")
+_TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
 
 class SleepLog(BaseModel):
@@ -35,8 +35,9 @@ class SleepLog(BaseModel):
     @classmethod
     def validate_time(cls, v: str) -> str:
         if not _TIME_RE.match(v):
-            raise ValueError(f"sleep_time must be HH:MM, got '{v}'")
-        return v
+            raise ValueError(f"sleep_time must be H:MM or HH:MM, got '{v}'")
+        parts = v.split(":")
+        return f"{int(parts[0]):02d}:{parts[1]}"
 
     def to_mongo_dict(self) -> dict:
         d = self.model_dump(mode="json")

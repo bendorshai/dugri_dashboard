@@ -61,4 +61,6 @@ class FoodEntry(BaseModel):
         doc = dict(doc)
         if "_id" in doc:
             doc["id"] = str(doc.pop("_id"))
+        doc.setdefault("within_window", True)
+        doc.setdefault("correction_history", [])
         return cls.model_validate(doc)

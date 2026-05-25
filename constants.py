@@ -58,3 +58,10 @@ EXIT_DOOR_UNANSWERED_THRESHOLD = 2
 
 ROTATING_PROMPT_COUNT = 5
 """Number of rotating phrasings per hook type (defined in messages.py)."""
+
+# ---------------------------------------------------------------------------
+# Conversation history
+# ---------------------------------------------------------------------------
+
+MAX_RECENT_MESSAGES = 8
+"""Maximum recent messages stored per user for classifier context."""

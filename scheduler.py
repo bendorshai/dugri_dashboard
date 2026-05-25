@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 
 import pytz
 
@@ -96,123 +96,107 @@ def get_hooks_to_schedule(profile: User) -> list[dict]:
     return hooks
 
 
-def schedule_hooks_for_user(
-    job_queue,
-    telegram_user_id: int,
-    profile: User,
-    user_repo,
-    toggle_service,
-):
-    """Schedule all applicable hooks for a user based on their toggle states."""
-    # Cancel existing hook jobs for this user
-    for job in job_queue.get_jobs_by_name(f"hook_{telegram_user_id}"):
+def schedule_global_hook_poller(job_queue, user_repo, toggle_service):
+    """Schedule a single global job that checks all users every 2 hours."""
+    job_name = "global_hook_poller"
+    for job in job_queue.get_jobs_by_name(job_name):
         job.schedule_removal()
 
+    job_queue.run_repeating(
+        _global_hook_tick,
+        interval=7200,
+        first=10,
+        name=job_name,
+        data={
+            "user_repo": user_repo,
+            "toggle_service": toggle_service,
+        },
+    )
+    logger.info("Global hook poller scheduled (every 2 hours)")
+
+
+async def _global_hook_tick(context):
+    """Every 2 hours: check all users, fire any due hooks."""
+    data = context.job.data
+    user_repo = data["user_repo"]
+    toggle_service = data["toggle_service"]
+
+    all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
+    logger.info("Hook tick: checking %d users", len(all_users))
+
+    for profile in all_users:
+        if not profile.telegram_user_id:
+            continue
+        try:
+            await _check_user_hooks(context, profile, user_repo, toggle_service)
+        except Exception:
+            logger.exception("Hook tick failed for user %d", profile.telegram_user_id)
+
+
+async def _check_user_hooks(context, profile, user_repo, toggle_service):
+    """Check and fire all due hooks for a single user."""
+    import messages as M
+    from constants import MAX_RECENT_MESSAGES
+
+    tid = profile.telegram_user_id
     tz = pytz.timezone(profile.timezone)
+    now = datetime.now(tz)
+    today_weekday = now.weekday()
+
     hooks = get_hooks_to_schedule(profile)
 
     for hook in hooks:
         toggle_name = hook["toggle_name"]
-        window = hook["window"]
         schedule_type = hook["schedule_type"]
-        rand_time = random_time_in_window(*window)
-        job_time = rand_time.replace(tzinfo=tz)
-        job_name = f"hook_{telegram_user_id}_{toggle_name}"
+        start_hour, end_hour = hook["window"]
 
-        # Cancel any existing job for this specific hook
-        for job in job_queue.get_jobs_by_name(job_name):
-            job.schedule_removal()
+        # Check if we're within the time window
+        if not (start_hour <= now.hour < end_hour):
+            continue
 
-        data = {
-            "telegram_user_id": telegram_user_id,
-            "toggle_name": toggle_name,
-            "user_repo": user_repo,
-            "toggle_service": toggle_service,
+        # For weekly hooks, check if today is the anchor day
+        if schedule_type == "weekly":
+            if today_weekday != hook["anchor_day"]:
+                continue
+
+        # Check if haven't already asked today
+        if not should_piggyback(profile, toggle_name, now):
+            continue
+
+        # All conditions met - fire the hook
+        prompt_pools = {
+            "sleep": M.HOOK_SLEEP_PROMPTS,
+            "workouts": M.HOOK_WORKOUTS_PROMPTS,
+            "self_care": M.HOOK_SELF_CARE_PROMPTS,
         }
 
-        if schedule_type == "daily":
-            job_queue.run_daily(
-                _hook_callback,
-                time=job_time,
-                chat_id=telegram_user_id,
-                name=job_name,
-                data=data,
-            )
-        elif schedule_type == "weekly":
-            days = (hook["anchor_day"],)
-            job_queue.run_daily(
-                _hook_callback,
-                time=job_time,
-                chat_id=telegram_user_id,
-                name=job_name,
-                data=data,
-                days=days,
-            )
+        if toggle_name == "weekly_summary":
+            text = M.WEEKLY_SUMMARY_OFFER
+        else:
+            pool = prompt_pools.get(toggle_name, [])
+            if not pool:
+                continue
+            text = random.choice(pool)
 
-    logger.info(
-        "Scheduled %d hooks for user %d: %s",
-        len(hooks),
-        telegram_user_id,
-        [h["toggle_name"] for h in hooks],
-    )
+        # Check exit door
+        if toggle_service.should_show_exit_door(profile, toggle_name):
+            habit_names = {
+                "sleep": "שינה", "eating_window": "חלון אכילה",
+                "workouts": "אימונים", "self_care": "משהו לעצמי",
+                "weekly_summary": "סיכום שבועי",
+            }
+            text += "\n\n" + M.EXIT_DOOR.format(habit=habit_names.get(toggle_name, ""))
 
+        # Record + send
+        toggle_service.record_asked(tid, toggle_name)
+        toggle_service.increment_unanswered(tid, profile, toggle_name)
 
-async def _hook_callback(context):
-    """Generic hook callback — sends the appropriate message for a toggle."""
-    data = context.job.data
-    tid = data["telegram_user_id"]
-    toggle_name = data["toggle_name"]
-    user_repo = data["user_repo"]
-    toggle_service = data["toggle_service"]
-
-    profile = user_repo.get(tid)
-    if profile is None:
-        return
-
-    toggle = getattr(profile.toggles, toggle_name)
-    if toggle.status != "active":
-        return
-
-    # Check if piggyback already fired today
-    now = datetime.now(pytz.timezone(profile.timezone))
-    if not should_piggyback(profile, toggle_name, now):
-        return
-
-    # Pick a random message from the rotating pool
-    import messages as M
-    prompt_pools = {
-        "sleep": M.HOOK_SLEEP_PROMPTS,
-        "workouts": M.HOOK_WORKOUTS_PROMPTS,
-        "self_care": M.HOOK_SELF_CARE_PROMPTS,
-    }
-
-    if toggle_name == "weekly_summary":
-        text = M.WEEKLY_SUMMARY_OFFER
-    else:
-        pool = prompt_pools.get(toggle_name, [])
-        if not pool:
-            return
-        text = random.choice(pool)
-
-    # Check exit door
-    if toggle_service.should_show_exit_door(profile, toggle_name):
-        habit_names = {
-            "sleep": "שינה",
-            "eating_window": "חלון אכילה",
-            "workouts": "אימונים",
-            "self_care": "משהו לעצמי",
-            "weekly_summary": "סיכום שבועי",
-        }
-        text += "\n\n" + M.EXIT_DOOR.format(habit=habit_names.get(toggle_name, ""))
-
-    # Record that we asked
-    toggle_service.record_asked(tid, toggle_name)
-    toggle_service.increment_unanswered(tid, profile, toggle_name)
-
-    try:
-        await context.bot.send_message(chat_id=tid, text=text)
-    except Exception:
-        logger.exception("Failed to send hook message for %s", toggle_name)
+        try:
+            await context.bot.send_message(chat_id=tid, text=text)
+            msg = {"role": "bot", "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
+            user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
+        except Exception:
+            logger.exception("Failed to send hook %s to user %d", toggle_name, tid)
 
 
 def schedule_eating_window_jobs(
@@ -309,6 +293,9 @@ async def _window_warning_callback(context):
 
     try:
         await context.bot.send_message(chat_id=tid, text=text)
+        from constants import MAX_RECENT_MESSAGES
+        msg = {"role": "bot", "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
+        user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
     except Exception:
         logger.exception("Failed to send window warning")
 
@@ -355,5 +342,8 @@ async def _window_close_callback(context):
 
     try:
         await context.bot.send_message(chat_id=tid, text=summary)
+        from constants import MAX_RECENT_MESSAGES
+        msg = {"role": "bot", "text": summary[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
+        user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
     except Exception:
         logger.exception("Failed to send window close summary")

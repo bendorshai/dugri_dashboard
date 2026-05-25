@@ -84,6 +84,21 @@ class HealthHandlers:
         self.toggle_service = toggle_service
 
     # ------------------------------------------------------------------
+    # Conversation history helpers
+    # ------------------------------------------------------------------
+
+    def _save_bot_message(self, tid: int, text: str) -> None:
+        """Save a bot message to conversation history."""
+        from constants import MAX_RECENT_MESSAGES
+        from datetime import timezone as tz
+        msg = {
+            "role": "bot",
+            "text": text[:500],
+            "timestamp": datetime.now(tz.utc).isoformat(),
+        }
+        self.user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
+
+    # ------------------------------------------------------------------
     # Profile helpers
     # ------------------------------------------------------------------
 
@@ -371,8 +386,22 @@ class HealthHandlers:
 
         last_entry = context.chat_data.get("last_entry")
 
-        # Heavy classifier (9 types) or fallback to old parse_message
-        classification = self.analyzer.classify_message(message.text, today_str, last_entry)
+        # Save user message and fetch conversation history for classifier context
+        from constants import MAX_RECENT_MESSAGES
+        from datetime import timezone as tz
+        user_msg = {
+            "role": "user",
+            "text": message.text[:500],
+            "timestamp": datetime.now(tz.utc).isoformat(),
+        }
+        self.user_repo.push_messages(tid, [user_msg], MAX_RECENT_MESSAGES)
+        recent_messages = self.user_repo.get_recent_messages(tid, MAX_RECENT_MESSAGES)
+
+        # Heavy classifier (9 types) with conversation history
+        classification = self.analyzer.classify_message(
+            message.text, today_str, last_entry,
+            recent_messages=recent_messages[:-1],
+        )
 
         # Route non-food types through MessageRouterService
         if classification.type == "correction" and classification.correction and last_entry:
@@ -384,6 +413,7 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
             await message.reply_text(text)
+            self._save_bot_message(tid, text)
             return
 
         if classification.type == "workout" and self.message_router:
@@ -391,6 +421,7 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
             await message.reply_text(text)
+            self._save_bot_message(tid, text)
             return
 
         if classification.type == "self_care" and self.message_router:
@@ -400,6 +431,7 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
             await message.reply_text(text)
+            self._save_bot_message(tid, text)
             return
 
         if classification.type == "help" and self.message_router:
@@ -461,6 +493,7 @@ class HealthHandlers:
         if classification.type == "none" and self.message_router:
             result = self.message_router.route_none()
             await message.reply_text(result.response_text)
+            self._save_bot_message(tid, result.response_text)
             return
 
         # Default: treat as food (meal type or fallback)
@@ -511,6 +544,7 @@ class HealthHandlers:
 
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
+        self._save_bot_message(tid, response)
 
         # Protein education on first meal ever
         if len(self.food_repo.get_all_for_user(tid)) == 1:
@@ -610,6 +644,7 @@ class HealthHandlers:
             self.state_service.set_pending(tid, "awaiting_toggle_consent",
                                            data={"toggle_name": "sleep"})
             await message.reply_text(M.REVEAL_SLEEP)
+            self._save_bot_message(tid, M.REVEAL_SLEEP)
             return
 
         if self.toggle_service.should_reveal_eating_window(profile):
@@ -617,6 +652,7 @@ class HealthHandlers:
             self.state_service.set_pending(tid, "awaiting_toggle_consent",
                                            data={"toggle_name": "eating_window"})
             await message.reply_text(M.REVEAL_EATING_WINDOW)
+            self._save_bot_message(tid, M.REVEAL_EATING_WINDOW)
             return
 
         if self.toggle_service.should_reveal_workouts(profile, weekday):
@@ -624,6 +660,7 @@ class HealthHandlers:
             self.state_service.set_pending(tid, "awaiting_toggle_consent",
                                            data={"toggle_name": "workouts"})
             await message.reply_text(M.REVEAL_WORKOUTS)
+            self._save_bot_message(tid, M.REVEAL_WORKOUTS)
             return
 
         if self.toggle_service.should_reveal_self_care(profile, weekday):
@@ -631,6 +668,7 @@ class HealthHandlers:
             self.state_service.set_pending(tid, "awaiting_toggle_consent",
                                            data={"toggle_name": "self_care"})
             await message.reply_text(M.REVEAL_SELF_CARE)
+            self._save_bot_message(tid, M.REVEAL_SELF_CARE)
             return
 
         # Recurring hooks piggyback
@@ -652,6 +690,7 @@ class HealthHandlers:
                 self.toggle_service.record_asked(tid, toggle_name)
                 self.toggle_service.increment_unanswered(tid, profile, toggle_name)
                 await message.reply_text(text)
+                self._save_bot_message(tid, text)
                 return  # Only one piggyback per meal
 
         # Weekly summary piggyback
@@ -659,6 +698,7 @@ class HealthHandlers:
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
             await message.reply_text(M.WEEKLY_SUMMARY_OFFER)
+            self._save_bot_message(tid, M.WEEKLY_SUMMARY_OFFER)
 
     async def _handle_correction(
         self, message, context, correction, last_entry: dict,

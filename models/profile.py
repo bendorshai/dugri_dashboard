@@ -17,7 +17,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-_TIME_RE = re.compile(r"^\d{2}:\d{2}$")
+_TIME_RE = re.compile(r"^\d{1,2}:\d{2}$")
 
 
 class EatingWindow(BaseModel):
@@ -41,8 +41,11 @@ class Targets(BaseModel):
     @field_validator("sleep_time")
     @classmethod
     def validate_sleep_time(cls, v: str | None) -> str | None:
-        if v is not None and not _TIME_RE.match(v):
-            raise ValueError(f"sleep_time must be HH:MM, got '{v}'")
+        if v is not None:
+            if not _TIME_RE.match(v):
+                raise ValueError(f"sleep_time must be H:MM or HH:MM, got '{v}'")
+            parts = v.split(":")
+            v = f"{int(parts[0]):02d}:{parts[1]}"
         return v
 
 
@@ -114,6 +117,7 @@ class User(BaseModel):
     toggles: Toggles = Field(default_factory=Toggles)
 
     pending_state: PendingState | None = None
+    recent_messages: list[dict] = Field(default_factory=list)
 
     dashboard_intro_shown: bool = False
     target_retry_done: bool = False

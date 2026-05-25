@@ -149,6 +149,7 @@ class FoodAnalyzer:
 
     def classify_message(
         self, text: str, today_str: str, last_entry: dict | None = None,
+        recent_messages: list[dict] | None = None,
     ) -> MessageClassification:
         """Heavy classifier: classify and process a message into one of 9 types."""
         system = CLASSIFIER_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
@@ -161,6 +162,13 @@ class FoodAnalyzer:
             )
         else:
             system += "\nאין רשומה קודמת. תיקון → food חדש.\n"
+
+        if recent_messages:
+            system += "\nהיסטוריית שיחה אחרונה (מהישנה לחדשה):\n"
+            for msg in recent_messages:
+                role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
+                system += f"[{role_label}]: {msg.get('text', '')}\n"
+            system += "\nההודעה הנוכחית של המשתמש מופיעה למטה. השתמש בהיסטוריה כדי להבין את ההקשר.\n"
 
         try:
             response = self.client.beta.chat.completions.parse(
