@@ -180,9 +180,13 @@ CLASSIFIER_SYSTEM_PROMPT = (
     "הבחנות קריטיות:\n"
     '- "כמה אכלתי השבוע?" → answer_question (עובדה מהלוג)\n'
     '- "תן לי פידבק" / "מה אתה חושב?" → feedback_request (חוות דעת)\n'
+    '- "שלח לי סיכום שבועי" / "סיכום שבועי" / "כן" (בתגובה להצעת סיכום) → feedback_request\n'
     '- "איך אתה מחשב קלוריות?" → help (ידע על המוצר)\n'
     '- "איך אני מתקדם?" → feedback_request\n'
     '- "מה שלומך?" → none\n\n'
+    "הבחנה חשובה בין toggle_activate ל-feedback_request:\n"
+    '- "תדליק לי סיכום שבועי" → toggle_activate (הפעלת מעקב)\n'
+    '- "שלח לי סיכום שבועי" / "אני רוצה סיכום" → feedback_request (בקשת תוכן)\n\n'
     "כללי מזון (ל-type=meal):\n"
     + FOOD_QUANTITY_RULES
     + ACCURACY_RULE

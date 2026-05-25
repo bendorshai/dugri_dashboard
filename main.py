@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.2.1"
-VERSION_NOTES = "תיקון: סיכום שבועי רק ביום ראשון, לא כל פעם שמישהו אוכל טוסט"
+VERSION = "2.2.2"
+VERSION_NOTES = "עכשיו באמת רק ביום ראשון, והבוט סוף סוף מבין מה זה 'שלח לי סיכום שבועי'"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
