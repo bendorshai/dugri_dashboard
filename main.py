@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "2.2.2"
-VERSION_NOTES = "עכשיו באמת רק ביום ראשון, והבוט סוף סוף מבין מה זה 'שלח לי סיכום שבועי'"
+VERSION = "2.2.3"
+VERSION_NOTES = "קונפיג מסודר - עכשיו אפשר לראות את כל ההגדרות של כל הרגל במקום אחד"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -10,58 +10,82 @@ Used by: scheduler, toggle_service, onboarding_service, handlers, feedback_servi
 """
 
 # ---------------------------------------------------------------------------
-# Gate & retry days
+# Lazy opt-in hook configuration
+#
+# Each toggle's full config in one place: schedule type, anchor day,
+# time window, gate days, and special params.
+#
+# Anchor days use Python weekday: 0=Monday ... 6=Sunday
+# Windows are (start_hour, end_hour) in user timezone
 # ---------------------------------------------------------------------------
 
-TOGGLE_GATE_DAYS = 4
-"""Minimum days since signup before revealing opt-in toggles (workouts, self-care, eating window)."""
+HOOK_CONFIG = {
+    "sleep": {
+        "schedule": "daily",
+        "window": (8, 10),           # 08:00-10:00
+        "gate_days": 1,              # reveal after day 1
+    },
+    "eating_window": {
+        "schedule": "daily",         # window warning/close are daily
+        "gate_days": 4,              # reveal after day 4
+        "retry_days": 11,            # retry 11 days after reveal refusal
+    },
+    "workouts": {
+        "schedule": "weekly",
+        "anchor_day": 3,             # Thursday
+        "window": (16, 20),          # 16:00-20:00
+        "gate_days": 4,              # reveal after day 4
+    },
+    "self_care": {
+        "schedule": "weekly",
+        "anchor_day": 4,             # Friday
+        "window": (10, 14),          # 10:00-14:00
+        "gate_days": 4,              # reveal after day 4
+    },
+    "weekly_summary": {
+        "schedule": "weekly",
+        "anchor_day": 6,             # Sunday
+        "window": (9, 11),           # 09:00-11:00
+        "default_active": True,      # opt-out (born active)
+        "min_days": 7,               # min food entry days before first offer
+    },
+    "target_data": {
+        "gate_days": 0,              # offered after first meal
+        "retry_day": 9,              # retry on day 9 if refused
+    },
+}
 
-TARGET_RETRY_DAY = 9
-"""Day number to retry target offer if refused at moment 1."""
+# ---------------------------------------------------------------------------
+# Backward-compatible aliases (derived from HOOK_CONFIG)
+# Existing code imports these — do not remove.
+# ---------------------------------------------------------------------------
 
-EATING_WINDOW_RETRY_DAYS = 11
-"""Days after eating window refusal to retry the offer once."""
+WORKOUTS_ANCHOR_DAY = HOOK_CONFIG["workouts"]["anchor_day"]
+SELF_CARE_ANCHOR_DAY = HOOK_CONFIG["self_care"]["anchor_day"]
+WEEKLY_SUMMARY_ANCHOR_DAY = HOOK_CONFIG["weekly_summary"]["anchor_day"]
+
+SLEEP_HOOK_WINDOW = HOOK_CONFIG["sleep"]["window"]
+WORKOUTS_HOOK_WINDOW = HOOK_CONFIG["workouts"]["window"]
+SELF_CARE_HOOK_WINDOW = HOOK_CONFIG["self_care"]["window"]
+WEEKLY_SUMMARY_HOOK_WINDOW = HOOK_CONFIG["weekly_summary"]["window"]
+
+TOGGLE_GATE_DAYS = HOOK_CONFIG["workouts"]["gate_days"]
+TARGET_RETRY_DAY = HOOK_CONFIG["target_data"]["retry_day"]
+EATING_WINDOW_RETRY_DAYS = HOOK_CONFIG["eating_window"]["retry_days"]
+WEEKLY_SUMMARY_MIN_DAYS = HOOK_CONFIG["weekly_summary"]["min_days"]
+
+# ---------------------------------------------------------------------------
+# Other constants
+# ---------------------------------------------------------------------------
 
 DASHBOARD_INTRO_DAY = 16
 """Day number to show the dashboard introduction hook."""
 
-WEEKLY_SUMMARY_MIN_DAYS = 7
-"""Minimum days of food entries before first weekly summary offer."""
-
-# ---------------------------------------------------------------------------
-# Anchor days (Python weekday: 0=Monday … 6=Sunday)
-# ---------------------------------------------------------------------------
-
-WORKOUTS_ANCHOR_DAY = 3       # Thursday
-SELF_CARE_ANCHOR_DAY = 4      # Friday
-WEEKLY_SUMMARY_ANCHOR_DAY = 6  # Sunday
-
-# ---------------------------------------------------------------------------
-# Random time windows — (start_hour, end_hour) in user timezone
-# ---------------------------------------------------------------------------
-
-SLEEP_HOOK_WINDOW = (8, 10)            # 08:00–10:00
-WORKOUTS_HOOK_WINDOW = (16, 20)        # 16:00–20:00
-SELF_CARE_HOOK_WINDOW = (10, 14)       # 10:00–14:00
-WEEKLY_SUMMARY_HOOK_WINDOW = (9, 11)   # 09:00–11:00
-
-# ---------------------------------------------------------------------------
-# Exit door
-# ---------------------------------------------------------------------------
-
 EXIT_DOOR_UNANSWERED_THRESHOLD = 2
 """Consecutive unanswered hooks before showing the exit door message (once)."""
 
-# ---------------------------------------------------------------------------
-# Rotating prompts
-# ---------------------------------------------------------------------------
-
 ROTATING_PROMPT_COUNT = 5
 """Number of rotating phrasings per hook type (defined in messages.py)."""
-
-# ---------------------------------------------------------------------------
-# Conversation history
-# ---------------------------------------------------------------------------
 
 MAX_RECENT_MESSAGES = 8
 """Maximum recent messages stored per user for classifier context."""
