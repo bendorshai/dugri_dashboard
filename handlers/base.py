@@ -671,14 +671,18 @@ class HealthHandlers:
             self._save_bot_message(tid, M.REVEAL_SELF_CARE)
             return
 
-        # Recurring hooks piggyback
-        prompt_pools = {
-            "sleep": M.HOOK_SLEEP_PROMPTS,
-            "workouts": M.HOOK_WORKOUTS_PROMPTS,
-            "self_care": M.HOOK_SELF_CARE_PROMPTS,
-        }
+        # Recurring hooks piggyback (with anchor day check for weekly hooks)
+        from constants import WORKOUTS_ANCHOR_DAY, SELF_CARE_ANCHOR_DAY, WEEKLY_SUMMARY_ANCHOR_DAY
 
-        for toggle_name, pool in prompt_pools.items():
+        piggyback_hooks = [
+            ("sleep", M.HOOK_SLEEP_PROMPTS, None),                        # daily
+            ("workouts", M.HOOK_WORKOUTS_PROMPTS, WORKOUTS_ANCHOR_DAY),   # Thursday
+            ("self_care", M.HOOK_SELF_CARE_PROMPTS, SELF_CARE_ANCHOR_DAY),  # Friday
+        ]
+
+        for toggle_name, pool, anchor_day in piggyback_hooks:
+            if anchor_day is not None and weekday != anchor_day:
+                continue
             if should_piggyback(profile, toggle_name, now):
                 text = random.choice(pool)
                 if self.toggle_service.should_show_exit_door(profile, toggle_name):
@@ -693,8 +697,8 @@ class HealthHandlers:
                 self._save_bot_message(tid, text)
                 return  # Only one piggyback per meal
 
-        # Weekly summary piggyback
-        if should_piggyback(profile, "weekly_summary", now):
+        # Weekly summary piggyback (Sunday only)
+        if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_piggyback(profile, "weekly_summary", now):
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
             await message.reply_text(M.WEEKLY_SUMMARY_OFFER)
