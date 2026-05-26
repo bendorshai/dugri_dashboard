@@ -68,6 +68,7 @@ class HealthHandlers:
         trial_service: TrialService | None = None,
         feedback_service: FeedbackService | None = None,
         toggle_service: ToggleService | None = None,
+        goal_service=None,
         landing_page_url: str = "https://dugri.up.railway.app",
     ):
         self.landing_page_url = landing_page_url
@@ -82,6 +83,7 @@ class HealthHandlers:
         self.trial_service = trial_service
         self.feedback_service = feedback_service
         self.toggle_service = toggle_service
+        self.goal_service = goal_service
 
     # ------------------------------------------------------------------
     # Conversation history helpers
@@ -120,9 +122,15 @@ class HealthHandlers:
         return is_within_eating_window(now, ws, we)
 
     def _target_cal(self, profile: UserProfile) -> int:
+        nv = profile.toggles.nutrition.goal_value
+        if nv and "calories" in nv:
+            return nv["calories"]
         return profile.targets.calories or 2000
 
     def _target_prot(self, profile: UserProfile) -> int:
+        nv = profile.toggles.nutrition.goal_value
+        if nv and "protein" in nv:
+            return nv["protein"]
         return profile.targets.protein or 150
 
     def _get_education_intro(self, tid: int, toggle_name: str, profile: UserProfile) -> str | None:
@@ -183,102 +191,109 @@ class HealthHandlers:
             return False
 
         kind = dispatch.kind
+        YES_WORDS = ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
 
+        # -- Onboarding: name collection --
         if kind == "awaiting_name" and self.onboarding_service:
             response = self.onboarding_service.handle_name_response(tid, message.text.strip())
             await message.reply_text(response)
+            self._save_bot_message(tid, response)
             return True
 
-        # New toggle-based consent handling
-        if kind == "awaiting_target_consent" and self.onboarding_service:
-            text = message.text.strip().lower()
-            accepted = text in ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
-            response = self.onboarding_service.handle_target_consent(tid, accepted)
-            if response:
-                await message.reply_text(response)
-            return True
-
+        # -- Habit tracking consent ("want to track X?") --
         if kind == "awaiting_toggle_consent" and self.toggle_service:
             import messages as M
             text = message.text.strip().lower()
-            accepted = text in ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
+            accepted = text in YES_WORDS
             toggle_name = dispatch.data.get("toggle_name", "")
             if accepted:
                 self.toggle_service.activate_toggle(tid, toggle_name)
                 self.state_service.clear_pending(tid)
-                if toggle_name == "eating_window":
-                    # Auto-compute eating window from existing food entries
-                    window = self.eating_day_svc.compute_eating_window(tid)
-                    if window:
-                        self.user_repo.update_fields(tid, {
-                            "eating_window.start": window.start,
-                            "eating_window.end": window.end,
-                        })
-                    await message.reply_text("יפה, אני עוקב אחרי חלון האכילה שלך מהיום.")
+                # Immediately offer goal if applicable
+                if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
+                    response = self.goal_service.offer_goal(tid, toggle_name)
+                    await message.reply_text(response)
+                    self._save_bot_message(tid, response)
                 else:
-                    await message.reply_text("יפה, נרשמתי.")
+                    response = "יפה, נרשמתי."
+                    await message.reply_text(response)
+                    self._save_bot_message(tid, response)
             else:
                 self.state_service.clear_pending(tid)
                 await message.reply_text(M.TOGGLE_DECLINED)
+                self._save_bot_message(tid, M.TOGGLE_DECLINED)
             return True
 
-        # Legacy consent kinds (backward compat during transition)
-        consent_kinds = {
-            "awaiting_calorie_target_consent",
-            "awaiting_eating_window_consent",
-            "awaiting_sleep_consent",
-            "awaiting_workouts_consent",
-            "awaiting_self_care_consent",
-        }
-        if kind in consent_kinds:
+        # -- Goal consent ("want to set a goal?") --
+        if kind == "awaiting_goal_consent" and self.goal_service:
             text = message.text.strip().lower()
-            accepted = text in ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
-            if self.onboarding_service and hasattr(self.onboarding_service, 'handle_consent_response'):
-                response = self.onboarding_service.handle_consent_response(tid, kind, accepted)
-                if response:
-                    await message.reply_text(response)
+            accepted = text in YES_WORDS
+            toggle_name = dispatch.data.get("toggle_name", "")
+            response = self.goal_service.handle_goal_consent(tid, toggle_name, accepted)
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return True
+
+        # -- Goal value collection --
+        if kind == "awaiting_goal_value" and self.goal_service:
+            toggle_name = dispatch.data.get("toggle_name", "")
+            response = self.goal_service.handle_goal_value(tid, toggle_name, message.text.strip())
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return True
+
+        # -- Goal remind ("want me to remind you?") --
+        if kind == "awaiting_goal_remind" and self.goal_service:
+            text = message.text.strip().lower()
+            accepted = text in YES_WORDS
+            toggle_name = dispatch.data.get("toggle_name", "")
+            response = self.goal_service.handle_goal_remind(tid, toggle_name, accepted)
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return True
+
+        # -- Nutrition: body stats collection --
+        if kind == "awaiting_body_stats" and self.goal_service:
+            response = self.goal_service.handle_body_stats(tid, message.text.strip())
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return True
+
+        # -- Nutrition: method choice (GPT suggest vs manual) --
+        if kind == "awaiting_nutrition_method" and self.goal_service:
+            profile_fresh = self._get_profile(tid)
+            response = self.goal_service.handle_nutrition_method(tid, message.text.strip(), profile_fresh)
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return True
+
+        # -- Nutrition: manual target entry --
+        if kind == "awaiting_manual_targets" and self.goal_service:
+            response = self.goal_service.handle_manual_targets(tid, message.text.strip())
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return True
+
+        # -- Legacy consent kinds (backward compat) --
+        if kind == "awaiting_target_consent":
+            text = message.text.strip().lower()
+            accepted = text in YES_WORDS
+            if accepted and self.goal_service:
+                response = self.goal_service.start_nutrition_onboarding(tid)
             else:
                 self.state_service.clear_pending(tid)
-                await message.reply_text("בסדר." if not accepted else "יפה, נרשמתי.")
+                response = "בסדר, ממשיכים."
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
             return True
 
-        if kind == "awaiting_body_stats" and self.onboarding_service:
-            parts = [p.strip() for p in message.text.split(",")]
-            if len(parts) == 3:
-                try:
-                    height, weight, age = int(parts[0]), int(parts[1]), int(parts[2])
-                    self.user_repo.update_fields(tid, {
-                        "height_cm": height,
-                        "weight_kg": weight,
-                        "age": age,
-                    })
-                    suggestion = self.analyzer.suggest_targets(height, weight, age)
-                    if suggestion:
-                        cal = suggestion.get("target_calories", 2000)
-                        prot = suggestion.get("target_protein", 150)
-                        self.user_repo.update_fields(tid, {
-                            "targets.calories": cal,
-                            "targets.protein": prot,
-                        })
-                        self.state_service.clear_pending(tid)
-                        await message.reply_text(
-                            f"יעדים מומלצים:\nקלוריות: {cal}\nחלבון: {prot} גרם\n\n"
-                            "עודכן. בוא נמשיך — מה אכלת?"
-                        )
-                    else:
-                        self.state_service.clear_pending(tid)
-                        await message.reply_text("לא הצלחתי לחשב יעדים. שלח ארוחה ונמשיך.")
-                except ValueError:
-                    await message.reply_text("פורמט לא תקין. שלח: גובה, משקל, גיל (מספרים מופרדים בפסיקים)")
-            else:
-                await message.reply_text("שלח: גובה, משקל, גיל (מופרדים בפסיקים, למשל: 175, 80, 30)")
-            return True
-
+        # -- Feedback reaction --
         if kind == "awaiting_feedback_reaction" and self.feedback_service:
             profile_fresh = self._get_profile(tid)
             steering = profile_fresh.feedback_steering_prompt if profile_fresh else None
             response = self.feedback_service.process_reaction(tid, message.text.strip(), steering)
             await message.reply_text(response)
+            self._save_bot_message(tid, response)
             return True
 
         # Unknown dispatched state - clear and fall through
@@ -603,81 +618,58 @@ class HealthHandlers:
         from scheduler import should_piggyback
         import messages as M
         import random
+        from constants import WORKOUTS_ANCHOR_DAY, SELF_CARE_ANCHOR_DAY, WEEKLY_SUMMARY_ANCHOR_DAY
 
         now = get_user_now(profile.timezone)
         day_number = self.toggle_service.get_day_number(profile)
+        weekday = now.weekday()
 
-        # Onboarding target offer (after first meal)
-        meal_count = len(self.food_repo.get_all_for_user(tid))
-        if self.onboarding_service and self.onboarding_service.should_offer_target(profile, meal_count):
-            offer_text = self.onboarding_service.offer_target(tid)
-            await message.reply_text(offer_text)
-            return  # Don't piggyback other hooks on the same message as target offer
+        # Goal reminders (due reminders fire first)
+        if self.goal_service:
+            due = self.goal_service.check_goal_reminders(profile)
+            if due:
+                text = self.goal_service.fire_goal_reminder(tid, due[0])
+                await message.reply_text(text)
+                self._save_bot_message(tid, text)
+                return
 
-        # Day 9 target retry
-        if self.toggle_service.should_retry_target(profile, day_number):
-            self.user_repo.update_fields(tid, {"target_retry_done": True})
-            self.toggle_service.reveal_toggle(tid, "target_data")
-            self.state_service.set_pending(tid, "awaiting_target_consent")
-            await message.reply_text(M.TARGET_RETRY)
-            return
-
-        # Day 11 eating window retry
-        if self.toggle_service.should_retry_eating_window(profile):
-            self.user_repo.update_fields(tid, {"eating_window_retry_done": True})
-            self.state_service.set_pending(tid, "awaiting_toggle_consent",
-                                           data={"toggle_name": "eating_window"})
-            await message.reply_text(M.REVEAL_EATING_WINDOW)
+        # Nutrition reveal (after first meal, gate_days=0)
+        if self.toggle_service.should_reveal_nutrition(profile):
+            self.toggle_service.reveal_toggle(tid, "nutrition")
+            self.toggle_service.activate_toggle(tid, "nutrition")
+            if self.goal_service and self.goal_service.should_offer_goal(profile, "nutrition"):
+                text = self.goal_service.offer_goal(tid, "nutrition")
+                await message.reply_text(text)
+                self._save_bot_message(tid, text)
             return
 
         # Day 16 dashboard intro
         if self.toggle_service.should_show_dashboard_intro(profile, day_number):
             self.user_repo.update_fields(tid, {"dashboard_intro_shown": True})
             await message.reply_text(M.DASHBOARD_INTRO)
-            # Don't return — other hooks can still fire
 
         # Toggle reveals (one-time offers)
-        weekday = now.weekday()
+        reveals = [
+            ("sleep", self.toggle_service.should_reveal_sleep(profile), M.REVEAL_SLEEP),
+            ("eating_window", self.toggle_service.should_reveal_eating_window(profile), M.REVEAL_EATING_WINDOW),
+            ("workouts", self.toggle_service.should_reveal_workouts(profile, weekday), M.REVEAL_WORKOUTS),
+            ("self_care", self.toggle_service.should_reveal_self_care(profile, weekday), M.REVEAL_SELF_CARE),
+        ]
 
-        if self.toggle_service.should_reveal_sleep(profile):
-            self.toggle_service.reveal_toggle(tid, "sleep")
-            self.state_service.set_pending(tid, "awaiting_toggle_consent",
-                                           data={"toggle_name": "sleep"})
-            await message.reply_text(M.REVEAL_SLEEP)
-            self._save_bot_message(tid, M.REVEAL_SLEEP)
-            return
-
-        if self.toggle_service.should_reveal_eating_window(profile):
-            self.toggle_service.reveal_toggle(tid, "eating_window")
-            self.state_service.set_pending(tid, "awaiting_toggle_consent",
-                                           data={"toggle_name": "eating_window"})
-            await message.reply_text(M.REVEAL_EATING_WINDOW)
-            self._save_bot_message(tid, M.REVEAL_EATING_WINDOW)
-            return
-
-        if self.toggle_service.should_reveal_workouts(profile, weekday):
-            self.toggle_service.reveal_toggle(tid, "workouts")
-            self.state_service.set_pending(tid, "awaiting_toggle_consent",
-                                           data={"toggle_name": "workouts"})
-            await message.reply_text(M.REVEAL_WORKOUTS)
-            self._save_bot_message(tid, M.REVEAL_WORKOUTS)
-            return
-
-        if self.toggle_service.should_reveal_self_care(profile, weekday):
-            self.toggle_service.reveal_toggle(tid, "self_care")
-            self.state_service.set_pending(tid, "awaiting_toggle_consent",
-                                           data={"toggle_name": "self_care"})
-            await message.reply_text(M.REVEAL_SELF_CARE)
-            self._save_bot_message(tid, M.REVEAL_SELF_CARE)
-            return
+        for toggle_name, should_reveal, reveal_msg in reveals:
+            if should_reveal:
+                self.toggle_service.reveal_toggle(tid, toggle_name)
+                self.state_service.set_pending(tid, "awaiting_toggle_consent",
+                                               data={"toggle_name": toggle_name})
+                await message.reply_text(reveal_msg)
+                self._save_bot_message(tid, reveal_msg)
+                return
 
         # Recurring hooks piggyback (with anchor day check for weekly hooks)
-        from constants import WORKOUTS_ANCHOR_DAY, SELF_CARE_ANCHOR_DAY, WEEKLY_SUMMARY_ANCHOR_DAY
-
         piggyback_hooks = [
-            ("sleep", M.HOOK_SLEEP_PROMPTS, None),                        # daily
-            ("workouts", M.HOOK_WORKOUTS_PROMPTS, WORKOUTS_ANCHOR_DAY),   # Thursday
-            ("self_care", M.HOOK_SELF_CARE_PROMPTS, SELF_CARE_ANCHOR_DAY),  # Friday
+            ("sleep", M.HOOK_SLEEP_PROMPTS, None),
+            ("workouts", M.HOOK_WORKOUTS_PROMPTS, WORKOUTS_ANCHOR_DAY),
+            ("self_care", M.HOOK_SELF_CARE_PROMPTS, SELF_CARE_ANCHOR_DAY),
         ]
 
         for toggle_name, pool, anchor_day in piggyback_hooks:
@@ -695,7 +687,7 @@ class HealthHandlers:
                 self.toggle_service.increment_unanswered(tid, profile, toggle_name)
                 await message.reply_text(text)
                 self._save_bot_message(tid, text)
-                return  # Only one piggyback per meal
+                return
 
         # Weekly summary piggyback (Sunday only)
         if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_piggyback(profile, "weekly_summary", now):

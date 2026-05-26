@@ -2,10 +2,10 @@
 toggle_service.py — Central service for habit toggle state management.
 
 Handles all toggle state transitions (dormant/active/cancelled), gate logic,
-reveal timing, exit door mechanics, and unanswered tracking.
+reveal timing, exit door mechanics, unanswered tracking, and goal state helpers.
 
 Depends on: repositories/user_repository, models/profile, constants.
-Used by: handlers/base, scheduler, onboarding_service.
+Used by: handlers/base, scheduler, goal_service, onboarding_service.
 """
 
 from __future__ import annotations
@@ -14,12 +14,11 @@ from datetime import datetime, timezone
 
 from constants import (
     TOGGLE_GATE_DAYS,
-    TARGET_RETRY_DAY,
-    EATING_WINDOW_RETRY_DAYS,
     DASHBOARD_INTRO_DAY,
     EXIT_DOOR_UNANSWERED_THRESHOLD,
     WORKOUTS_ANCHOR_DAY,
     SELF_CARE_ANCHOR_DAY,
+    HOOK_CONFIG,
 )
 from models.profile import User, ToggleState, Toggles
 from repositories.user_repository import UserRepository
@@ -52,7 +51,7 @@ class ToggleService:
         })
 
     def activate_toggle(self, telegram_user_id: int, toggle_name: str) -> None:
-        """User accepted — toggle becomes active."""
+        """User accepted - toggle becomes active."""
         now = datetime.now(timezone.utc).isoformat()
         self._user_repo.update_fields(telegram_user_id, {
             f"toggles.{toggle_name}.status": "active",
@@ -61,9 +60,40 @@ class ToggleService:
         })
 
     def cancel_toggle(self, telegram_user_id: int, toggle_name: str) -> None:
-        """User cancelled — toggle is off forever (unless re-activated manually)."""
+        """User cancelled - toggle is off forever (unless reset)."""
         self._user_repo.update_fields(telegram_user_id, {
             f"toggles.{toggle_name}.status": "cancelled",
+        })
+
+    # ------------------------------------------------------------------
+    # Goal state helpers
+    # ------------------------------------------------------------------
+
+    def set_goal_value(self, tid: int, toggle_name: str, value: dict) -> None:
+        """Store goal value and mark as set."""
+        now = datetime.now(timezone.utc).isoformat()
+        self._user_repo.update_fields(tid, {
+            f"toggles.{toggle_name}.goal_value": value,
+            f"toggles.{toggle_name}.goal_status": "set",
+            f"toggles.{toggle_name}.goal_offered_at": now,
+        })
+
+    def set_goal_status(
+        self, tid: int, toggle_name: str, status: str, remind_at: datetime | None = None,
+    ) -> None:
+        """Update goal status (and optionally remind_at)."""
+        fields: dict = {f"toggles.{toggle_name}.goal_status": status}
+        if remind_at is not None:
+            fields[f"toggles.{toggle_name}.goal_remind_at"] = remind_at.isoformat()
+        else:
+            fields[f"toggles.{toggle_name}.goal_remind_at"] = None
+        self._user_repo.update_fields(tid, fields)
+
+    def set_goal_offered(self, tid: int, toggle_name: str) -> None:
+        """Record that a goal was offered (timestamp only)."""
+        now = datetime.now(timezone.utc).isoformat()
+        self._user_repo.update_fields(tid, {
+            f"toggles.{toggle_name}.goal_offered_at": now,
         })
 
     # ------------------------------------------------------------------
@@ -78,7 +108,7 @@ class ToggleService:
         })
 
     def record_answered(self, telegram_user_id: int, toggle_name: str) -> None:
-        """User answered the hook — reset unanswered counter."""
+        """User answered the hook - reset unanswered counter."""
         self._user_repo.update_fields(telegram_user_id, {
             f"toggles.{toggle_name}.consecutive_unanswered": 0,
         })
@@ -116,6 +146,13 @@ class ToggleService:
         """Has the user passed the 4-day gate?"""
         return self.get_day_number(profile) >= TOGGLE_GATE_DAYS
 
+    def should_reveal_nutrition(self, profile: User) -> bool:
+        """Should we reveal nutrition toggle? After first meal, dormant, not revealed."""
+        toggle = profile.toggles.nutrition
+        if toggle.status != "dormant" or toggle.revealed_at is not None:
+            return False
+        return profile.trial_started_at is not None
+
     def should_reveal_sleep(self, profile: User) -> bool:
         """Should we reveal sleep toggle? Morning after first night."""
         toggle = profile.toggles.sleep
@@ -123,11 +160,10 @@ class ToggleService:
             return False
         if profile.trial_started_at is None:
             return False
-        # At least 1 day since trial started (meaning they've had a first night)
         return self.get_day_number(profile) >= 1
 
     def should_reveal_eating_window(self, profile: User) -> bool:
-        """Should we reveal eating window toggle? After 4-day gate, evening."""
+        """Should we reveal eating window toggle? After 4-day gate."""
         toggle = profile.toggles.eating_window
         if toggle.status != "dormant" or toggle.revealed_at is not None:
             return False
@@ -150,31 +186,6 @@ class ToggleService:
         if weekday != SELF_CARE_ANCHOR_DAY:
             return False
         return self.is_past_gate(profile)
-
-    # ------------------------------------------------------------------
-    # Retry logic
-    # ------------------------------------------------------------------
-
-    def should_retry_target(self, profile: User, day_number: int) -> bool:
-        """Should we retry the target offer? Day 9, dormant, not yet retried."""
-        if profile.target_retry_done:
-            return False
-        toggle = profile.toggles.target_data
-        if toggle.status != "dormant":
-            return False
-        return day_number >= TARGET_RETRY_DAY
-
-    def should_retry_eating_window(self, profile: User) -> bool:
-        """Should we retry eating window? 11 days after refusal, dormant."""
-        if profile.eating_window_retry_done:
-            return False
-        toggle = profile.toggles.eating_window
-        if toggle.status != "dormant":
-            return False
-        if toggle.revealed_at is None:
-            return False
-        days_since_reveal = (datetime.now(timezone.utc) - toggle.revealed_at).days
-        return days_since_reveal >= EATING_WINDOW_RETRY_DAYS
 
     # ------------------------------------------------------------------
     # Dashboard intro

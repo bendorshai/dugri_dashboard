@@ -6,14 +6,14 @@ file — never hard-codes values. This makes tuning Dugri's cadence and
 behavior a one-file change without touching logic.
 
 Depends on: nothing.
-Used by: scheduler, toggle_service, onboarding_service, handlers, feedback_service.
+Used by: scheduler, toggle_service, goal_service, onboarding_service, handlers, feedback_service.
 """
 
 # ---------------------------------------------------------------------------
 # Lazy opt-in hook configuration
 #
 # Each toggle's full config in one place: schedule type, anchor day,
-# time window, gate days, and special params.
+# time window, gate days, goal settings, and special params.
 #
 # Anchor days use Python weekday: 0=Monday ... 6=Sunday
 # Windows are (start_hour, end_hour) in user timezone
@@ -24,23 +24,34 @@ HOOK_CONFIG = {
         "schedule": "daily",
         "window": (8, 10),           # 08:00-10:00
         "gate_days": 1,              # reveal after day 1
+        "has_goal": True,
+        "goal_reminder_days": 10,
     },
     "eating_window": {
         "schedule": "daily",         # window warning/close are daily
         "gate_days": 4,              # reveal after day 4
-        "retry_days": 11,            # retry 11 days after reveal refusal
+        "has_goal": True,
+        "goal_reminder_days": 10,
     },
     "workouts": {
         "schedule": "weekly",
         "anchor_day": 3,             # Thursday
         "window": (16, 20),          # 16:00-20:00
         "gate_days": 4,              # reveal after day 4
+        "has_goal": True,
+        "goal_reminder_days": 10,
     },
     "self_care": {
         "schedule": "weekly",
         "anchor_day": 4,             # Friday
         "window": (10, 14),          # 10:00-14:00
         "gate_days": 4,              # reveal after day 4
+        "has_goal": False,
+    },
+    "nutrition": {
+        "gate_days": 0,              # offered after first meal
+        "has_goal": True,
+        "goal_reminder_days": 10,
     },
     "weekly_summary": {
         "schedule": "weekly",
@@ -48,10 +59,7 @@ HOOK_CONFIG = {
         "window": (9, 11),           # 09:00-11:00
         "default_active": True,      # opt-out (born active)
         "min_days": 7,               # min food entry days before first offer
-    },
-    "target_data": {
-        "gate_days": 0,              # offered after first meal
-        "retry_day": 9,              # retry on day 9 if refused
+        "has_goal": False,
     },
 }
 
@@ -70,9 +78,10 @@ SELF_CARE_HOOK_WINDOW = HOOK_CONFIG["self_care"]["window"]
 WEEKLY_SUMMARY_HOOK_WINDOW = HOOK_CONFIG["weekly_summary"]["window"]
 
 TOGGLE_GATE_DAYS = HOOK_CONFIG["workouts"]["gate_days"]
-TARGET_RETRY_DAY = HOOK_CONFIG["target_data"]["retry_day"]
-EATING_WINDOW_RETRY_DAYS = HOOK_CONFIG["eating_window"]["retry_days"]
 WEEKLY_SUMMARY_MIN_DAYS = HOOK_CONFIG["weekly_summary"]["min_days"]
+
+DEFAULT_GOAL_REMINDER_DAYS = 10
+"""Default days before re-asking about a declined goal."""
 
 # ---------------------------------------------------------------------------
 # Other constants
@@ -87,5 +96,5 @@ EXIT_DOOR_UNANSWERED_THRESHOLD = 2
 ROTATING_PROMPT_COUNT = 5
 """Number of rotating phrasings per hook type (defined in messages.py)."""
 
-MAX_RECENT_MESSAGES = 8
+MAX_RECENT_MESSAGES = 12
 """Maximum recent messages stored per user for classifier context."""

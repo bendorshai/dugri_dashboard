@@ -36,6 +36,7 @@ from services.message_router_service import MessageRouterService
 from services.trial_service import TrialService
 from services.feedback_service import FeedbackService
 from services.toggle_service import ToggleService
+from services.goal_service import GoalService
 from handlers.start_handler import StartHandler
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
@@ -99,7 +100,11 @@ def create_bot(
     # Services
     state_service = ConversationStateService(user_repo)
     toggle_service = ToggleService(user_repo)
-    onboarding_service = OnboardingService(user_repo, state_service, toggle_service)
+    goal_service = GoalService(user_repo, state_service, toggle_service, analyzer)
+    onboarding_service = OnboardingService(user_repo, state_service)
+
+    # Wire ghosting callback: expired goal-related pending → auto-remind
+    state_service.on_expired = goal_service.handle_expired_goal_pending
 
     # Message router (if habit repos are provided)
     message_router = None
@@ -126,6 +131,7 @@ def create_bot(
         trial_service=trial_service,
         feedback_service=feedback_service,
         toggle_service=toggle_service,
+        goal_service=goal_service,
         landing_page_url=landing_page_url,
     )
 
@@ -169,6 +175,6 @@ def create_bot(
         )
 
     # Schedule global hook poller (replaces per-user scheduling)
-    schedule_global_hook_poller(app.job_queue, user_repo, toggle_service)
+    schedule_global_hook_poller(app.job_queue, user_repo, toggle_service, goal_service)
 
     return app

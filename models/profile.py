@@ -67,17 +67,29 @@ class OnboardingHabits(BaseModel):
 class ToggleState(BaseModel):
     """State of a single habit toggle in the toggle system.
 
-    Three statuses:
+    Tracking statuses:
     - dormant: not yet offered or offered but not activated
     - active: user opted in, hook runs at its cadence
     - cancelled: user explicitly opted out, never offered again
+
+    Goal statuses:
+    - pending: goal not yet offered
+    - set: goal value stored
+    - declined: user said "don't ask again"
+    - remind: user wants to be reminded later (goal_remind_at has the date)
     """
+    # Tracking lifecycle
     status: Literal["dormant", "active", "cancelled"] = "dormant"
     revealed_at: datetime | None = None
     activated_at: datetime | None = None
     last_asked_at: datetime | None = None
     consecutive_unanswered: int = 0
-    edu_intro_shown: bool = False
+
+    # Goal lifecycle
+    goal_status: Literal["pending", "set", "declined", "remind"] = "pending"
+    goal_value: dict | None = None
+    goal_remind_at: datetime | None = None
+    goal_offered_at: datetime | None = None
 
 
 class Toggles(BaseModel):
@@ -86,7 +98,7 @@ class Toggles(BaseModel):
     eating_window: ToggleState = Field(default_factory=ToggleState)
     workouts: ToggleState = Field(default_factory=ToggleState)
     self_care: ToggleState = Field(default_factory=ToggleState)
-    target_data: ToggleState = Field(default_factory=ToggleState)
+    nutrition: ToggleState = Field(default_factory=ToggleState)
     weekly_summary: ToggleState = Field(default_factory=lambda: ToggleState(status="active"))
 
 
@@ -190,12 +202,11 @@ class User(BaseModel):
                     "declined": "cancelled",
                 }
                 toggles: dict = {}
-                # Map old habit names to new toggle names
                 habit_to_toggle = {
                     "sleep": "sleep",
                     "workouts": "workouts",
                     "self_care": "self_care",
-                    "nutrition": "target_data",
+                    "nutrition": "nutrition",
                     "eating_window": "eating_window",
                 }
                 for old_name, new_name in habit_to_toggle.items():
@@ -203,9 +214,62 @@ class User(BaseModel):
                     if isinstance(habit, dict):
                         old_state = habit.get("state", "pending")
                         toggles[new_name] = {"status": state_map.get(old_state, "dormant")}
-                # weekly_summary defaults to active (opt-out)
                 toggles.setdefault("weekly_summary", {"status": "active"})
                 doc["toggles"] = toggles
+
+        # Rename target_data -> nutrition
+        toggles = doc.get("toggles", {})
+        if isinstance(toggles, dict) and "target_data" in toggles:
+            toggles["nutrition"] = toggles.pop("target_data")
+            doc["toggles"] = toggles
+
+        # Migrate targets into toggle goal_values
+        targets = doc.get("targets", {})
+        if isinstance(targets, dict) and isinstance(toggles, dict):
+            # Nutrition goals from targets.calories/protein
+            nt = toggles.get("nutrition", {})
+            if isinstance(nt, dict) and not nt.get("goal_value"):
+                cal = targets.get("calories")
+                prot = targets.get("protein")
+                if cal or prot:
+                    nt["goal_value"] = {}
+                    if cal:
+                        nt["goal_value"]["calories"] = cal
+                    if prot:
+                        nt["goal_value"]["protein"] = prot
+                    nt["goal_status"] = "set"
+                    toggles["nutrition"] = nt
+
+            # Sleep goal from targets.sleep_time
+            st = toggles.get("sleep", {})
+            if isinstance(st, dict) and not st.get("goal_value"):
+                sleep_time = targets.get("sleep_time")
+                if sleep_time:
+                    st["goal_value"] = {"sleep_time": sleep_time}
+                    st["goal_status"] = "set"
+                    toggles["sleep"] = st
+
+            # Workouts goal from targets.workouts_per_week
+            wt = toggles.get("workouts", {})
+            if isinstance(wt, dict) and not wt.get("goal_value"):
+                wpw = targets.get("workouts_per_week")
+                if wpw:
+                    wt["goal_value"] = {"weekly_target": wpw}
+                    wt["goal_status"] = "set"
+                    toggles["workouts"] = wt
+
+            doc["toggles"] = toggles
+
+        # Migrate eating_window into toggle goal_value
+        ew = doc.get("eating_window")
+        if ew and isinstance(toggles, dict):
+            ewt = toggles.get("eating_window", {})
+            if isinstance(ewt, dict) and not ewt.get("goal_value"):
+                if isinstance(ew, dict):
+                    ewt["goal_value"] = {"start": ew.get("start", "08:00"), "end": ew.get("end", "20:00")}
+                    ewt["goal_status"] = "set"
+                    toggles["eating_window"] = ewt
+                    doc["toggles"] = toggles
 
         return cls.model_validate(doc)
 

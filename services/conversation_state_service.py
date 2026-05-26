@@ -1,24 +1,28 @@
 """
-conversation_state_service.py — ה-state dispatcher המרכזי.
+conversation_state_service.py — the central state dispatcher.
 
-יודע מה דוגרי מחכה לו מהמשתמש כרגע, ומנתב את ההודעה הבאה בהתאם.
-נשען על pending_state שעל הפרופיל (UserRepository).
-נבדק ראשון — לפני כל מסווג או ניתוב אחר.
+Knows what Dugri is waiting for from the user, and routes the next message.
+Relies on pending_state on the profile (UserRepository).
+Checked first — before any classifier or other routing.
 
-תלוי ב: repositories/user_repository, models/profile.
-נצרך על ידי: handlers/base.py.
+Depends on: repositories/user_repository, models/profile.
+Used by: handlers/base.py.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Callable
 
 from models.profile import UserProfile, PendingState
 from repositories.user_repository import UserRepository
 
 
 PENDING_TTL_SECONDS = 300  # 5 minutes
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,13 +35,29 @@ class DispatchResult:
 class ConversationStateService:
     def __init__(self, user_repo: UserRepository):
         self._user_repo = user_repo
+        self._on_expired: Callable[[int, str, dict], None] | None = None
+
+    @property
+    def on_expired(self) -> Callable[[int, str, dict], None] | None:
+        return self._on_expired
+
+    @on_expired.setter
+    def on_expired(self, callback: Callable[[int, str, dict], None] | None) -> None:
+        self._on_expired = callback
 
     def get_pending(self, profile: UserProfile) -> PendingState | None:
         if profile.pending_state is None:
             return None
         age = (datetime.now(timezone.utc) - profile.pending_state.created_at).total_seconds()
         if age > PENDING_TTL_SECONDS:
+            expired = profile.pending_state
             self.clear_pending(profile.telegram_user_id)
+            # Notify callback (e.g. GoalService ghosting handler)
+            if self._on_expired:
+                try:
+                    self._on_expired(profile.telegram_user_id, expired.kind, expired.data)
+                except Exception:
+                    logger.exception("on_expired callback failed for kind=%s", expired.kind)
             return None
         return profile.pending_state
 

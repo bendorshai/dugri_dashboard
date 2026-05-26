@@ -96,7 +96,7 @@ def get_hooks_to_schedule(profile: User) -> list[dict]:
     return hooks
 
 
-def schedule_global_hook_poller(job_queue, user_repo, toggle_service):
+def schedule_global_hook_poller(job_queue, user_repo, toggle_service, goal_service=None):
     """Schedule a single global job that checks all users every 2 hours."""
     job_name = "global_hook_poller"
     for job in job_queue.get_jobs_by_name(job_name):
@@ -110,6 +110,7 @@ def schedule_global_hook_poller(job_queue, user_repo, toggle_service):
         data={
             "user_repo": user_repo,
             "toggle_service": toggle_service,
+            "goal_service": goal_service,
         },
     )
     logger.info("Global hook poller scheduled (every 2 hours)")
@@ -120,6 +121,7 @@ async def _global_hook_tick(context):
     data = context.job.data
     user_repo = data["user_repo"]
     toggle_service = data["toggle_service"]
+    goal_service = data.get("goal_service")
 
     all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
     logger.info("Hook tick: checking %d users", len(all_users))
@@ -128,12 +130,12 @@ async def _global_hook_tick(context):
         if not profile.telegram_user_id:
             continue
         try:
-            await _check_user_hooks(context, profile, user_repo, toggle_service)
+            await _check_user_hooks(context, profile, user_repo, toggle_service, goal_service)
         except Exception:
             logger.exception("Hook tick failed for user %d", profile.telegram_user_id)
 
 
-async def _check_user_hooks(context, profile, user_repo, toggle_service):
+async def _check_user_hooks(context, profile, user_repo, toggle_service, goal_service=None):
     """Check and fire all due hooks for a single user."""
     import messages as M
     from constants import MAX_RECENT_MESSAGES
@@ -142,6 +144,19 @@ async def _check_user_hooks(context, profile, user_repo, toggle_service):
     tz = pytz.timezone(profile.timezone)
     now = datetime.now(tz)
     today_weekday = now.weekday()
+
+    # Check goal reminders first
+    if goal_service:
+        due = goal_service.check_goal_reminders(profile)
+        if due:
+            text = goal_service.fire_goal_reminder(tid, due[0])
+            try:
+                await context.bot.send_message(chat_id=tid, text=text)
+                msg = {"role": "bot", "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
+                user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
+            except Exception:
+                logger.exception("Failed to send goal reminder to user %d", tid)
+            return  # One reminder per tick
 
     hooks = get_hooks_to_schedule(profile)
 
