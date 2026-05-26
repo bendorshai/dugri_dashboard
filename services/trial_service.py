@@ -19,7 +19,7 @@ TRIAL_DAYS = 21
 
 
 class TrialService:
-    def __init__(self, user_repo: UserRepository, landing_page_url: str = "https://dugri.up.railway.app"):
+    def __init__(self, user_repo: UserRepository, landing_page_url: str = "https://www.dugri.life"):
         self._user_repo = user_repo
         self._landing_page_url = landing_page_url
 

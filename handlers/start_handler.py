@@ -21,7 +21,7 @@ from services.linking_service import LinkingService
 from services.onboarding_service import OnboardingService
 
 class StartHandler:
-    def __init__(self, linking_service: LinkingService, onboarding_service: OnboardingService, landing_page_url: str = "https://dugri.up.railway.app"):
+    def __init__(self, linking_service: LinkingService, onboarding_service: OnboardingService, landing_page_url: str = "https://www.dugri.life"):
         self._linking = linking_service
         self._onboarding = onboarding_service
         self._landing_page_url = landing_page_url

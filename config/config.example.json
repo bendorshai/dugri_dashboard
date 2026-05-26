@@ -10,5 +10,5 @@
         "uri": "mongodb://user:password@host:27017",
         "db_name": "health_tracker"
     },
-    "landing_page_url": "https://dugri.up.railway.app"
+    "landing_page_url": "https://www.dugri.life"
 }

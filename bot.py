@@ -93,7 +93,7 @@ def create_bot(
     sleep_repo=None,
     workout_repo=None,
     self_care_repo=None,
-    landing_page_url: str = "https://dugri.up.railway.app",
+    landing_page_url: str = "https://www.dugri.life",
 ) -> Application:
     app = Application.builder().token(token).build()
 

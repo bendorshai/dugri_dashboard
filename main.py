@@ -97,7 +97,7 @@ def main():
     logger.info("GPT food analyzer ready")
 
     # Landing page URL
-    landing_page_url = cfg.get("landing_page_url", "https://dugri.up.railway.app")
+    landing_page_url = cfg.get("landing_page_url", "https://www.dugri.life")
 
     # Create bot
     app = create_bot(

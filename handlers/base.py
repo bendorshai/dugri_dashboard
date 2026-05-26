@@ -69,7 +69,7 @@ class HealthHandlers:
         feedback_service: FeedbackService | None = None,
         toggle_service: ToggleService | None = None,
         goal_service=None,
-        landing_page_url: str = "https://dugri.up.railway.app",
+        landing_page_url: str = "https://www.dugri.life",
     ):
         self.landing_page_url = landing_page_url
         self.analyzer = analyzer
