@@ -178,127 +178,106 @@ class HealthHandlers:
         return "\n".join(alerts)
 
     # ------------------------------------------------------------------
-    # Dispatched state handler (profile-based pending states)
+    # Conversation reply handler (classifier routed, not a flow hijack)
     # ------------------------------------------------------------------
 
-    async def _handle_dispatched_state(
+    async def _handle_conversation_reply(
         self, message, context, tid: int, profile: UserProfile,
-    ) -> bool:
-        if self.state_service is None:
-            return False
-        dispatch = self.state_service.dispatch(profile, message.text)
-        if dispatch is None:
-            return False
+        pending, classification,
+    ):
+        """Handle a message classified as conversation_reply by GPT.
 
-        kind = dispatch.kind
-        YES_WORDS = ("כן", "yes", "כ", "y", "בטח", "יאללה", "אשמח")
+        The classifier determined the user is responding to something
+        the bot asked. The pending_state tells us what was asked.
+        """
+        import messages as M
+
+        kind = pending.kind
+        intent = classification.reply_intent or "accept"
+        text = message.text.strip()
+        accepted = intent in ("accept", "value")
 
         # -- Onboarding: name collection --
         if kind == "awaiting_name" and self.onboarding_service:
-            response = self.onboarding_service.handle_name_response(tid, message.text.strip())
+            response = self.onboarding_service.handle_name_response(tid, text)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
+            return
 
-        # -- Habit tracking consent ("want to track X?") --
+        # -- Habit tracking consent --
         if kind == "awaiting_toggle_consent" and self.toggle_service:
-            import messages as M
-            text = message.text.strip().lower()
-            accepted = text in YES_WORDS
-            toggle_name = dispatch.data.get("toggle_name", "")
+            toggle_name = pending.data.get("toggle_name", "")
             if accepted:
                 self.toggle_service.activate_toggle(tid, toggle_name)
                 self.state_service.clear_pending(tid)
-                # Immediately offer goal if applicable
                 if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
                     response = self.goal_service.offer_goal(tid, toggle_name)
-                    await message.reply_text(response)
-                    self._save_bot_message(tid, response)
                 else:
                     response = "יפה, נרשמתי."
-                    await message.reply_text(response)
-                    self._save_bot_message(tid, response)
             else:
                 self.state_service.clear_pending(tid)
-                await message.reply_text(M.TOGGLE_DECLINED)
-                self._save_bot_message(tid, M.TOGGLE_DECLINED)
-            return True
+                response = M.TOGGLE_DECLINED
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return
 
-        # -- Goal consent ("want to set a goal?") --
+        # -- Goal consent --
         if kind == "awaiting_goal_consent" and self.goal_service:
-            text = message.text.strip().lower()
-            accepted = text in YES_WORDS
-            toggle_name = dispatch.data.get("toggle_name", "")
+            toggle_name = pending.data.get("toggle_name", "")
             response = self.goal_service.handle_goal_consent(tid, toggle_name, accepted)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
+            return
 
-        # -- Goal value collection --
+        # -- Goal value --
         if kind == "awaiting_goal_value" and self.goal_service:
-            toggle_name = dispatch.data.get("toggle_name", "")
-            response = self.goal_service.handle_goal_value(tid, toggle_name, message.text.strip())
+            toggle_name = pending.data.get("toggle_name", "")
+            response = self.goal_service.handle_goal_value(tid, toggle_name, text)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
+            return
 
-        # -- Goal remind ("want me to remind you?") --
+        # -- Goal remind --
         if kind == "awaiting_goal_remind" and self.goal_service:
-            text = message.text.strip().lower()
-            accepted = text in YES_WORDS
-            toggle_name = dispatch.data.get("toggle_name", "")
+            toggle_name = pending.data.get("toggle_name", "")
             response = self.goal_service.handle_goal_remind(tid, toggle_name, accepted)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
+            return
 
-        # -- Nutrition: body stats collection --
+        # -- Nutrition: body stats --
         if kind == "awaiting_body_stats" and self.goal_service:
-            response = self.goal_service.handle_body_stats(tid, message.text.strip())
+            response = self.goal_service.handle_body_stats(tid, text)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
+            return
 
-        # -- Nutrition: method choice (GPT suggest vs manual) --
+        # -- Nutrition: method choice --
         if kind == "awaiting_nutrition_method" and self.goal_service:
             profile_fresh = self._get_profile(tid)
-            response = self.goal_service.handle_nutrition_method(tid, message.text.strip(), profile_fresh)
+            response = self.goal_service.handle_nutrition_method(tid, text, profile_fresh)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
+            return
 
-        # -- Nutrition: manual target entry --
+        # -- Nutrition: manual targets --
         if kind == "awaiting_manual_targets" and self.goal_service:
-            response = self.goal_service.handle_manual_targets(tid, message.text.strip())
+            response = self.goal_service.handle_manual_targets(tid, text)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
-
-        # -- Legacy consent kinds (backward compat) --
-        if kind == "awaiting_target_consent":
-            text = message.text.strip().lower()
-            accepted = text in YES_WORDS
-            if accepted and self.goal_service:
-                response = self.goal_service.start_nutrition_onboarding(tid)
-            else:
-                self.state_service.clear_pending(tid)
-                response = "בסדר, ממשיכים."
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return True
+            return
 
         # -- Feedback reaction --
         if kind == "awaiting_feedback_reaction" and self.feedback_service:
             profile_fresh = self._get_profile(tid)
             steering = profile_fresh.feedback_steering_prompt if profile_fresh else None
-            response = self.feedback_service.process_reaction(tid, message.text.strip(), steering)
+            response = self.feedback_service.process_reaction(tid, text, steering)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
-            return True
+            return
 
-        # Unknown dispatched state - clear and fall through
+        # Unknown pending kind - clear and let classifier handle next message
         self.state_service.clear_pending(tid)
-        return False
 
     # ------------------------------------------------------------------
     # Command handlers
@@ -378,30 +357,13 @@ class HealthHandlers:
                 await message.reply_text(self.trial_service.get_blocked_message())
                 return
 
-        # Check profile-based pending state (dispatcher) first
-        if await self._handle_dispatched_state(message, context, tid, profile):
-            return
-
-        # Check context-based pending states (legacy, will migrate in future)
-        if await self._handle_pending_edit(message, context, tid, profile):
-            return
-
-        if await self._handle_pending_question(message, context, tid, profile):
-            return
-
-        if await self._handle_pending_correction(message, context, tid, profile):
-            return
-
-        if await self._handle_pending_bulk_fix(message, context, tid, profile):
-            return
-
         today_str = self._get_today_str(profile)
         time_str = self._get_time_str(profile)
         within_window = self._is_within_window(profile)
 
         last_entry = context.chat_data.get("last_entry")
 
-        # Save user message and fetch conversation history for classifier context
+        # Save user message and fetch conversation history
         from constants import MAX_RECENT_MESSAGES
         from datetime import timezone as tz
         user_msg = {
@@ -412,11 +374,28 @@ class HealthHandlers:
         self.user_repo.push_messages(tid, [user_msg], MAX_RECENT_MESSAGES)
         recent_messages = self.user_repo.get_recent_messages(tid, MAX_RECENT_MESSAGES)
 
-        # Heavy classifier (9 types) with conversation history
+        # Get pending state as context (not as a flow hijack)
+        pending = None
+        pending_dict = None
+        if self.state_service:
+            pending = self.state_service.get_pending(profile)
+            if pending:
+                pending_dict = pending.model_dump(mode="json")
+
+        # Classifier is the SINGLE entry point for ALL messages.
+        # It sees: message text, conversation history, last food entry, and pending state.
         classification = self.analyzer.classify_message(
             message.text, today_str, last_entry,
             recent_messages=recent_messages[:-1],
+            pending_state=pending_dict,
         )
+
+        # conversation_reply: user is responding to something the bot asked
+        if classification.type == "conversation_reply" and pending:
+            await self._handle_conversation_reply(
+                message, context, tid, profile, pending, classification,
+            )
+            return
 
         # Route non-food types through MessageRouterService
         if classification.type == "correction" and classification.correction and last_entry:

@@ -63,7 +63,9 @@ class MessageClassification(BaseModel):
     type: Literal[
         "meal", "correction", "sleep", "workout", "self_care",
         "help", "answer_question", "feedback_request",
-        "toggle_cancel", "toggle_activate", "none",
+        "toggle_cancel", "toggle_activate",
+        "conversation_reply",
+        "none",
     ]
     meal: FoodAnalysisResult | None = None
     correction: CorrectionResult | None = None
@@ -72,6 +74,7 @@ class MessageClassification(BaseModel):
     self_care_description: str | None = None
     question_text: str | None = None
     toggle_name: str | None = None
+    reply_intent: Literal["accept", "decline", "value", "defer"] | None = None
 
 
 from prompts import (
@@ -150,8 +153,9 @@ class FoodAnalyzer:
     def classify_message(
         self, text: str, today_str: str, last_entry: dict | None = None,
         recent_messages: list[dict] | None = None,
+        pending_state: dict | None = None,
     ) -> MessageClassification:
-        """Heavy classifier: classify and process a message into one of 9 types."""
+        """Classify a message using GPT. This is the ONLY entry point for all user messages."""
         system = CLASSIFIER_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
         if last_entry:
             system += (
@@ -169,6 +173,19 @@ class FoodAnalyzer:
                 role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
                 system += f"[{role_label}]: {msg.get('text', '')}\n"
             system += "\nההודעה הנוכחית של המשתמש מופיעה למטה. השתמש בהיסטוריה כדי להבין את ההקשר.\n"
+
+        if pending_state:
+            kind = pending_state.get("kind", "")
+            data = pending_state.get("data", {})
+            system += (
+                f"\nהבוט מחכה לתשובה מהמשתמש. סוג ההמתנה: {kind}\n"
+            )
+            if data:
+                system += f"הקשר: {data}\n"
+            system += (
+                "אם ההודעה היא תשובה לשאלת הבוט - סווג כ-conversation_reply עם reply_intent מתאים.\n"
+                "אם ההודעה היא אוכל - סווג כ-meal גם אם הבוט מחכה לתשובה.\n"
+            )
 
         try:
             response = self.client.beta.chat.completions.parse(

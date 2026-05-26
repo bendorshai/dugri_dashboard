@@ -20,7 +20,7 @@ from models.profile import UserProfile, PendingState
 from repositories.user_repository import UserRepository
 
 
-PENDING_TTL_SECONDS = 300  # 5 minutes
+PENDING_TTL_SECONDS = 3600  # 1 hour — generous because classifier handles context, not the TTL
 
 logger = logging.getLogger(__name__)
 
