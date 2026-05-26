@@ -1,22 +1,26 @@
 """
-scheduler.py — תזמון jobs: חלון אכילה + hooks של מתגים.
+scheduler.py — single unified polling loop for all scheduled behaviors.
 
-מתזמן את כל ה-hooks הפרואקטיביים (שינה, אימונים, משהו טוב, סיכום שבועי,
-חלון אכילה) וגם את התרעות חלון האכילה.
+All proactive messages (hooks, eating window, goal reminders) run on one
+28-minute polling loop. Each tick loads fresh user data from MongoDB, so
+changes (resets, toggle cancellations) take effect immediately - no stale
+in-memory jobs.
 
-תלוי ב: repositories, services, analyzer, parsing, constants, messages.
-נצרך על ידי: bot.py, handlers/base.py.
+Depends on: repositories, services, constants, messages, parsing.
+Used by: bot.py, handlers/base.py (should_piggyback only).
 """
 
 from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytz
 
 from constants import (
+    POLL_INTERVAL_SECONDS,
+    EATING_WINDOW_WARN_MINUTES,
     SLEEP_HOOK_WINDOW,
     WORKOUTS_HOOK_WINDOW,
     SELF_CARE_HOOK_WINDOW,
@@ -24,35 +28,25 @@ from constants import (
     WORKOUTS_ANCHOR_DAY,
     SELF_CARE_ANCHOR_DAY,
     WEEKLY_SUMMARY_ANCHOR_DAY,
+    MAX_RECENT_MESSAGES,
 )
-from models.profile import User, UserProfile, ToggleState
+from models.profile import User, ToggleState
 from parsing import parse_time_window
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Hook scheduling helpers
+# Helpers (used by both poller and piggyback hooks in handlers)
 # ---------------------------------------------------------------------------
 
-def random_time_in_window(start_hour: int, end_hour: int) -> time:
-    """Generate a random time within [start_hour, end_hour) range."""
-    hour = random.randint(start_hour, end_hour - 1)
-    minute = random.randint(0, 59)
-    return time(hour, minute)
-
-
 def should_piggyback(profile: User, toggle_name: str, now: datetime) -> bool:
-    """Should this hook piggyback on the current interaction?
-
-    True if the toggle is active and the hook hasn't fired today.
-    """
+    """Should this hook fire now? True if active and hasn't fired today."""
     toggle: ToggleState = getattr(profile.toggles, toggle_name)
     if toggle.status != "active":
         return False
     if toggle.last_asked_at is None:
         return True
-    # Check if last_asked_at was today (comparing dates)
     last_date = toggle.last_asked_at.date() if hasattr(toggle.last_asked_at, 'date') else None
     now_date = now.date() if hasattr(now, 'date') else None
     if last_date is None or now_date is None:
@@ -61,10 +55,7 @@ def should_piggyback(profile: User, toggle_name: str, now: datetime) -> bool:
 
 
 def get_hooks_to_schedule(profile: User) -> list[dict]:
-    """Return list of hook descriptors for active toggles.
-
-    Each descriptor: {toggle_name, schedule_type, window, anchor_day}
-    """
+    """Return list of hook descriptors for active toggles."""
     hooks = []
     toggle_configs = {
         "sleep": {
@@ -96,68 +87,92 @@ def get_hooks_to_schedule(profile: User) -> list[dict]:
     return hooks
 
 
-def schedule_global_hook_poller(job_queue, user_repo, toggle_service, goal_service=None):
-    """Schedule a single global job that checks all users every 2 hours."""
-    job_name = "global_hook_poller"
+# ---------------------------------------------------------------------------
+# Global poller
+# ---------------------------------------------------------------------------
+
+def schedule_global_poller(
+    job_queue, user_repo, toggle_service,
+    goal_service=None, eating_day_service=None,
+):
+    """Schedule the single unified polling loop.
+
+    Every POLL_INTERVAL_SECONDS (28 min), checks all users for:
+    - Habit hook messages (sleep, workouts, self_care, weekly_summary)
+    - Eating window warnings and close summaries
+    - Goal reminders
+    All data is read fresh from MongoDB each tick.
+    """
+    job_name = "global_poller"
     for job in job_queue.get_jobs_by_name(job_name):
         job.schedule_removal()
 
     job_queue.run_repeating(
-        _global_hook_tick,
-        interval=7200,
+        _global_tick,
+        interval=POLL_INTERVAL_SECONDS,
         first=10,
         name=job_name,
         data={
             "user_repo": user_repo,
             "toggle_service": toggle_service,
             "goal_service": goal_service,
+            "eating_day_service": eating_day_service,
         },
     )
-    logger.info("Global hook poller scheduled (every 2 hours)")
+    logger.info(
+        "Global poller scheduled (every %d seconds / %.1f minutes)",
+        POLL_INTERVAL_SECONDS, POLL_INTERVAL_SECONDS / 60,
+    )
 
 
-async def _global_hook_tick(context):
-    """Every 2 hours: check all users, fire any due hooks."""
+async def _global_tick(context):
+    """Single tick: check all users for any due scheduled messages."""
     data = context.job.data
     user_repo = data["user_repo"]
     toggle_service = data["toggle_service"]
     goal_service = data.get("goal_service")
+    eating_day_svc = data.get("eating_day_service")
 
     all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
-    logger.info("Hook tick: checking %d users", len(all_users))
+    logger.info("Poller tick: checking %d users", len(all_users))
 
     for profile in all_users:
         if not profile.telegram_user_id:
             continue
         try:
-            await _check_user_hooks(context, profile, user_repo, toggle_service, goal_service)
+            await _check_user_hooks(
+                context, profile, user_repo, toggle_service,
+                goal_service, eating_day_svc,
+            )
         except Exception:
-            logger.exception("Hook tick failed for user %d", profile.telegram_user_id)
+            logger.exception("Poller tick failed for user %d", profile.telegram_user_id)
 
 
-async def _check_user_hooks(context, profile, user_repo, toggle_service, goal_service=None):
-    """Check and fire all due hooks for a single user."""
+# ---------------------------------------------------------------------------
+# Per-user check (called each tick for each user)
+# ---------------------------------------------------------------------------
+
+async def _check_user_hooks(
+    context, profile, user_repo, toggle_service,
+    goal_service=None, eating_day_svc=None,
+):
+    """Check and fire all due messages for a single user."""
     import messages as M
-    from constants import MAX_RECENT_MESSAGES
 
     tid = profile.telegram_user_id
     tz = pytz.timezone(profile.timezone)
     now = datetime.now(tz)
     today_weekday = now.weekday()
 
-    # Check goal reminders first
+    # --- Goal reminders (highest priority) ---
     if goal_service:
         due = goal_service.check_goal_reminders(profile)
         if due:
             text = goal_service.fire_goal_reminder(tid, due[0])
-            try:
-                await context.bot.send_message(chat_id=tid, text=text)
-                msg = {"role": "bot", "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
-                user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
-            except Exception:
-                logger.exception("Failed to send goal reminder to user %d", tid)
-            return  # One reminder per tick
+            await _send_and_save(context, tid, text, user_repo)
+            return
 
+    # --- Habit hooks (sleep, workouts, self_care, weekly_summary) ---
     hooks = get_hooks_to_schedule(profile)
 
     for hook in hooks:
@@ -165,20 +180,15 @@ async def _check_user_hooks(context, profile, user_repo, toggle_service, goal_se
         schedule_type = hook["schedule_type"]
         start_hour, end_hour = hook["window"]
 
-        # Check if we're within the time window
         if not (start_hour <= now.hour < end_hour):
             continue
 
-        # For weekly hooks, check if today is the anchor day
-        if schedule_type == "weekly":
-            if today_weekday != hook["anchor_day"]:
-                continue
+        if schedule_type == "weekly" and today_weekday != hook["anchor_day"]:
+            continue
 
-        # Check if haven't already asked today
         if not should_piggyback(profile, toggle_name, now):
             continue
 
-        # All conditions met - fire the hook
         prompt_pools = {
             "sleep": M.HOOK_SLEEP_PROMPTS,
             "workouts": M.HOOK_WORKOUTS_PROMPTS,
@@ -193,7 +203,6 @@ async def _check_user_hooks(context, profile, user_repo, toggle_service, goal_se
                 continue
             text = random.choice(pool)
 
-        # Check exit door
         if toggle_service.should_show_exit_door(profile, toggle_name):
             habit_names = {
                 "sleep": "שינה", "eating_window": "חלון אכילה",
@@ -202,163 +211,124 @@ async def _check_user_hooks(context, profile, user_repo, toggle_service, goal_se
             }
             text += "\n\n" + M.EXIT_DOOR.format(habit=habit_names.get(toggle_name, ""))
 
-        # Record + send
         toggle_service.record_asked(tid, toggle_name)
         toggle_service.increment_unanswered(tid, profile, toggle_name)
+        await _send_and_save(context, tid, text, user_repo)
 
-        try:
-            await context.bot.send_message(chat_id=tid, text=text)
-            msg = {"role": "bot", "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
-            user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
-        except Exception:
-            logger.exception("Failed to send hook %s to user %d", toggle_name, tid)
+    # --- Eating window: "closing soon" warning ---
+    await _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, now)
 
 
-def schedule_eating_window_jobs(
-    job_queue,
-    telegram_user_id: int,
-    profile: UserProfile,
-    user_repo,
-    food_repo,
-    feedback_repo,
-    analyzer,
-    eating_day_service,
-):
-    """Schedule eating window warning and close jobs."""
-    for job in job_queue.get_jobs_by_name(f"window_{telegram_user_id}_warning"):
-        job.schedule_removal()
-    for job in job_queue.get_jobs_by_name(f"window_{telegram_user_id}_close"):
-        job.schedule_removal()
+async def _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, now):
+    """Check if eating window is closing soon or has closed. Send once per day."""
+    import messages as M
 
-    # Don't schedule if no eating window computed yet
+    if profile.toggles.eating_window.status != "active":
+        return
     if not profile.eating_window:
-        logger.info("No eating window for user %d, skipping window job scheduling", telegram_user_id)
         return
 
-    tz_str = profile.timezone
-    tz = pytz.timezone(tz_str)
-    window_end = profile.eating_window.end
-    end_h, end_m = parse_time_window(window_end)
+    tid = profile.telegram_user_id
+    toggle = profile.toggles.eating_window
 
-    # 30-min warning
-    warning_dt = datetime(2000, 1, 1, end_h, end_m) - timedelta(minutes=30)
-    warning_time = time(warning_dt.hour, warning_dt.minute, tzinfo=tz)
+    end_h, end_m = parse_time_window(profile.eating_window.end)
+    close_minutes = end_h * 60 + end_m
+    now_minutes = now.hour * 60 + now.minute
+    minutes_until_close = close_minutes - now_minutes
 
-    job_queue.run_daily(
-        _window_warning_callback,
-        time=warning_time,
-        chat_id=telegram_user_id,
-        name=f"window_{telegram_user_id}_warning",
-        data={
-            "telegram_user_id": telegram_user_id,
-            "user_repo": user_repo,
-            "eating_day_service": eating_day_service,
-        },
-    )
+    # Already sent today? Check via last_asked_at
+    already_warned = False
+    if toggle.last_asked_at:
+        last_date = toggle.last_asked_at.date() if hasattr(toggle.last_asked_at, 'date') else None
+        if last_date == now.date():
+            already_warned = True
 
-    # Window close
-    close_time = time(end_h, end_m, tzinfo=tz)
-    job_queue.run_daily(
-        _window_close_callback,
-        time=close_time,
-        chat_id=telegram_user_id,
-        name=f"window_{telegram_user_id}_close",
-        data={
-            "telegram_user_id": telegram_user_id,
-            "user_repo": user_repo,
-            "food_repo": food_repo,
-            "feedback_repo": feedback_repo,
-            "analyzer": analyzer,
-            "eating_day_service": eating_day_service,
-        },
-    )
-
-    logger.info("Scheduled eating window jobs for user %d: warning at %s, close at %s",
-                telegram_user_id, warning_time, close_time)
-
-
-async def _window_warning_callback(context):
-    data = context.job.data
-    tid = data["telegram_user_id"]
-    user_repo = data["user_repo"]
-    eating_day_svc = data["eating_day_service"]
-
-    profile = user_repo.get(tid)
-    if profile is None:
+    if already_warned:
         return
+
+    # Window closing soon (within EATING_WINDOW_WARN_MINUTES, but still open)
+    if 0 < minutes_until_close <= EATING_WINDOW_WARN_MINUTES:
+        stats = _build_eating_stats(profile, eating_day_svc, now)
+        text = random.choice(M.EATING_WINDOW_CLOSING_SOON).format(stats=stats)
+        toggle_service.record_asked(tid, "eating_window")
+        await _send_and_save(context, tid, text, user_repo)
+        return
+
+    # Window just closed (within one poll interval after close)
+    if -EATING_WINDOW_WARN_MINUTES <= minutes_until_close <= 0:
+        stats = _build_eating_close_summary(profile, eating_day_svc, now)
+        text = f"🌙 חלון האכילה נסגר! סיכום יומי:\n\n{stats}"
+        toggle_service.record_asked(tid, "eating_window")
+        await _send_and_save(context, tid, text, user_repo)
+
+
+def _build_eating_stats(profile, eating_day_svc, now) -> str:
+    """Build stats string for eating window warning."""
+    if not eating_day_svc:
+        return ""
 
     from parsing import get_user_now
     today_str = get_user_now(profile.timezone).strftime("%d/%m/%Y")
     total_cal, total_prot = eating_day_svc.get_eating_day_totals(profile, today_str)
 
-    target_cal = profile.targets.calories or 2000
-    target_prot = profile.targets.protein or 150
+    # Read targets from nutrition goal_value or fallback
+    nv = profile.toggles.nutrition.goal_value
+    target_cal = (nv or {}).get("calories") or profile.targets.calories or 2000
+    target_prot = (nv or {}).get("protein") or profile.targets.protein or 150
+
     remaining_cal = target_cal - total_cal
     remaining_prot = target_prot - total_prot
-
     cal_pct = round(total_cal / target_cal * 100) if target_cal else 0
     prot_pct = round(total_prot / target_prot * 100) if target_prot else 0
     prot_status = f"נותרו {remaining_prot}" if remaining_prot > 0 else "✅ הגעת ליעד!"
 
-    text = (
-        "⏰ חלון האכילה נסגר בעוד 30 דקות!\n\n"
+    return (
         f"קלוריות: {total_cal}/{target_cal} ({cal_pct}%, נותרו: {remaining_cal})\n"
         f"גרם חלבון: {total_prot}/{target_prot} ({prot_pct}%, {prot_status})"
     )
 
-    try:
-        await context.bot.send_message(chat_id=tid, text=text)
-        from constants import MAX_RECENT_MESSAGES
-        msg = {"role": "bot", "text": text[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
-        user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
-    except Exception:
-        logger.exception("Failed to send window warning")
 
-
-async def _window_close_callback(context):
-    data = context.job.data
-    tid = data["telegram_user_id"]
-    user_repo = data["user_repo"]
-    food_repo = data["food_repo"]
-    feedback_repo = data["feedback_repo"]
-    analyzer = data["analyzer"]
-    eating_day_svc = data["eating_day_service"]
-
-    profile = user_repo.get(tid)
-    if profile is None:
-        return
+def _build_eating_close_summary(profile, eating_day_svc, now) -> str:
+    """Build close summary string."""
+    if not eating_day_svc:
+        return ""
 
     from parsing import get_user_now
     today_str = get_user_now(profile.timezone).strftime("%d/%m/%Y")
     total_cal, total_prot = eating_day_svc.get_eating_day_totals(profile, today_str)
 
-    target_cal = profile.targets.calories or 2000
-    target_prot = profile.targets.protein or 150
+    nv = profile.toggles.nutrition.goal_value
+    target_cal = (nv or {}).get("calories") or profile.targets.calories or 2000
+    target_prot = (nv or {}).get("protein") or profile.targets.protein or 150
 
     cal_delta = total_cal - target_cal
     prot_delta = total_prot - target_prot
-
     cal_icon = "✅" if cal_delta <= 0 else "⚠️"
     prot_icon = "✅" if prot_delta >= 0 else "⚠️"
-
     cal_pct = round(total_cal / target_cal * 100) if target_cal else 0
     prot_pct = round(total_prot / target_prot * 100) if target_prot else 0
     cal_text = f"{abs(cal_delta)} מתחת ליעד" if cal_delta <= 0 else f"{cal_delta} מעל היעד"
     prot_text = f"{prot_delta} מעל היעד" if prot_delta >= 0 else f"{abs(prot_delta)} מתחת ליעד"
 
-    summary = (
-        "🌙 חלון האכילה נסגר! סיכום יומי:\n\n"
+    return (
         f"{cal_icon} קלוריות: {total_cal}/{target_cal} ({cal_pct}%, {cal_text})\n"
         f"{prot_icon} גרם חלבון: {total_prot}/{target_prot} ({prot_pct}%, {prot_text})"
     )
 
-    # No automatic GPT coaching — just the dry numeric summary.
-    # Feedback is opt-in only (via /menu button or classifier).
 
+# ---------------------------------------------------------------------------
+# Send helper (shared by all scheduled messages)
+# ---------------------------------------------------------------------------
+
+async def _send_and_save(context, tid: int, text: str, user_repo) -> None:
+    """Send a message and save to conversation history."""
     try:
-        await context.bot.send_message(chat_id=tid, text=summary)
-        from constants import MAX_RECENT_MESSAGES
-        msg = {"role": "bot", "text": summary[:500], "timestamp": datetime.now(timezone.utc).isoformat()}
+        await context.bot.send_message(chat_id=tid, text=text)
+        msg = {
+            "role": "bot",
+            "text": text[:500],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
         user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
     except Exception:
-        logger.exception("Failed to send window close summary")
+        logger.exception("Failed to send scheduled message to user %d", tid)

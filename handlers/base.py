@@ -595,16 +595,8 @@ class HealthHandlers:
             "eating_window.start": new_window.start,
             "eating_window.end": new_window.end,
         })
-
-        # Reschedule window warning/close jobs with new times
-        updated_profile = self._get_profile(tid)
-        if updated_profile and context.application and context.application.job_queue:
-            from scheduler import schedule_eating_window_jobs
-            schedule_eating_window_jobs(
-                context.application.job_queue, tid, updated_profile,
-                self.user_repo, self.food_repo, self.feedback_repo,
-                self.analyzer, self.eating_day_svc,
-            )
+        # No PTB job rescheduling needed - the global poller reads
+        # fresh data from MongoDB each tick.
 
     # ------------------------------------------------------------------
     # Piggyback hooks - fire pending hooks after a meal
@@ -850,15 +842,6 @@ class HealthHandlers:
 
             await safe_react(message, OK_HAND)
             await message.reply_text(f"✅ {FIELD_LABELS.get(field, field)} עודכן!")
-
-            if field == "eating_window":
-                from scheduler import schedule_eating_window_jobs
-                updated_profile = self._get_profile(tid)
-                schedule_eating_window_jobs(
-                    context.job_queue, tid, updated_profile,
-                    self.user_repo, self.food_repo, self.feedback_repo,
-                    self.analyzer, self.eating_day_svc,
-                )
 
         except ValueError:
             await message.reply_text("ערך לא תקין. נסה שוב.")

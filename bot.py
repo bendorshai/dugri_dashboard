@@ -44,7 +44,7 @@ from keyboards import (
     CB_FEEDBACK,
 )
 from handlers import HealthHandlers
-from scheduler import schedule_eating_window_jobs, schedule_global_hook_poller
+from scheduler import schedule_global_poller
 
 logger = logging.getLogger(__name__)
 
@@ -165,16 +165,11 @@ def create_bot(
     # Error handler
     app.add_error_handler(_make_error_handler(error_repo))
 
-    # Schedule eating window jobs for all existing users with eating windows
-    profiles = user_repo.find({"eating_window": {"$ne": None}})
-    for profile in profiles:
-        schedule_eating_window_jobs(
-            app.job_queue, profile.telegram_user_id, profile,
-            user_repo, food_repo, feedback_repo,
-            analyzer, eating_day_service,
-        )
-
-    # Schedule global hook poller (replaces per-user scheduling)
-    schedule_global_hook_poller(app.job_queue, user_repo, toggle_service, goal_service)
+    # Single unified polling loop for all scheduled messages
+    schedule_global_poller(
+        app.job_queue, user_repo, toggle_service,
+        goal_service=goal_service,
+        eating_day_service=eating_day_service,
+    )
 
     return app

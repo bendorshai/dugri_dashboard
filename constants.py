@@ -84,6 +84,21 @@ DEFAULT_GOAL_REMINDER_DAYS = 10
 """Default days before re-asking about a declined goal."""
 
 # ---------------------------------------------------------------------------
+# Global polling interval
+#
+# All scheduled checks (hooks, eating window, goal reminders) run on a single
+# polling loop. 28 minutes chosen deliberately:
+# - Frequent enough for eating window precision (~30 min accuracy)
+# - Infrequent enough to avoid DB spam
+# - Slightly irregular to make Dugri's timing feel natural, not robotic
+# ---------------------------------------------------------------------------
+
+POLL_INTERVAL_SECONDS = 28 * 60  # 28 minutes
+
+EATING_WINDOW_WARN_MINUTES = 60
+"""Send 'closing soon' when window closes within this many minutes. Once per day."""
+
+# ---------------------------------------------------------------------------
 # Other constants
 # ---------------------------------------------------------------------------
 
