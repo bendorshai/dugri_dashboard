@@ -64,7 +64,7 @@ class DashboardStorage:
                 "eating_window": {"status": "dormant"},
                 "workouts": {"status": "dormant"},
                 "self_care": {"status": "dormant"},
-                "target_data": {"status": "dormant"},
+                "nutrition": {"status": "dormant"},
                 "weekly_summary": {"status": "active"},
             },
             "dashboard_intro_shown": False,

@@ -12,7 +12,7 @@
     <form id="prefs-form" method="POST" action="{{ url_for('dashboard_views.preferences_post') }}">
 
         {% set habits = [
-            ('target_data', 'מודעות תזונתית', 'יעד קלוריות וחלבון יומי מותאם אישית'),
+            ('nutrition', 'מודעות תזונתית', 'יעד קלוריות וחלבון יומי מותאם אישית'),
             ('eating_window', 'חלון אכילה', 'מעקב אחרי שעות האכילה היומיות'),
             ('sleep', 'שעת שינה', 'מעקב יומי אחרי שעת ההירדמות'),
             ('workouts', 'אימונים', 'מעקב שבועי אחרי אימונים'),
@@ -76,7 +76,7 @@
             <input type="hidden" :name="'{{ name }}_status'" :value="status">
 
             <!-- Target fields (shown only when active) -->
-            {% if name == 'target_data' %}
+            {% if name == 'nutrition' %}
             <div class="pref-fields" x-show="isActive" x-transition>
                 <div class="field-row">
                     <label>יעד קלוריות</label>

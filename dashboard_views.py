@@ -60,7 +60,7 @@ def preferences_post():
     existing_toggles = user.get("toggles", {}) if user else {}
 
     # Build toggles from hidden status fields (dormant/active/cancelled)
-    toggle_names = ["sleep", "eating_window", "workouts", "self_care", "target_data", "weekly_summary"]
+    toggle_names = ["sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"]
     toggles = {}
     for name in toggle_names:
         existing = existing_toggles.get(name, {})
