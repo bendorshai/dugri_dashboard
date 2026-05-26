@@ -551,7 +551,7 @@ class HealthHandlers:
         await self._recompute_eating_window(context, tid, profile)
 
         # Piggyback hooks: check if any hooks should fire after this meal
-        await self._check_piggyback_hooks(message, tid, profile)
+        await self._check_inline_hooks(message, tid, profile)
 
     # ------------------------------------------------------------------
     # Eating window auto-computation
@@ -581,12 +581,12 @@ class HealthHandlers:
     # Piggyback hooks - fire pending hooks after a meal
     # ------------------------------------------------------------------
 
-    async def _check_piggyback_hooks(self, message, tid: int, profile: UserProfile):
-        """After a meal is logged, check if any hooks should piggyback."""
+    async def _check_inline_hooks(self, message, tid: int, profile: UserProfile):
+        """After a meal is logged, check if any hooks should inline hook."""
         if not self.toggle_service:
             return
 
-        from scheduler import should_piggyback
+        from scheduler import should_fire_inline
         import messages as M
         import random
         from constants import WORKOUTS_ANCHOR_DAY, SELF_CARE_ANCHOR_DAY, WEEKLY_SUMMARY_ANCHOR_DAY
@@ -607,11 +607,10 @@ class HealthHandlers:
         # Nutrition reveal (after first meal, gate_days=0)
         if self.toggle_service.should_reveal_nutrition(profile):
             self.toggle_service.reveal_toggle(tid, "nutrition")
-            self.toggle_service.activate_toggle(tid, "nutrition")
-            if self.goal_service and self.goal_service.should_offer_goal(profile, "nutrition"):
-                text = self.goal_service.offer_goal(tid, "nutrition")
-                await message.reply_text(text)
-                self._save_bot_message(tid, text)
+            self.state_service.set_pending(tid, "awaiting_toggle_consent",
+                                           data={"toggle_name": "nutrition"})
+            await message.reply_text(M.REVEAL_NUTRITION)
+            self._save_bot_message(tid, M.REVEAL_NUTRITION)
             return
 
         # Day 16 dashboard intro
@@ -636,17 +635,17 @@ class HealthHandlers:
                 self._save_bot_message(tid, reveal_msg)
                 return
 
-        # Recurring hooks piggyback (with anchor day check for weekly hooks)
-        piggyback_hooks = [
+        # Recurring hooks inline hook (with anchor day check for weekly hooks)
+        inline_hooks = [
             ("sleep", M.HOOK_SLEEP_PROMPTS, None),
             ("workouts", M.HOOK_WORKOUTS_PROMPTS, WORKOUTS_ANCHOR_DAY),
             ("self_care", M.HOOK_SELF_CARE_PROMPTS, SELF_CARE_ANCHOR_DAY),
         ]
 
-        for toggle_name, pool, anchor_day in piggyback_hooks:
+        for toggle_name, pool, anchor_day in inline_hooks:
             if anchor_day is not None and weekday != anchor_day:
                 continue
-            if should_piggyback(profile, toggle_name, now):
+            if should_fire_inline(profile, toggle_name, now):
                 text = random.choice(pool)
                 if self.toggle_service.should_show_exit_door(profile, toggle_name):
                     habit_names = {
@@ -660,8 +659,8 @@ class HealthHandlers:
                 self._save_bot_message(tid, text)
                 return
 
-        # Weekly summary piggyback (Sunday only)
-        if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_piggyback(profile, "weekly_summary", now):
+        # Weekly summary inline hook (Sunday only)
+        if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_fire_inline(profile, "weekly_summary", now):
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
             await message.reply_text(M.WEEKLY_SUMMARY_OFFER)

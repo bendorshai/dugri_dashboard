@@ -1,7 +1,7 @@
 """
 test_hook_scheduler — TDD tests for the hook scheduling system.
 
-Tests the hook scheduling, random time generation, piggyback detection,
+Tests the hook scheduling, random time generation, inline hook detection,
 and hook callback behavior.
 """
 
@@ -23,7 +23,7 @@ from constants import (
 )
 from scheduler import (
     random_time_in_window,
-    should_piggyback,
+    should_fire_inline,
     get_hooks_to_schedule,
 )
 
@@ -72,7 +72,7 @@ class TestShouldPiggyback:
         user = _make_user(toggles=Toggles(
             sleep=ToggleState(status="active", last_asked_at=None),
         ))
-        assert should_piggyback(user, "sleep", datetime(2026, 5, 22, 9, 0)) is True
+        assert should_fire_inline(user, "sleep", datetime(2026, 5, 22, 9, 0)) is True
 
     def test_false_when_hook_already_fired_today(self):
         today_morning = datetime(2026, 5, 22, 8, 30, tzinfo=timezone.utc)
@@ -80,7 +80,7 @@ class TestShouldPiggyback:
             sleep=ToggleState(status="active", last_asked_at=today_morning),
         ))
         now = datetime(2026, 5, 22, 12, 0, tzinfo=timezone.utc)
-        assert should_piggyback(user, "sleep", now) is False
+        assert should_fire_inline(user, "sleep", now) is False
 
     def test_true_when_last_asked_was_yesterday(self):
         yesterday = datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)
@@ -88,17 +88,17 @@ class TestShouldPiggyback:
             sleep=ToggleState(status="active", last_asked_at=yesterday),
         ))
         now = datetime(2026, 5, 22, 12, 0, tzinfo=timezone.utc)
-        assert should_piggyback(user, "sleep", now) is True
+        assert should_fire_inline(user, "sleep", now) is True
 
     def test_false_when_toggle_dormant(self):
         user = _make_user()
-        assert should_piggyback(user, "sleep", datetime(2026, 5, 22, 9, 0)) is False
+        assert should_fire_inline(user, "sleep", datetime(2026, 5, 22, 9, 0)) is False
 
     def test_false_when_toggle_cancelled(self):
         user = _make_user(toggles=Toggles(
             sleep=ToggleState(status="cancelled"),
         ))
-        assert should_piggyback(user, "sleep", datetime(2026, 5, 22, 9, 0)) is False
+        assert should_fire_inline(user, "sleep", datetime(2026, 5, 22, 9, 0)) is False
 
 
 class TestGetHooksToSchedule:

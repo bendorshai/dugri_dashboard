@@ -7,7 +7,7 @@ changes (resets, toggle cancellations) take effect immediately - no stale
 in-memory jobs.
 
 Depends on: repositories, services, constants, messages, parsing.
-Used by: bot.py, handlers/base.py (should_piggyback only).
+Used by: bot.py, handlers/base.py (should_fire_inline only).
 """
 
 from __future__ import annotations
@@ -37,10 +37,10 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Helpers (used by both poller and piggyback hooks in handlers)
+# Helpers (used by both poller and inline hook hooks in handlers)
 # ---------------------------------------------------------------------------
 
-def should_piggyback(profile: User, toggle_name: str, now: datetime) -> bool:
+def should_fire_inline(profile: User, toggle_name: str, now: datetime) -> bool:
     """Should this hook fire now? True if active and hasn't fired today."""
     toggle: ToggleState = getattr(profile.toggles, toggle_name)
     if toggle.status != "active":
@@ -186,7 +186,7 @@ async def _check_user_hooks(
         if schedule_type == "weekly" and today_weekday != hook["anchor_day"]:
             continue
 
-        if not should_piggyback(profile, toggle_name, now):
+        if not should_fire_inline(profile, toggle_name, now):
             continue
 
         prompt_pools = {
