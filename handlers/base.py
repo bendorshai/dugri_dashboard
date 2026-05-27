@@ -252,17 +252,17 @@ class HealthHandlers:
             self._save_bot_message(tid, response)
             return
 
-        # -- Nutrition: method choice --
-        if kind == "awaiting_nutrition_method" and self.goal_service:
+        # -- Nutrition: weight goal (lose/keep/gain) --
+        if kind == "awaiting_weight_goal" and self.goal_service:
             profile_fresh = self._get_profile(tid)
-            response = self.goal_service.handle_nutrition_method(tid, text, profile_fresh)
+            response = self.goal_service.handle_weight_goal(tid, text, profile_fresh)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
             return
 
-        # -- Nutrition: manual targets --
-        if kind == "awaiting_manual_targets" and self.goal_service:
-            response = self.goal_service.handle_manual_targets(tid, text)
+        # -- Nutrition: confirm/correct suggestion --
+        if kind == "awaiting_nutrition_confirm" and self.goal_service:
+            response = self.goal_service.handle_nutrition_confirm(tid, text, classification)
             await message.reply_text(response)
             self._save_bot_message(tid, response)
             return

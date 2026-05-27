@@ -368,8 +368,10 @@ class FoodAnalyzer:
             logger.exception("GPT Q&A failed for: %s", question)
             return ""
 
-    def suggest_targets(self, height_cm: int, weight_kg: int, age: int) -> dict | None:
+    def suggest_targets(self, height_cm: int, weight_kg: int, age: int, weight_goal: str = "") -> dict | None:
         user_msg = f"גובה: {height_cm} ס\"מ\nמשקל: {weight_kg} ק\"ג\nגיל: {age}"
+        if weight_goal:
+            user_msg += f"\nמטרת המשתמש: {weight_goal}"
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",

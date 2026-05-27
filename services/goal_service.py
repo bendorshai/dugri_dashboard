@@ -31,8 +31,8 @@ GOAL_PENDING_KINDS = frozenset({
     "awaiting_goal_value",
     "awaiting_goal_remind",
     "awaiting_body_stats",
-    "awaiting_nutrition_method",
-    "awaiting_manual_targets",
+    "awaiting_weight_goal",
+    "awaiting_nutrition_confirm",
 })
 
 
@@ -240,6 +240,8 @@ class GoalService:
 
     # ------------------------------------------------------------------
     # Nutrition special flow
+    #
+    # body stats → weight goal (lose/keep/gain) → GPT suggests → user confirms/corrects
     # ------------------------------------------------------------------
 
     def start_nutrition_onboarding(self, tid: int) -> str:
@@ -251,8 +253,8 @@ class GoalService:
         self._toggle_service.set_goal_offered(tid, "nutrition")
         return text
 
-    def handle_body_stats(self, tid: int, text: str) -> str | None:
-        """Parse height, weight, age from user text. Store on user profile."""
+    def handle_body_stats(self, tid: int, text: str) -> str:
+        """Parse height, weight, age from user text. Store, then ask weight goal."""
         import messages as M
 
         parts = [p.strip() for p in text.replace("/", ",").replace(" ", ",").split(",") if p.strip()]
@@ -275,64 +277,73 @@ class GoalService:
             "birth_year": birth_year,
         })
 
-        self._state_service.set_pending(tid, "awaiting_nutrition_method")
-        return random.choice(M.NUTRITION_METHOD_ASK)
+        self._state_service.set_pending(tid, "awaiting_weight_goal")
+        return random.choice(M.NUTRITION_WEIGHT_GOAL_ASK)
 
-    def handle_nutrition_method(self, tid: int, text: str, profile: User | None = None) -> str:
-        """Handle 'GPT suggest or manual?' response."""
+    def handle_weight_goal(self, tid: int, text: str, profile: User | None = None) -> str:
+        """User told us their weight goal. Calculate targets and present suggestion."""
         import messages as M
 
-        lower = text.strip().lower()
-        manual_keywords = ("בעצמי", "ידני", "manual", "לבד", "אני")
-        is_manual = any(kw in lower for kw in manual_keywords)
+        if not self._analyzer or not profile:
+            self._state_service.clear_pending(tid)
+            return self._ask_remind(tid, "nutrition")
 
-        if is_manual:
-            self._state_service.set_pending(tid, "awaiting_manual_targets")
-            return random.choice(M.NUTRITION_MANUAL_ASK)
+        height = profile.height_cm or 170
+        weight = profile.weight_kg or 70
+        age = datetime.now().year - profile.birth_year if profile.birth_year else 30
 
-        # GPT suggest path
-        if self._analyzer and profile:
-            height = profile.height_cm or 170
-            weight = profile.weight_kg or 70
-            age = datetime.now().year - profile.birth_year if profile.birth_year else 30
-            suggestion = self._analyzer.suggest_targets(height, weight, age)
-            if suggestion:
-                cal = suggestion.get("target_calories", 2000)
-                prot = suggestion.get("target_protein", 150)
-                self._toggle_service.set_goal_value(
-                    tid, "nutrition", {"calories": cal, "protein": prot},
-                )
+        suggestion = self._analyzer.suggest_targets(height, weight, age, text)
+
+        if not suggestion:
+            self._state_service.clear_pending(tid)
+            return self._ask_remind(tid, "nutrition")
+
+        cal = suggestion.get("target_calories", 2000)
+        prot = suggestion.get("target_protein", 150)
+
+        # Store suggestion temporarily so confirm handler can access it
+        self._user_repo.update_fields(tid, {
+            "toggles.nutrition.goal_value": {"calories": cal, "protein": prot},
+        })
+
+        self._state_service.set_pending(tid, "awaiting_nutrition_confirm",
+                                        data={"calories": cal, "protein": prot})
+        return random.choice(M.NUTRITION_SUGGESTION).format(calories=cal, protein=prot)
+
+    def handle_nutrition_confirm(self, tid: int, text: str, classification=None) -> str:
+        """User confirms or corrects the nutrition suggestion."""
+        import messages as M
+
+        intent = classification.reply_intent if classification else "accept"
+
+        if intent == "accept":
+            # Already stored in handle_weight_goal, just set status
+            self._toggle_service.set_goal_status(tid, "nutrition", "set")
+            self._state_service.clear_pending(tid)
+            return random.choice(self._get_goal_set_pool("nutrition"))
+
+        if intent == "value":
+            # User sent corrected numbers - parse them
+            nums = []
+            for p in text.replace("/", ",").split(","):
+                p = p.strip()
+                try:
+                    nums.append(int(float(p)))
+                except ValueError:
+                    continue
+            if len(nums) >= 2:
+                self._toggle_service.set_goal_value(tid, "nutrition",
+                                                    {"calories": nums[0], "protein": nums[1]})
                 self._state_service.clear_pending(tid)
-                pool = self._get_goal_set_pool("nutrition")
-                return random.choice(pool)
+                return random.choice(self._get_goal_set_pool("nutrition"))
+            # Couldn't parse - treat as accept of original suggestion
+            self._toggle_service.set_goal_status(tid, "nutrition", "set")
+            self._state_service.clear_pending(tid)
+            return random.choice(self._get_goal_set_pool("nutrition"))
 
-        # Fallback if GPT fails
-        self._state_service.set_pending(tid, "awaiting_manual_targets")
-        return random.choice(M.NUTRITION_MANUAL_ASK)
-
-    def handle_manual_targets(self, tid: int, text: str) -> str:
-        """Parse manual calorie/protein entry."""
-        import messages as M
-
-        parts = [p.strip() for p in text.replace("/", ",").split(",") if p.strip()]
-        nums = []
-        for p in parts:
-            try:
-                nums.append(int(float(p)))
-            except ValueError:
-                continue
-
-        if len(nums) < 2:
-            return random.choice(M.NUTRITION_MANUAL_ASK)
-
-        cal, prot = nums[0], nums[1]
-        self._toggle_service.set_goal_value(
-            tid, "nutrition", {"calories": cal, "protein": prot},
-        )
-        self._state_service.clear_pending(tid)
-
-        pool = self._get_goal_set_pool("nutrition")
-        return random.choice(pool)
+        # decline or defer
+        self._user_repo.update_fields(tid, {"toggles.nutrition.goal_value": None})
+        return self._ask_remind(tid, "nutrition")
 
     # ------------------------------------------------------------------
     # Ghosting handler
@@ -350,7 +361,7 @@ class GoalService:
         toggle_name = data.get("toggle_name")
         if not toggle_name:
             # For nutrition-specific kinds without toggle_name in data
-            if kind in ("awaiting_body_stats", "awaiting_nutrition_method", "awaiting_manual_targets"):
+            if kind in ("awaiting_body_stats", "awaiting_weight_goal", "awaiting_nutrition_confirm"):
                 toggle_name = "nutrition"
             else:
                 return
