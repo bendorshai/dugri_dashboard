@@ -484,10 +484,10 @@ class HealthHandlers:
                 await message.reply_text(result.response_text, reply_markup=make_main_menu_keyboard())
             return
 
-        if classification.type == "none" and self.message_router:
-            result = self.message_router.route_none()
-            await message.reply_text(result.response_text)
-            self._save_bot_message(tid, result.response_text)
+        if classification.type == "none":
+            response = classification.freeform_response or "מה נשמע?"
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
             return
 
         # Default: treat as food (meal type or fallback)

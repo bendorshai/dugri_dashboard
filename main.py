@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "3.2.1"
-VERSION_NOTES = "תזונה מקבלת הקדמה כמו כולם, ו-piggyback הפך ל-inline hook כי אנחנו מתורבתים"
+VERSION = "3.3.0"
+VERSION_NOTES = "המסווג עכשיו קולט רמזים, אוקיי זה כן, ואם מפטפטים איתו הוא פשוט מדבר כמו בן אדם"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
