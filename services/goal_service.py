@@ -100,14 +100,9 @@ class GoalService:
     # Goal consent (yes/no to "want to set a goal?")
     # ------------------------------------------------------------------
 
-    def handle_goal_consent(self, tid: int, toggle_name: str, accepted: bool) -> str:
-        """Handle user's response to goal offer."""
-        import messages as M
-
-        if accepted:
-            return self._ask_for_goal_value(tid, toggle_name)
-        else:
-            return self._ask_remind(tid, toggle_name)
+    def handle_goal_consent(self, tid: int, toggle_name: str) -> str:
+        """User cooperated with goal offer - proceed to value collection."""
+        return self._ask_for_goal_value(tid, toggle_name)
 
     def _ask_for_goal_value(self, tid: int, toggle_name: str) -> str:
         """Transition to collecting the goal value."""
@@ -190,22 +185,17 @@ class GoalService:
     # Goal remind (yes/no to "want me to remind you?")
     # ------------------------------------------------------------------
 
-    def handle_goal_remind(self, tid: int, toggle_name: str, accepted: bool) -> str:
-        """Handle user's response to reminder question."""
+    def handle_remind_accept(self, tid: int, toggle_name: str) -> str:
+        """User agreed to be reminded later. Set reminder."""
         import messages as M
 
         self._state_service.clear_pending(tid)
-
-        if accepted:
-            days = HOOK_CONFIG.get(toggle_name, {}).get(
-                "goal_reminder_days", DEFAULT_GOAL_REMINDER_DAYS,
-            )
-            remind_at = datetime.now(timezone.utc) + timedelta(days=days)
-            self._toggle_service.set_goal_status(tid, toggle_name, "remind", remind_at)
-            return random.choice(M.GOAL_REMIND_SCHEDULED)
-        else:
-            self._toggle_service.set_goal_status(tid, toggle_name, "declined")
-            return random.choice(M.GOAL_DECLINED_FOREVER)
+        days = HOOK_CONFIG.get(toggle_name, {}).get(
+            "goal_reminder_days", DEFAULT_GOAL_REMINDER_DAYS,
+        )
+        remind_at = datetime.now(timezone.utc) + timedelta(days=days)
+        self._toggle_service.set_goal_status(tid, toggle_name, "remind", remind_at)
+        return random.choice(M.GOAL_REMIND_SCHEDULED)
 
     # ------------------------------------------------------------------
     # Goal reminders (check + fire)
@@ -310,40 +300,27 @@ class GoalService:
                                         data={"calories": cal, "protein": prot})
         return random.choice(M.NUTRITION_SUGGESTION).format(calories=cal, protein=prot)
 
-    def handle_nutrition_confirm(self, tid: int, text: str, classification=None) -> str:
-        """User confirms or corrects the nutrition suggestion."""
+    def handle_nutrition_confirm(self, tid: int, text: str) -> str:
+        """User responded to nutrition suggestion. conversation_reply = cooperation.
+
+        Try to parse numbers (correction). If no numbers found, accept the
+        original suggestion. Refusals are caught by toggle_cancel in the handler.
+        """
         import messages as M
 
-        intent = classification.reply_intent if classification else "accept"
-
-        if intent == "accept":
-            # Already stored in handle_weight_goal, just set status
-            self._toggle_service.set_goal_status(tid, "nutrition", "set")
+        # Try to extract corrected numbers from the text
+        import re
+        nums = [int(float(n)) for n in re.findall(r'\d+', text) if 50 < float(n) < 10000]
+        if len(nums) >= 2:
+            self._toggle_service.set_goal_value(tid, "nutrition",
+                                                {"calories": nums[0], "protein": nums[1]})
             self._state_service.clear_pending(tid)
             return random.choice(self._get_goal_set_pool("nutrition"))
 
-        if intent == "value":
-            # User sent corrected numbers - parse them
-            nums = []
-            for p in text.replace("/", ",").split(","):
-                p = p.strip()
-                try:
-                    nums.append(int(float(p)))
-                except ValueError:
-                    continue
-            if len(nums) >= 2:
-                self._toggle_service.set_goal_value(tid, "nutrition",
-                                                    {"calories": nums[0], "protein": nums[1]})
-                self._state_service.clear_pending(tid)
-                return random.choice(self._get_goal_set_pool("nutrition"))
-            # Couldn't parse - treat as accept of original suggestion
-            self._toggle_service.set_goal_status(tid, "nutrition", "set")
-            self._state_service.clear_pending(tid)
-            return random.choice(self._get_goal_set_pool("nutrition"))
-
-        # decline or defer
-        self._user_repo.update_fields(tid, {"toggles.nutrition.goal_value": None})
-        return self._ask_remind(tid, "nutrition")
+        # No numbers - accept the original suggestion
+        self._toggle_service.set_goal_status(tid, "nutrition", "set")
+        self._state_service.clear_pending(tid)
+        return random.choice(self._get_goal_set_pool("nutrition"))
 
     # ------------------------------------------------------------------
     # Ghosting handler

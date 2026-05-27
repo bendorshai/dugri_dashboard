@@ -187,97 +187,56 @@ class HealthHandlers:
     ):
         """Handle a message classified as conversation_reply by GPT.
 
-        The classifier determined the user is responding to something
-        the bot asked. The pending_state tells us what was asked.
+        conversation_reply = cooperation. The user is responding positively
+        to whatever the bot asked. No intent parsing - just forward progress.
+        Refusals are classified as toggle_cancel by the classifier.
         """
-        import messages as M
-
         kind = pending.kind
-        intent = classification.reply_intent or "accept"
         text = message.text.strip()
-        accepted = intent in ("accept", "value")
+        response = None
 
-        # -- Onboarding: name collection --
         if kind == "awaiting_name" and self.onboarding_service:
             response = self.onboarding_service.handle_name_response(tid, text)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
 
-        # -- Habit tracking consent --
-        if kind == "awaiting_toggle_consent" and self.toggle_service:
+        elif kind == "awaiting_toggle_consent" and self.toggle_service:
             toggle_name = pending.data.get("toggle_name", "")
-            if accepted:
-                self.toggle_service.activate_toggle(tid, toggle_name)
-                self.state_service.clear_pending(tid)
-                if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
-                    response = self.goal_service.offer_goal(tid, toggle_name)
-                else:
-                    response = "יפה, נרשמתי."
+            self.toggle_service.activate_toggle(tid, toggle_name)
+            self.state_service.clear_pending(tid)
+            if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
+                response = self.goal_service.offer_goal(tid, toggle_name)
             else:
-                self.state_service.clear_pending(tid)
-                response = M.TOGGLE_DECLINED
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
+                response = "יפה, נרשמתי."
 
-        # -- Goal consent --
-        if kind == "awaiting_goal_consent" and self.goal_service:
-            toggle_name = pending.data.get("toggle_name", "")
-            response = self.goal_service.handle_goal_consent(tid, toggle_name, accepted)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
+        elif kind == "awaiting_goal_consent" and self.goal_service:
+            response = self.goal_service.handle_goal_consent(tid, pending.data.get("toggle_name", ""))
 
-        # -- Goal value --
-        if kind == "awaiting_goal_value" and self.goal_service:
-            toggle_name = pending.data.get("toggle_name", "")
-            response = self.goal_service.handle_goal_value(tid, toggle_name, text)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
+        elif kind == "awaiting_goal_value" and self.goal_service:
+            response = self.goal_service.handle_goal_value(tid, pending.data.get("toggle_name", ""), text)
 
-        # -- Goal remind --
-        if kind == "awaiting_goal_remind" and self.goal_service:
-            toggle_name = pending.data.get("toggle_name", "")
-            response = self.goal_service.handle_goal_remind(tid, toggle_name, accepted)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
+        elif kind == "awaiting_goal_remind" and self.goal_service:
+            response = self.goal_service.handle_remind_accept(tid, pending.data.get("toggle_name", ""))
 
-        # -- Nutrition: body stats --
-        if kind == "awaiting_body_stats" and self.goal_service:
+        elif kind == "awaiting_body_stats" and self.goal_service:
             response = self.goal_service.handle_body_stats(tid, text)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
 
-        # -- Nutrition: weight goal (lose/keep/gain) --
-        if kind == "awaiting_weight_goal" and self.goal_service:
-            profile_fresh = self._get_profile(tid)
-            response = self.goal_service.handle_weight_goal(tid, text, profile_fresh)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
+        elif kind == "awaiting_weight_goal" and self.goal_service:
+            response = self.goal_service.handle_weight_goal(tid, text, self._get_profile(tid))
 
-        # -- Nutrition: confirm/correct suggestion --
-        if kind == "awaiting_nutrition_confirm" and self.goal_service:
-            response = self.goal_service.handle_nutrition_confirm(tid, text, classification)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
-            return
+        elif kind == "awaiting_nutrition_confirm" and self.goal_service:
+            response = self.goal_service.handle_nutrition_confirm(tid, text)
 
-        # -- Feedback reaction --
-        if kind == "awaiting_feedback_reaction" and self.feedback_service:
+        elif kind == "awaiting_feedback_reaction" and self.feedback_service:
             profile_fresh = self._get_profile(tid)
             steering = profile_fresh.feedback_steering_prompt if profile_fresh else None
             response = self.feedback_service.process_reaction(tid, text, steering)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
+
+        else:
+            self.state_service.clear_pending(tid)
             return
 
-        # Unknown pending kind - clear and let classifier handle next message
-        self.state_service.clear_pending(tid)
+        if response:
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
 
     # ------------------------------------------------------------------
     # Command handlers
@@ -441,15 +400,24 @@ class HealthHandlers:
             await send_long_text(message, result.response_text, reply_markup=make_daily_summary_keyboard())
             return
 
-        if classification.type == "toggle_cancel" and self.toggle_service:
+        if classification.type == "toggle_cancel":
             import messages as M
-            toggle_name = classification.toggle_name
-            if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "weekly_summary"}:
-                self.toggle_service.cancel_toggle(tid, toggle_name)
-                await message.reply_text(M.EXIT_DOOR_CANCELLED)
-            else:
-                await message.reply_text("לא הבנתי איזה מעקב לכבות. נסה שוב?")
-            return
+            # Refusal during an active opt-in conversation
+            if pending:
+                toggle_name = pending.data.get("toggle_name", "") or classification.toggle_name
+                self.state_service.clear_pending(tid)
+                response = M.TOGGLE_DECLINED
+                await message.reply_text(response)
+                self._save_bot_message(tid, response)
+                return
+            # Standalone cancel (no pending)
+            if self.toggle_service:
+                toggle_name = classification.toggle_name
+                if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"}:
+                    self.toggle_service.cancel_toggle(tid, toggle_name)
+                    await message.reply_text(M.EXIT_DOOR_CANCELLED)
+                    self._save_bot_message(tid, M.EXIT_DOOR_CANCELLED)
+                return
 
         if classification.type == "toggle_activate" and self.toggle_service:
             toggle_name = classification.toggle_name

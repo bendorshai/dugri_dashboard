@@ -170,13 +170,9 @@ CLASSIFIER_SYSTEM_PROMPT = (
 
     "סווג את ההודעה לאחד מהסוגים הבאים:\n\n"
 
-    '1. "conversation_reply" - תשובה למשהו שהבוט שאל.\n'
-    "   השתמש בהיסטוריית השיחה ובמצב ההמתנה כדי לזהות.\n"
-    '   reply_intent: "accept" (הסכמה - כן, אוקיי, בטח, יאללה, בוא),\n'
-    '                 "decline" (סירוב - לא, לא עכשיו, לא מעוניין),\n'
-    '                 "value" (ערך - מספר, שעה, נתונים כמו 175,80,30 או 23:00),\n'
-    '                 "defer" (דחייה - אולי, אחר כך, לא בטוח).\n'
-    "   אם הבוט שאל שאלה וההודעה היא תגובה אליה - זה conversation_reply.\n\n"
+    '1. "conversation_reply" - תשובה למשהו שהבוט שאל. המשתמש משתף פעולה.\n'
+    "   השתמש בתיאור מצב ההמתנה ובהיסטוריית השיחה כדי לזהות.\n"
+    "   conversation_reply = שיתוף פעולה. אם המשתמש מסרב, סווג כ-toggle_cancel.\n\n"
 
     '2. "meal" - תיאור של אוכל שהמשתמש אכל. ברירת מחדל כשאין הקשר אחר.\n'
     '3. "correction" - תיקון לרשומה האחרונה ("ההמבורגר היה 300 גרם", "תוסיף קטשופ")\n'
@@ -234,6 +230,53 @@ DUGRI_HELP_SYSTEM_PROMPT = (
     "- אימונים: לא כדי ללחוץ — כדי לראות את הקצב האמיתי לאורך זמן.\n"
     "- משהו לעצמי: הדבר היחיד פה בלי מספרים, כי לא הכל נמדד.\n"
 )
+
+# ---------------------------------------------------------------------------
+# Pending state descriptions for classifier context
+#
+# Injected into the classifier prompt when a pending state exists.
+# Tells GPT what the bot asked, what habit it's about, and what kind
+# of response to expect. Uses {toggle_name} placeholder from pending data.
+# ---------------------------------------------------------------------------
+
+PENDING_DESCRIPTIONS = {
+    "awaiting_toggle_consent": (
+        "הבוט הציע למשתמש להתחיל מעקב אחרי הרגל: {toggle_name}. "
+        "כל תגובה שמביעה הסכמה, סקרנות, או נכונות = conversation_reply. "
+        "סירוב מפורש = toggle_cancel."
+    ),
+    "awaiting_goal_consent": (
+        "הבוט שאל אם המשתמש רוצה לקבוע יעד ל-{toggle_name}. "
+        "הסכמה או נכונות = conversation_reply. סירוב = toggle_cancel."
+    ),
+    "awaiting_goal_value": (
+        "הבוט מבקש מהמשתמש ערך ליעד של {toggle_name}. "
+        "sleep: שעה (למשל 23:00). workouts: מספר בשבוע. eating_window: טווח שעות. "
+        "כל תשובה שמכילה את הערך = conversation_reply."
+    ),
+    "awaiting_goal_remind": (
+        "המשתמש סירב ליעד, הבוט שאל אם להזכיר בעתיד. "
+        "הסכמה = conversation_reply. סירוב = toggle_cancel."
+    ),
+    "awaiting_body_stats": (
+        "הבוט ביקש גובה, משקל וגיל לחישוב יעד תזונתי. "
+        "כל תשובה שמכילה מספרים = conversation_reply."
+    ),
+    "awaiting_weight_goal": (
+        "הבוט שאל מה מטרת המשקל: ירידה, שמירה, או עלייה. "
+        "כל תשובה שמתארת מטרה, כיוון, או משקל יעד = conversation_reply."
+    ),
+    "awaiting_nutrition_confirm": (
+        "הבוט הציע יעד קלוריות וחלבון מחושב. "
+        "הסכמה = conversation_reply. מספרים מתוקנים = conversation_reply. סירוב = toggle_cancel."
+    ),
+    "awaiting_name": (
+        "הבוט שאל מה שם המשתמש. כל שם = conversation_reply."
+    ),
+    "awaiting_feedback_reaction": (
+        "הבוט שאל מה המשתמש חושב על הפידבק השבועי. כל תגובה = conversation_reply."
+    ),
+}
 
 # ---------------------------------------------------------------------------
 # Feedback steering prompt (Phase 4)

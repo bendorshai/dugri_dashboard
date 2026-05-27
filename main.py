@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "3.4.0"
-VERSION_NOTES = "תזונה: לרדת, לשמור או לעלות? דוגרי מחשב ומציע, בלי לשאול שאלות מיותרות"
+VERSION = "3.5.0"
+VERSION_NOTES = "אפס לוגיקה נוקשה. conversation_reply = שיתוף פעולה. סירוב = toggle_cancel. נקודה."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

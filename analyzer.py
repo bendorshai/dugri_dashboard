@@ -74,7 +74,6 @@ class MessageClassification(BaseModel):
     self_care_description: str | None = None
     question_text: str | None = None
     toggle_name: str | None = None
-    reply_intent: Literal["accept", "decline", "value", "defer"] | None = None
     freeform_response: str | None = None
 
 
@@ -158,21 +157,23 @@ class FoodAnalyzer:
     ) -> MessageClassification:
         """Classify a message using GPT. This is the ONLY entry point for all user messages."""
         # Build system prompt: pending state FIRST (highest priority context)
+        from prompts import PENDING_DESCRIPTIONS
         system = ""
 
         if pending_state:
             kind = pending_state.get("kind", "")
             data = pending_state.get("data", {})
-            system += (
-                "חשוב - הבוט מחכה לתשובה מהמשתמש.\n"
-                f"סוג ההמתנה: {kind}\n"
-            )
-            if data:
-                system += f"הקשר: {data}\n"
-            system += (
-                "ברירת מחדל כשהבוט מחכה: conversation_reply.\n"
-                "סווג כ-meal רק אם ההודעה היא בבירור תיאור של אוכל.\n\n"
-            )
+            desc = PENDING_DESCRIPTIONS.get(kind, "")
+            if desc:
+                try:
+                    desc = desc.format(**{k: v for k, v in data.items() if isinstance(v, str)})
+                except (KeyError, IndexError):
+                    pass
+            if desc:
+                system += f"חשוב - {desc}\n"
+            else:
+                system += f"חשוב - הבוט מחכה לתשובה. סוג: {kind}\n"
+            system += "סווג כ-meal רק אם ההודעה היא בבירור תיאור של אוכל.\n\n"
 
         system += CLASSIFIER_SYSTEM_PROMPT
         system += f"\nהתאריך של היום: {today_str}\n"
