@@ -582,14 +582,22 @@ class HealthHandlers:
     # ------------------------------------------------------------------
 
     async def _check_inline_hooks(self, message, tid: int, profile: UserProfile):
-        """After a meal is logged, check if any hooks should inline hook."""
+        """After a meal is logged, check if any hooks should inline hook.
+
+        Waits INLINE_HOOK_DELAY_SECONDS before sending, so the bot feels
+        like it's pausing before bringing up a new topic.
+        """
         if not self.toggle_service:
             return
 
+        import asyncio
         from scheduler import should_fire_inline
         import messages as M
         import random
-        from constants import WORKOUTS_ANCHOR_DAY, SELF_CARE_ANCHOR_DAY, WEEKLY_SUMMARY_ANCHOR_DAY
+        from constants import (
+            WORKOUTS_ANCHOR_DAY, SELF_CARE_ANCHOR_DAY, WEEKLY_SUMMARY_ANCHOR_DAY,
+            INLINE_HOOK_DELAY_SECONDS,
+        )
 
         now = get_user_now(profile.timezone)
         day_number = self.toggle_service.get_day_number(profile)
@@ -599,6 +607,7 @@ class HealthHandlers:
         if self.goal_service:
             due = self.goal_service.check_goal_reminders(profile)
             if due:
+                await asyncio.sleep(INLINE_HOOK_DELAY_SECONDS)
                 text = self.goal_service.fire_goal_reminder(tid, due[0])
                 await message.reply_text(text)
                 self._save_bot_message(tid, text)
@@ -609,6 +618,7 @@ class HealthHandlers:
             self.toggle_service.reveal_toggle(tid, "nutrition")
             self.state_service.set_pending(tid, "awaiting_toggle_consent",
                                            data={"toggle_name": "nutrition"})
+            await asyncio.sleep(INLINE_HOOK_DELAY_SECONDS)
             await message.reply_text(M.REVEAL_NUTRITION)
             self._save_bot_message(tid, M.REVEAL_NUTRITION)
             return
@@ -631,6 +641,7 @@ class HealthHandlers:
                 self.toggle_service.reveal_toggle(tid, toggle_name)
                 self.state_service.set_pending(tid, "awaiting_toggle_consent",
                                                data={"toggle_name": toggle_name})
+                await asyncio.sleep(INLINE_HOOK_DELAY_SECONDS)
                 await message.reply_text(reveal_msg)
                 self._save_bot_message(tid, reveal_msg)
                 return
@@ -655,6 +666,7 @@ class HealthHandlers:
                     text += "\n\n" + M.EXIT_DOOR.format(habit=habit_names.get(toggle_name, ""))
                 self.toggle_service.record_asked(tid, toggle_name)
                 self.toggle_service.increment_unanswered(tid, profile, toggle_name)
+                await asyncio.sleep(INLINE_HOOK_DELAY_SECONDS)
                 await message.reply_text(text)
                 self._save_bot_message(tid, text)
                 return
@@ -663,6 +675,7 @@ class HealthHandlers:
         if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_fire_inline(profile, "weekly_summary", now):
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
+            await asyncio.sleep(INLINE_HOOK_DELAY_SECONDS)
             await message.reply_text(M.WEEKLY_SUMMARY_OFFER)
             self._save_bot_message(tid, M.WEEKLY_SUMMARY_OFFER)
 

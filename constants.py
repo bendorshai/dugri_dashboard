@@ -113,3 +113,7 @@ ROTATING_PROMPT_COUNT = 5
 
 MAX_RECENT_MESSAGES = 12
 """Maximum recent messages stored per user for classifier context."""
+
+INLINE_HOOK_DELAY_SECONDS = 5
+"""Seconds to wait before sending an inline hook after a meal response.
+Makes the bot feel less robotic - like it's thinking before bringing up a new topic."""
