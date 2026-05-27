@@ -186,7 +186,12 @@ class FoodAnalyzer:
                 system += f"חשוב - {desc}\n"
             else:
                 system += f"חשוב - הבוט מחכה לתשובה. סוג: {kind}\n"
-            system += "סווג כ-meal רק אם ההודעה היא בבירור תיאור של אוכל.\n\n"
+            system += (
+                "סווג כ-meal רק אם ההודעה היא בבירור תיאור של אוכל.\n"
+                "כשיש מצב המתנה, none כמעט בלתי אפשרי. "
+                "הודעות קצרות כמו 'יאללה', 'סבבה', 'כן', 'אוקיי', 'בוא' "
+                "הן תמיד conversation_reply או toggle_cancel - לעולם לא none.\n\n"
+            )
 
         system += CLASSIFIER_SYSTEM_PROMPT
         system += f"\nהתאריך של היום: {today_str}\n"
