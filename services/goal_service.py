@@ -253,8 +253,8 @@ class GoalService:
         import messages as M
 
         if not self._analyzer or not profile:
-            self._state_service.clear_pending(tid)
-            return self._ask_remind(tid, "nutrition")
+            logger.error("FATAL ERROR CONVERSATION BREAKER: no analyzer or profile for nutrition calc, tid=%d", tid)
+            return "משהו השתבש אצלי. ננסה שוב בהודעה הבאה."
 
         height = profile.height_cm or 170
         weight = profile.weight_kg or 70
@@ -263,8 +263,12 @@ class GoalService:
         suggestion = self._analyzer.suggest_targets(height, weight, age, text)
 
         if not suggestion:
-            self._state_service.clear_pending(tid)
-            return self._ask_remind(tid, "nutrition")
+            # Keep pending at awaiting_weight_goal so next message retries
+            # Store the weight goal text so we don't lose it
+            self._state_service.set_pending(
+                tid, "awaiting_weight_goal", data={"weight_goal_text": text},
+            )
+            return "לא הצלחתי לחשב עכשיו. ננסה שוב בהודעה הבאה."
 
         cal = suggestion.get("target_calories", 2000)
         prot = suggestion.get("target_protein", 150)

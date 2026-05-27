@@ -388,24 +388,35 @@ class FoodAnalyzer:
             return ""
 
     def suggest_targets(self, height_cm: int, weight_kg: int, age: int, weight_goal: str = "") -> dict | None:
+        """Calculate nutrition targets using GPT. Retries 3 times on failure."""
+        import time as _time
+
         user_msg = f"גובה: {height_cm} ס\"מ\nמשקל: {weight_kg} ק\"ג\nגיל: {age}"
         if weight_goal:
             user_msg += f"\nמטרת המשתמש: {weight_goal}"
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": TARGET_SUGGESTION_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_msg},
-                ],
-                temperature=0,
-                max_tokens=200,
-            )
-            content = response.choices[0].message.content.strip()
-            return json.loads(content)
-        except Exception:
-            logger.exception("GPT target suggestion failed")
-            return None
+
+        for attempt in range(3):
+            try:
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": TARGET_SUGGESTION_SYSTEM_PROMPT},
+                        {"role": "user", "content": user_msg},
+                    ],
+                    temperature=0,
+                    max_tokens=200,
+                )
+                content = response.choices[0].message.content.strip()
+                if content.startswith("```"):
+                    content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                return json.loads(content)
+            except Exception:
+                logger.warning("suggest_targets attempt %d/3 failed", attempt + 1)
+                if attempt < 2:
+                    _time.sleep(attempt + 1)
+
+        logger.error("FATAL ERROR CONVERSATION BREAKER: suggest_targets failed after 3 attempts")
+        return None
 
     def extract_goal_value(self, text: str, goal_type: str) -> dict | None:
         """Extract structured goal data from natural Hebrew text using GPT.

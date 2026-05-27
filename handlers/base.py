@@ -220,7 +220,10 @@ class HealthHandlers:
             response = self.goal_service.handle_body_stats(tid, text)
 
         elif kind == "awaiting_weight_goal" and self.goal_service:
-            response = self.goal_service.handle_weight_goal(tid, text, self._get_profile(tid))
+            # Use stored weight goal text from a previous failed attempt if available
+            stored_goal = pending.data.get("weight_goal_text", "")
+            goal_text = stored_goal or text
+            response = self.goal_service.handle_weight_goal(tid, goal_text, self._get_profile(tid))
 
         elif kind == "awaiting_nutrition_confirm" and self.goal_service:
             response = self.goal_service.handle_nutrition_confirm(tid, text)

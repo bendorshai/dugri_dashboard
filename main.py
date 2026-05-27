@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "3.7.0"
-VERSION_NOTES = "דוגרי עכשיו מבין ישראלית: יאללה = כן, סבבה = כן, עושים = כן. none כמעט מת."
+VERSION = "3.8.0"
+VERSION_NOTES = "חישוב תזונה רציני עם 3 נסיונות, ואם נופל - אומר את האמת ומנסה שוב"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
