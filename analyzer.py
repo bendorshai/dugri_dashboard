@@ -81,6 +81,11 @@ from prompts import (
     BULK_CORRECTION_SYSTEM_PROMPT,
     CLASSIFIER_SYSTEM_PROMPT,
     CORRECTION_SYSTEM_PROMPT,
+    EXTRACT_BODY_STATS_PROMPT,
+    EXTRACT_EATING_WINDOW_PROMPT,
+    EXTRACT_NUTRITION_TARGETS_PROMPT,
+    EXTRACT_SLEEP_TIME_PROMPT,
+    EXTRACT_WORKOUT_COUNT_PROMPT,
     FOOD_PHOTO_SYSTEM_PROMPT,
     FOOD_TEXT_SYSTEM_PROMPT,
     MEAL_SUGGESTION_SYSTEM_PROMPT,
@@ -89,6 +94,14 @@ from prompts import (
     TARGET_SUGGESTION_SYSTEM_PROMPT,
     WEEKLY_FEEDBACK_SYSTEM_PROMPT,
 )
+
+_EXTRACTION_PROMPTS = {
+    "body_stats": EXTRACT_BODY_STATS_PROMPT,
+    "sleep_time": EXTRACT_SLEEP_TIME_PROMPT,
+    "workout_count": EXTRACT_WORKOUT_COUNT_PROMPT,
+    "eating_window": EXTRACT_EATING_WINDOW_PROMPT,
+    "nutrition_targets": EXTRACT_NUTRITION_TARGETS_PROMPT,
+}
 
 
 class FoodAnalyzer:
@@ -387,6 +400,37 @@ class FoodAnalyzer:
             return json.loads(content)
         except Exception:
             logger.exception("GPT target suggestion failed")
+            return None
+
+    def extract_goal_value(self, text: str, goal_type: str) -> dict | None:
+        """Extract structured goal data from natural Hebrew text using GPT.
+
+        goal_type: "body_stats", "sleep_time", "workout_count",
+                   "eating_window", "nutrition_targets"
+        Returns parsed dict or None on failure.
+        """
+        prompt = _EXTRACTION_PROMPTS.get(goal_type)
+        if not prompt:
+            logger.warning("Unknown goal_type for extraction: %s", goal_type)
+            return None
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text},
+                ],
+                temperature=0,
+                max_tokens=100,
+            )
+            content = response.choices[0].message.content.strip()
+            # Strip markdown code fences if present
+            if content.startswith("```"):
+                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            return json.loads(content)
+        except Exception:
+            logger.exception("GPT extraction failed for %s: %s", goal_type, text[:80])
             return None
 
     def analyze_bulk_correction(

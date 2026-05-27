@@ -131,10 +131,20 @@ class GoalService:
     # ------------------------------------------------------------------
 
     def handle_goal_value(self, tid: int, toggle_name: str, raw_value: str) -> str:
-        """Parse and store the goal value."""
+        """Extract and store the goal value using GPT - no format requirements."""
         import messages as M
 
-        parsed = self._parse_goal_value(toggle_name, raw_value)
+        extraction_types = {
+            "sleep": "sleep_time",
+            "workouts": "workout_count",
+            "eating_window": "eating_window",
+        }
+        goal_type = extraction_types.get(toggle_name)
+        if not goal_type or not self._analyzer:
+            pool = self._get_goal_value_ask_pool(toggle_name)
+            return random.choice(pool)
+
+        parsed = self._analyzer.extract_goal_value(raw_value, goal_type)
         if parsed is None:
             pool = self._get_goal_value_ask_pool(toggle_name)
             return random.choice(pool)
@@ -150,36 +160,6 @@ class GoalService:
 
         pool = self._get_goal_set_pool(toggle_name)
         return random.choice(pool)
-
-    def _parse_goal_value(self, toggle_name: str, raw: str) -> dict | None:
-        """Parse raw text into a goal value dict. Returns None if invalid."""
-        raw = raw.strip()
-
-        if toggle_name == "sleep":
-            import re
-            m = re.match(r"^(\d{1,2}):(\d{2})$", raw)
-            if m:
-                h, mn = int(m.group(1)), m.group(2)
-                return {"sleep_time": f"{h:02d}:{mn}"}
-            return None
-
-        if toggle_name == "workouts":
-            try:
-                n = int(raw)
-                if 1 <= n <= 14:
-                    return {"weekly_target": n}
-            except ValueError:
-                pass
-            return None
-
-        if toggle_name == "eating_window":
-            import re
-            m = re.match(r"^(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})$", raw)
-            if m:
-                return {"start": m.group(1), "end": m.group(2)}
-            return None
-
-        return None
 
     # ------------------------------------------------------------------
     # Goal remind (yes/no to "want me to remind you?")
@@ -244,21 +224,19 @@ class GoalService:
         return text
 
     def handle_body_stats(self, tid: int, text: str) -> str:
-        """Parse height, weight, age from user text. Store, then ask weight goal."""
+        """Extract height, weight, age from natural text using GPT."""
         import messages as M
 
-        parts = [p.strip() for p in text.replace("/", ",").replace(" ", ",").split(",") if p.strip()]
-        nums = []
-        for p in parts:
-            try:
-                nums.append(float(p))
-            except ValueError:
-                continue
-
-        if len(nums) < 3:
+        if not self._analyzer:
             return random.choice(M.NUTRITION_BODY_STATS_ASK)
 
-        height, weight, age = nums[0], nums[1], int(nums[2])
+        parsed = self._analyzer.extract_goal_value(text, "body_stats")
+        if not parsed or not parsed.get("height_cm") or not parsed.get("weight_kg") or not parsed.get("age"):
+            return random.choice(M.NUTRITION_BODY_STATS_ASK)
+
+        height = parsed["height_cm"]
+        weight = parsed["weight_kg"]
+        age = int(parsed["age"])
         birth_year = datetime.now().year - age
 
         self._user_repo.update_fields(tid, {
@@ -303,21 +281,21 @@ class GoalService:
     def handle_nutrition_confirm(self, tid: int, text: str) -> str:
         """User responded to nutrition suggestion. conversation_reply = cooperation.
 
-        Try to parse numbers (correction). If no numbers found, accept the
-        original suggestion. Refusals are caught by toggle_cancel in the handler.
+        Try to extract corrected numbers via GPT. If none found, accept
+        the original suggestion. Refusals are caught by toggle_cancel.
         """
         import messages as M
 
-        # Try to extract corrected numbers from the text
-        import re
-        nums = [int(float(n)) for n in re.findall(r'\d+', text) if 50 < float(n) < 10000]
-        if len(nums) >= 2:
-            self._toggle_service.set_goal_value(tid, "nutrition",
-                                                {"calories": nums[0], "protein": nums[1]})
-            self._state_service.clear_pending(tid)
-            return random.choice(self._get_goal_set_pool("nutrition"))
+        # Try to extract corrected numbers from natural text
+        if self._analyzer:
+            parsed = self._analyzer.extract_goal_value(text, "nutrition_targets")
+            if parsed and parsed.get("calories") and parsed.get("protein"):
+                self._toggle_service.set_goal_value(tid, "nutrition",
+                                                    {"calories": parsed["calories"], "protein": parsed["protein"]})
+                self._state_service.clear_pending(tid)
+                return random.choice(self._get_goal_set_pool("nutrition"))
 
-        # No numbers - accept the original suggestion
+        # No corrected numbers - accept the original suggestion
         self._toggle_service.set_goal_status(tid, "nutrition", "set")
         self._state_service.clear_pending(tid)
         return random.choice(self._get_goal_set_pool("nutrition"))

@@ -239,6 +239,41 @@ DUGRI_HELP_SYSTEM_PROMPT = (
 # of response to expect. Uses {toggle_name} placeholder from pending data.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Goal value extraction prompts (GPT extracts structured data from natural text)
+# ---------------------------------------------------------------------------
+
+EXTRACT_BODY_STATS_PROMPT = (
+    "חלץ מהטקסט גובה בס\"מ, משקל בק\"ג, וגיל. "
+    "המשתמש כותב בעברית בצורה חופשית. "
+    "החזר JSON: {\"height_cm\": number, \"weight_kg\": number, \"age\": number}. "
+    "אם חסר ערך, החזר null עבורו."
+)
+
+EXTRACT_SLEEP_TIME_PROMPT = (
+    "חלץ מהטקסט שעת שינה (מתי המשתמש רוצה ללכת לישון). "
+    "המשתמש כותב בעברית בצורה חופשית, למשל '23 בלילה', 'אחת עשרה', '11 בערב'. "
+    "החזר JSON: {\"sleep_time\": \"HH:MM\"}."
+)
+
+EXTRACT_WORKOUT_COUNT_PROMPT = (
+    "חלץ מהטקסט מספר אימונים שבועי. "
+    "המשתמש כותב בעברית, למשל '3 פעמים', 'שלוש', 'פעמיים-שלוש'. "
+    "החזר JSON: {\"weekly_target\": number}."
+)
+
+EXTRACT_EATING_WINDOW_PROMPT = (
+    "חלץ מהטקסט חלון אכילה - שעת התחלה ושעת סיום. "
+    "המשתמש כותב בעברית, למשל 'מ-8 בבוקר עד 8 בערב', '08:00-20:00', 'שמונה עד שמונה'. "
+    "החזר JSON: {\"start\": \"HH:MM\", \"end\": \"HH:MM\"}."
+)
+
+EXTRACT_NUTRITION_TARGETS_PROMPT = (
+    "חלץ מהטקסט יעד קלוריות ויעד חלבון. "
+    "המשתמש כותב בעברית, למשל '1800 קלוריות ו-160 גרם חלבון', '1800, 160'. "
+    "החזר JSON: {\"calories\": number, \"protein\": number}."
+)
+
 PENDING_DESCRIPTIONS = {
     "awaiting_toggle_consent": (
         "הבוט הציע למשתמש להתחיל מעקב אחרי הרגל: {toggle_name}. "

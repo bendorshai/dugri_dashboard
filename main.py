@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "3.5.0"
-VERSION_NOTES = "אפס לוגיקה נוקשה. conversation_reply = שיתוף פעולה. סירוב = toggle_cancel. נקודה."
+VERSION = "3.6.0"
+VERSION_NOTES = "אפס פורמטים. תכתוב איך שבא לך - GPT יבין. גובה 174 משקל 112 גיל 36? אין בעיה."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
