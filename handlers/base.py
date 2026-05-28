@@ -328,11 +328,20 @@ class HealthHandlers:
         # Save user message and fetch conversation history
         from constants import MAX_RECENT_MESSAGES
         from datetime import timezone as tz
+
+        # Capture Telegram reply-to-message context (user swiped left on a message)
+        reply_context = None
+        if message.reply_to_message and message.reply_to_message.text:
+            reply_context = message.reply_to_message.text[:300]
+
+        # Save user message (including reply context if present)
         user_msg = {
             "role": "user",
             "text": message.text[:500],
             "timestamp": datetime.now(tz.utc).isoformat(),
         }
+        if reply_context:
+            user_msg["replying_to"] = reply_context
         self.user_repo.push_messages(tid, [user_msg], MAX_RECENT_MESSAGES)
         recent_messages = self.user_repo.get_recent_messages(tid, MAX_RECENT_MESSAGES)
 
@@ -344,12 +353,34 @@ class HealthHandlers:
             if pending:
                 pending_dict = pending.model_dump(mode="json")
 
+        # Build toggle state summary (always present - gives classifier the full picture)
+        toggle_labels = {
+            "nutrition": "תזונה", "sleep": "שינה", "eating_window": "חלון אכילה",
+            "workouts": "אימונים", "self_care": "משהו לעצמי", "weekly_summary": "סיכום שבועי",
+        }
+        toggle_lines = []
+        for name, label in toggle_labels.items():
+            toggle = getattr(profile.toggles, name, None)
+            if not toggle:
+                continue
+            if toggle.status == "active":
+                goal = f", יעד: {toggle.goal_value}" if toggle.goal_value else ", בלי יעד"
+                toggle_lines.append(f"- {label}: פעיל{goal}")
+            elif toggle.revealed_at and toggle.status == "dormant":
+                toggle_lines.append(f"- {label}: הוצע אבל לא הופעל")
+            elif toggle.status == "dormant":
+                toggle_lines.append(f"- {label}: לא הוצע עדיין")
+            elif toggle.status == "cancelled":
+                toggle_lines.append(f"- {label}: בוטל")
+        toggle_state = "\n".join(toggle_lines) if toggle_lines else None
+
         # Classifier is the SINGLE entry point for ALL messages.
-        # It sees: message text, conversation history, last food entry, and pending state.
         classification = self.analyzer.classify_message(
             message.text, today_str, last_entry,
             recent_messages=recent_messages[:-1],
             pending_state=pending_dict,
+            toggle_state=toggle_state,
+            reply_context=reply_context,
         )
 
         # conversation_reply: user is responding to something the bot asked
@@ -358,6 +389,21 @@ class HealthHandlers:
                 message, context, tid, profile, pending, classification,
             )
             return
+
+        # Late reply: conversation_reply but no pending (expired TTL)
+        # Find the most recent unanswered offer from toggle state
+        if classification.type == "conversation_reply" and not pending:
+            for name in ("nutrition", "sleep", "eating_window", "workouts", "self_care"):
+                toggle = getattr(profile.toggles, name, None)
+                if toggle and toggle.revealed_at and toggle.status == "dormant":
+                    self.toggle_service.activate_toggle(tid, name)
+                    if self.goal_service and self.goal_service.should_offer_goal(profile, name):
+                        response = self.goal_service.offer_goal(tid, name)
+                    else:
+                        response = "יפה, נרשמתי."
+                    await message.reply_text(response)
+                    self._save_bot_message(tid, response)
+                    return
 
         # Route non-food types through MessageRouterService
         if classification.type == "correction" and classification.correction and last_entry:
