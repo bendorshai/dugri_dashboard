@@ -48,6 +48,13 @@ Skip in CI: pytest -m "not integration"
 #    - Goal: target sleep time (HH:MM)
 #    - Flow: offer tracking -> accept -> ask "what time do you aim to sleep?"
 #      -> user sends time in any format -> GPT extracts -> goal set
+#    - IMPORTANT: while awaiting a sleep GOAL, the first time the user
+#      sends is treated as the GOAL, not as a sleep log. The bot confirms
+#      "goal set to 23:00" (not "logged sleep at 23:00").
+#    - Only if the user explicitly declines setting a goal does Dugri
+#      switch to tracking sleep times WITHOUT a goal (just logging).
+#    - User can update sleep goal later via natural language at any time
+#      (see USER-INITIATED GOAL UPDATE section).
 #
 # 3. EATING WINDOW
 #    - Gate: HOOK_CONFIG["eating_window"]["gate_days"] (4)
@@ -187,6 +194,21 @@ Skip in CI: pytest -m "not integration"
 # 4. Reply-to-message context (if Telegram reply)
 # 5. Last food entry (for corrections)
 # 6. Israeli Hebrew cultural context (informal slang = cooperation)
+#
+# CLASSIFIER PROMPT GAPS
+# -----------------------
+# [GAP] Calorie/protein numbers are rarely food: most users don't describe
+# meals by calories and protein. "1800 קלוריות אבל 180 חלבון" is almost
+# certainly a goal correction, not a food log. The classifier should learn
+# that calorie/protein descriptions are rare as meal inputs.
+#
+# [GAP] Pending state should be strongest pull: when ANY awaiting_confirm
+# or awaiting_goal_value pending state exists, and the user sends a message
+# that COULD be relevant to it, the pending context should win over all
+# other type pulls (meal, correction, sleep, etc.). A message during
+# awaiting_nutrition_confirm with numbers is a goal correction. A message
+# during awaiting_goal_value for sleep with a time is a goal value. The
+# pending state is the strongest signal in the system.
 #
 # TEST INFRASTRUCTURE GAPS
 # -------------------------
