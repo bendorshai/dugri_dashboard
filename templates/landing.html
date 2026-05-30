@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 
-{% block title %}דוגרי - איתך על ההרגלים{% endblock %}
+{% block title %}דוגרי - סוף סוף להיות על זה{% endblock %}
 
 {% block meta %}
     <meta name="description" content="מעקב הרגלים בעברית, בטלגרם, בגובה העיניים. חמישה הרגלים, תיעוד בשיחה, לא בטופס.">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="דוגרי - איתך על ההרגלים">
+    <meta property="og:title" content="דוגרי - סוף סוף להיות על זה">
     <meta property="og:description" content="מעקב הרגלים בעברית, בטלגרם, בגובה העיניים. חמישה הרגלים, תיעוד בשיחה, לא בטופס.">
     <meta property="og:image" content="{{ og_image_url }}">
     <meta property="og:url" content="{{ og_page_url }}">
     <meta property="og:locale" content="he_IL">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="דוגרי - איתך על ההרגלים">
+    <meta name="twitter:title" content="דוגרי - סוף סוף להיות על זה">
     <meta name="twitter:description" content="מעקב הרגלים בעברית, בטלגרם, בגובה העיניים.">
     <meta name="twitter:image" content="{{ og_image_url }}">
 {% endblock %}
@@ -38,9 +38,9 @@
         <div class="container hero-grid">
             <div>
                 <img src="{{ url_for('static', filename='images/1.png') }}" alt="הלוגו של דוגרי - בועת דיבור בצבע קינמון עם הכיתוב 'דוגרי, איתך על ההרגלים'" class="hero-logo">
-                <h2 class="hero-promise" style="font-size: 1.5rem; font-weight: 700; margin: 0.5rem 0 0.25rem; color: var(--text);">סוף סוף להיות על זה. בלי להפוך כל ארוחה לפרויקט.</h2>
+                <h1 class="hero-promise">סוף סוף להיות על זה. בלי להפוך כל ארוחה לפרויקט.</h1>
+                <p class="hero-sub">מעקב הרגלים בעברית, בטלגרם, בגובה העיניים.</p>
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
-                <h1>מעקב הרגלים בעברית, בטלגרם, בגובה העיניים.</h1>
                 <p class="hero-lede">חמישה הרגלים שמשנים את היום-יום שלך - תיעוד בשיחה, לא בטופס.</p>
                 <div class="hero-actions">
                     <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
@@ -89,7 +89,9 @@
                 <li class="reveal-item" style="--item-delay: 2">הבטחתם לעצמכם שתהיו על זה. לא מצאתם פתרון פשוט שזורם.</li>
             </ul>
         </div>
-        <p class="section-bridge reveal-item" style="--item-delay: 3">ובסוף אתה רוצה דבר אחד פשוט: להרגיש שאתה על זה, ולראות שזה באמת עובד.</p>
+        <div class="container">
+            <p class="section-bridge reveal-item" style="--item-delay: 3">ובסוף אתה רוצה דבר אחד פשוט: להרגיש שאתה על זה, ולראות שזה באמת עובד.</p>
+        </div>
     </section>
 
     <!-- Solution -->
@@ -111,7 +113,9 @@
                 </ul>
             </div>
         </div>
-        <p class="section-bridge">זה הבסיס שמשנה את הבריאות היומיומית. כל השאר זה רעש.</p>
+        <div class="container">
+            <p class="section-bridge">זה הבסיס שמשנה את הבריאות היומיומית. כל השאר זה רעש.</p>
+        </div>
     </section>
 
     <!-- Why it works -->
@@ -131,7 +135,7 @@
         <div class="container">
             <h2>תוך חמש דקות יש לכם את דוגרי בטלגרם.</h2>
             <p class="tagline">המעקב הכי טוב הוא זה שאנחנו באמת עושים.</p>
-            <p>21 יום לראות אם אתה באמת מצליח להיות על זה. בלי כרטיס אשראי.</p>
+            <p class="cta-highlight">21 יום לראות אם אתה באמת מצליח להיות על זה. בלי כרטיס אשראי.</p>
             <p>אחר כך אפשר להצטרף בעלות של 47 ₪ לחודש - אפשר לבטל בלחיצה.</p>
             <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
         </div>

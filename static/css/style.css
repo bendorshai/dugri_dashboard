@@ -201,23 +201,34 @@ a:hover {
     text-align: center;
 }
 
-.landing-hero h1 {
+.hero-promise {
     max-width: 760px;
     margin-left: auto;
     margin-right: auto;
-    font-size: clamp(2.35rem, 6vw, 5rem);
-    line-height: 1.03;
-    margin-bottom: 1.35rem;
+    font-size: clamp(2.35rem, 6vw, 4.5rem);
+    line-height: 1.08;
+    margin-bottom: 1rem;
     letter-spacing: 0;
     color: var(--cinnamon-dark);
+}
+
+.hero-sub {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: clamp(1.3rem, 3vw, 1.85rem);
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.4;
+    margin-bottom: 1.25rem;
 }
 
 .hero-lede {
     max-width: 640px;
     margin-left: auto;
     margin-right: auto;
-    font-size: clamp(1.15rem, 2vw, 1.45rem);
-    color: var(--ink);
+    font-size: clamp(1.05rem, 1.8vw, 1.25rem);
+    color: var(--muted);
     line-height: 1.65;
     margin-bottom: 2rem;
 }
@@ -434,10 +445,12 @@ a:hover {
 
 .section-bridge {
     text-align: center;
-    font-size: clamp(1.25rem, 2.5vw, 1.6rem);
-    font-weight: 700;
+    font-size: clamp(1.4rem, 3vw, 1.85rem);
+    font-weight: 800;
     color: var(--cinnamon-dark);
-    margin-top: 2.5rem;
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 2px solid rgba(166, 116, 72, 0.15);
     max-width: 640px;
     margin-left: auto;
     margin-right: auto;
@@ -506,6 +519,13 @@ a:hover {
     margin-inline: auto;
     color: rgba(255, 255, 255, 0.76);
     font-size: 1.15rem;
+}
+
+.cta-highlight {
+    font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+    font-weight: 800;
+    color: white;
+    margin-bottom: 0.5rem;
 }
 
 .cta-band .btn {
@@ -1200,8 +1220,12 @@ a:hover {
         padding: 0 1rem;
     }
 
-    .landing-hero h1 {
-        font-size: 2.45rem;
+    .hero-promise {
+        font-size: 2.2rem;
+    }
+
+    .hero-sub {
+        font-size: 1.2rem;
     }
 
     .hero-actions,
