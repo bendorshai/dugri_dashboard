@@ -173,6 +173,44 @@ Skip in CI: pytest -m "not integration"
 #   (asks for the new value) instead of just re-activating
 # - Dugri understands the intent from context, not from exact phrasing
 #
+# RECURRING HOOKS (scheduled prompts for active toggles)
+# ------------------------------------------------------
+# Once a toggle is ACTIVE, Dugri proactively sends prompts to collect
+# data. These fire via the 28-min poller, within configured time windows,
+# at whatever tick falls in the window (slightly irregular = natural).
+#
+# - SLEEP: daily, within HOOK_CONFIG["sleep"]["window"] (08:00-10:00).
+#   Dugri asks what time the user went to sleep yesterday.
+#   5 rotating phrasings. Once per day (deduped by last_asked_at).
+#
+# - WORKOUTS: weekly on HOOK_CONFIG["workouts"]["anchor_day"] (Thursday),
+#   within HOOK_CONFIG["workouts"]["window"] (16:00-20:00).
+#   Dugri asks if the user worked out this week.
+#   5 rotating phrasings. Once per week.
+#
+# - SELF-CARE: weekly on HOOK_CONFIG["self_care"]["anchor_day"] (Friday),
+#   within HOOK_CONFIG["self_care"]["window"] (10:00-14:00).
+#   Dugri asks what good thing the user did for themselves.
+#   5 rotating phrasings. Once per week.
+#
+# - WEEKLY SUMMARY: weekly on HOOK_CONFIG["weekly_summary"]["anchor_day"]
+#   (Sunday), within window (09:00-11:00).
+#   Dugri offers to show the weekly summary.
+#
+# - EATING WINDOW: daily check. If window closes within
+#   EATING_WINDOW_WARN_MINUTES (60 min), send "closing soon" with stats.
+#   After window closes, send daily compliance summary.
+#   Both fire once per day (deduped by last_asked_at).
+#
+# These hooks also fire as INLINE HOOKS after food entries (piggybacking)
+# if the user happens to log food during the window and the hook hasn't
+# fired yet today. Inline hooks are preferred (natural moment), poller
+# is the fallback.
+#
+# EXIT DOOR: after EXIT_DOOR_UNANSWERED_THRESHOLD (2) consecutive
+# unanswered hooks, Dugri adds a soft opt-out message ("if this isn't
+# for you, I can stop asking").
+#
 # PROACTIVE REVEALS (via poller, not just inline hooks)
 # -----------------------------------------------------
 # [GAP - NOT YET IMPLEMENTED]
