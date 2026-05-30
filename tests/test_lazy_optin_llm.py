@@ -115,13 +115,12 @@ Skip in CI: pytest -m "not integration"
 #   - LATE LATE REPLY (out of history): user replies days later, the
 #     bot's offer has scrolled out of the MAX_RECENT_MESSAGES (12) message history. Only
 #     toggle_state shows "offered but not activated".
-#     -> [GAP - NOT YET IMPLEMENTED IN PROMPT]
-#     -> If only ONE habit is offered: classifier should infer the reply
-#        is about that habit and classify as conversation_reply
-#     -> If MULTIPLE habits are offered: Dugri should ask for
-#        clarification ("you mean sleep or workouts?") rather than guess
-#     -> Currently classifier returns none for bare words like "אשמח"
-#        when there's no history context and no pending state
+#     -> [CLOSED] Classifier routing rule added: if toggle_state shows
+#        a single offered habit + short affirm = conversation_reply.
+#        If multiple offered, ask clarification via freeform_response.
+#     -> If only ONE habit is offered: classifier infers the reply
+#        is about that habit and classifies as conversation_reply
+#     -> If MULTIPLE habits are offered: Dugri asks for clarification
 #
 # GOAL STEP (Dugri asks about setting a goal):
 #   - ACCEPT: user cooperates -> collect goal value
@@ -213,8 +212,8 @@ Skip in CI: pytest -m "not integration"
 #
 # PROACTIVE REVEALS (via poller, not just inline hooks)
 # -----------------------------------------------------
-# [GAP - NOT YET IMPLEMENTED]
-# - Currently, reveals ONLY fire as inline hooks after food entries
+# [CLOSED] Implemented in _check_proactive_reveals in scheduler.py
+# - Previously, reveals ONLY fired as inline hooks after food entries
 # - If a user doesn't log food by a certain hour (e.g., within the
 #   habit's time window), the 28-min poller should proactively offer
 #   the reveal - not wait for a food entry that may never come
@@ -233,20 +232,15 @@ Skip in CI: pytest -m "not integration"
 # 5. Last food entry (for corrections)
 # 6. Israeli Hebrew cultural context (informal slang = cooperation)
 #
-# CLASSIFIER PROMPT GAPS
-# -----------------------
-# [GAP] Calorie/protein numbers are rarely food: most users don't describe
-# meals by calories and protein. "1800 קלוריות אבל 180 חלבון" is almost
-# certainly a goal correction, not a food log. The classifier should learn
-# that calorie/protein descriptions are rare as meal inputs.
+# CLASSIFIER PROMPT - CLOSED GAPS
+# ---------------------------------
+# [CLOSED] Calorie/protein numbers are rarely food: added to classifier
+# routing rules. "1800 קלוריות ו-180 חלבון" is almost always a goal, not food.
 #
-# [GAP] Pending state should be strongest pull: when ANY awaiting_confirm
-# or awaiting_goal_value pending state exists, and the user sends a message
-# that COULD be relevant to it, the pending context should win over all
-# other type pulls (meal, correction, sleep, etc.). A message during
-# awaiting_nutrition_confirm with numbers is a goal correction. A message
-# during awaiting_goal_value for sleep with a time is a goal value. The
-# pending state is the strongest signal in the system.
+# [CLOSED] Pending state is strongest pull: added to classifier routing
+# rules. When pending exists, it overrides meal, correction, sleep, etc.
+# PENDING_DESCRIPTIONS for awaiting_goal_value and awaiting_nutrition_confirm
+# now explicitly state that values in context are goals, not logs/corrections.
 #
 # TEST INFRASTRUCTURE GAPS
 # -------------------------
@@ -257,10 +251,9 @@ Skip in CI: pytest -m "not integration"
 # stubs in test cases. This ensures tests reflect real conversation flow,
 # not idealized messages.
 #
-# [GAP] Late reply distinction: tests should separately cover:
-#   1. Late reply IN history (offer visible in 12-message window)
-#   2. Late late reply OUT OF history (offer scrolled out, only toggle_state)
-#   These are fundamentally different classifier challenges.
+# [CLOSED] Late reply distinction: tests now split into:
+#   1. test_late_reply_in_history (offer visible in window)
+#   2. test_late_late_reply_out_of_history (offer scrolled out)
 #
 # ============================================================================
 """
@@ -434,8 +427,8 @@ class TestNutritionOffer:
         )
         assert result.type == "meal"
 
-    def test_late_reply_no_pending(self):
-        """User says 'אשמח' after TTL expired (no pending) but toggle shows offered."""
+    def test_late_reply_in_history(self):
+        """User says 'אשמח' after TTL expired, offer still in history window."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אשמח",
@@ -446,6 +439,18 @@ class TestNutritionOffer:
                 ("user", "חביתה עם גבינה"),  # food, not an answer
                 ("bot", "קלטתי. 300 קלוריות."),
             ),
+        )
+        assert result.type in ("conversation_reply", "toggle_activate")
+
+    def test_late_late_reply_out_of_history(self):
+        """User says 'אשמח' days later, offer scrolled out of history.
+        Only toggle_state shows 'offered'. Single offered habit -> should infer."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אשמח",
+            pending=None,
+            toggle_state=_build_toggle_state(nutrition="offered"),
+            history=[],  # empty - offer long gone from history
         )
         assert result.type in ("conversation_reply", "toggle_activate")
 

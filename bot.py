@@ -170,6 +170,7 @@ def create_bot(
         app.job_queue, user_repo, toggle_service,
         goal_service=goal_service,
         eating_day_service=eating_day_service,
+        state_service=state_service,
     )
 
     return app

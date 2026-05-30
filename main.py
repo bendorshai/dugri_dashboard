@@ -23,8 +23,8 @@ from repositories.self_care_repository import SelfCareRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "3.9.0"
-VERSION_NOTES = "דוגרי רואה את כל התמונה: מצב הרגלים, תגובות ישירות, והקשר מלא. אין עוד תירוצים."
+VERSION = "4.0.0"
+VERSION_NOTES = "כל הפערים נסגרים: pending חזק יותר, reveals פרואקטיביים, קלוריות זה לא אוכל"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

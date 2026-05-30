@@ -94,6 +94,7 @@ def get_hooks_to_schedule(profile: User) -> list[dict]:
 def schedule_global_poller(
     job_queue, user_repo, toggle_service,
     goal_service=None, eating_day_service=None,
+    state_service=None,
 ):
     """Schedule the single unified polling loop.
 
@@ -117,6 +118,7 @@ def schedule_global_poller(
             "toggle_service": toggle_service,
             "goal_service": goal_service,
             "eating_day_service": eating_day_service,
+            "state_service": state_service,
         },
     )
     logger.info(
@@ -217,6 +219,46 @@ async def _check_user_hooks(
 
     # --- Eating window: "closing soon" warning ---
     await _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, now)
+
+    # --- Proactive reveals (fallback for users who haven't logged food) ---
+    state_service = context.job.data.get("state_service")
+    if toggle_service and state_service:
+        await _check_proactive_reveals(
+            context, profile, user_repo, toggle_service, state_service, now, today_weekday,
+        )
+
+
+async def _check_proactive_reveals(
+    context, profile, user_repo, toggle_service, state_service, now, weekday,
+):
+    """Proactive reveals: offer dormant habits via poller if not yet offered.
+
+    This is the fallback for users who haven't logged food (inline hooks
+    didn't fire). Checks gate days, anchor days, and time windows.
+    """
+    import messages as M
+
+    tid = profile.telegram_user_id
+
+    reveal_checks = [
+        ("nutrition", toggle_service.should_reveal_nutrition(profile), M.REVEAL_NUTRITION, None),
+        ("sleep", toggle_service.should_reveal_sleep(profile), M.REVEAL_SLEEP, HOOK_CONFIG["sleep"].get("window")),
+        ("eating_window", toggle_service.should_reveal_eating_window(profile), M.REVEAL_EATING_WINDOW, None),
+        ("workouts", toggle_service.should_reveal_workouts(profile, weekday), M.REVEAL_WORKOUTS, HOOK_CONFIG["workouts"].get("window")),
+        ("self_care", toggle_service.should_reveal_self_care(profile, weekday), M.REVEAL_SELF_CARE, HOOK_CONFIG["self_care"].get("window")),
+    ]
+
+    for name, should_reveal, reveal_msg, window in reveal_checks:
+        if not should_reveal:
+            continue
+        # Check time window if the habit has one
+        if window and not (window[0] <= now.hour < window[1]):
+            continue
+        # Reveal and offer
+        toggle_service.reveal_toggle(tid, name)
+        state_service.set_pending(tid, "awaiting_toggle_consent", data={"toggle_name": name})
+        await _send_and_save(context, tid, reveal_msg, user_repo)
+        return  # One reveal per tick
 
 
 async def _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, now):
