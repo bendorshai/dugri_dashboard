@@ -53,9 +53,10 @@ Skip in CI: pytest -m "not integration"
 #    - Gate: HOOK_CONFIG["eating_window"]["gate_days"] (4)
 #    - Trigger: inline hook after food entry
 #    - Goal: the window itself (start-end times). Dugri measures daily
-#      compliance (did user eat within the window?). User can update
-#      window later with natural language ("update my eating window").
+#      compliance (did user eat within the window?).
 #      Weekly summary reports how many days window was kept.
+#      (User can update goal later via natural language - see
+#      USER-INITIATED GOAL UPDATE section below.)
 #    - Flow: offer tracking -> accept -> ask "when do you start and stop
 #      eating?" -> user sends times in any format -> GPT extracts -> set
 #
@@ -142,6 +143,29 @@ Skip in CI: pytest -m "not integration"
 # - reply_to_message.text is injected into classifier context
 # - Gives GPT exact context for what the user is responding to
 # - Especially useful for late replies (replying to an old offer)
+#
+# USER-INITIATED GOAL UPDATE (cross-cutting)
+# -------------------------------------------
+# - Applies to ALL habits, not just eating window
+# - User can say "I want to update my sleep goal" / "change my eating
+#   window" / "update my calorie target" at any time in natural language
+# - classifier: toggle_activate with the relevant toggle_name
+# - If toggle is already active, Dugri re-enters the goal setting flow
+#   (asks for the new value) instead of just re-activating
+# - Dugri understands the intent from context, not from exact phrasing
+#
+# PROACTIVE REVEALS (via poller, not just inline hooks)
+# -----------------------------------------------------
+# [GAP - NOT YET IMPLEMENTED]
+# - Currently, reveals ONLY fire as inline hooks after food entries
+# - If a user doesn't log food by a certain hour (e.g., within the
+#   habit's time window), the 28-min poller should proactively offer
+#   the reveal - not wait for a food entry that may never come
+# - This applies to all habits: if Dugri has something to offer and
+#   the user hasn't been active, Dugri should reach out within the
+#   configured time window
+# - Inline hooks (after food) remain the preferred trigger
+# - Poller is the fallback for inactive users
 #
 # CLASSIFIER CONTEXT (always present on every call)
 # --------------------------------------------------
