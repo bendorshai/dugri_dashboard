@@ -104,6 +104,24 @@ def create_app(config: dict | None = None) -> Flask:
             og_page_url=og_page_url,
         )
 
+    @app.route("/prev-landing")
+    def prev_landing():
+        from flask import render_template, request, url_for
+        import hebrew_strings as hs
+
+        contact_email = config.get("contact_email", "")
+        base_url = request.url_root.rstrip("/")
+        og_image_url = base_url + url_for("static", filename="images/1.png")
+        og_page_url = base_url + "/"
+
+        return render_template(
+            "prev_landing.html",
+            contact_email=contact_email,
+            hs=hs,
+            og_image_url=og_image_url,
+            og_page_url=og_page_url,
+        )
+
     @app.route("/welcome")
     def welcome():
         from flask import render_template, redirect, url_for, session
