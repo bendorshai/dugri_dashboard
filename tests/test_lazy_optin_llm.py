@@ -99,10 +99,22 @@ Skip in CI: pytest -m "not integration"
 #     -> sets goal_remind_at = now + goal_reminder_days
 #     -> Dugri does NOT re-offer inline. Waits for scheduled reminder.
 #
-#   - LATE REPLY: user replies after TTL expired (hours/days later)
-#     -> classifier uses toggle_state ("offered but not activated") +
-#        conversation history to identify as conversation_reply
+#   - LATE REPLY (in history): user replies after TTL expired but the
+#     bot's offer is still visible in the 12-message history window.
+#     -> classifier uses conversation history + toggle_state to identify
+#        as conversation_reply
 #     -> late reply recovery: activate toggle, proceed
+#
+#   - LATE LATE REPLY (out of history): user replies days later, the
+#     bot's offer has scrolled out of the 12-message history. Only
+#     toggle_state shows "offered but not activated".
+#     -> [GAP - NOT YET IMPLEMENTED IN PROMPT]
+#     -> If only ONE habit is offered: classifier should infer the reply
+#        is about that habit and classify as conversation_reply
+#     -> If MULTIPLE habits are offered: Dugri should ask for
+#        clarification ("you mean sleep or workouts?") rather than guess
+#     -> Currently classifier returns none for bare words like "אשמח"
+#        when there's no history context and no pending state
 #
 # GOAL STEP (Dugri asks about setting a goal):
 #   - ACCEPT: user cooperates -> collect goal value
@@ -175,6 +187,20 @@ Skip in CI: pytest -m "not integration"
 # 4. Reply-to-message context (if Telegram reply)
 # 5. Last food entry (for corrections)
 # 6. Israeli Hebrew cultural context (informal slang = cooperation)
+#
+# TEST INFRASTRUCTURE GAPS
+# -------------------------
+# [GAP] History stubs: the _build_history helper currently uses manually
+# written bot messages. These should be replaced with ACTUAL LLM responses
+# captured from real classifier/handler runs. When closing gaps, run the
+# prompts first to capture accurate bot responses, then inject them as
+# stubs in test cases. This ensures tests reflect real conversation flow,
+# not idealized messages.
+#
+# [GAP] Late reply distinction: tests should separately cover:
+#   1. Late reply IN history (offer visible in 12-message window)
+#   2. Late late reply OUT OF history (offer scrolled out, only toggle_state)
+#   These are fundamentally different classifier challenges.
 #
 # ============================================================================
 """
