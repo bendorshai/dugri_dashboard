@@ -107,13 +107,13 @@ Skip in CI: pytest -m "not integration"
 #     -> Dugri does NOT re-offer inline. Waits for scheduled reminder.
 #
 #   - LATE REPLY (in history): user replies after TTL expired but the
-#     bot's offer is still visible in the 12-message history window.
+#     bot's offer is still visible in the MAX_RECENT_MESSAGES (12) message history window.
 #     -> classifier uses conversation history + toggle_state to identify
 #        as conversation_reply
 #     -> late reply recovery: activate toggle, proceed
 #
 #   - LATE LATE REPLY (out of history): user replies days later, the
-#     bot's offer has scrolled out of the 12-message history. Only
+#     bot's offer has scrolled out of the MAX_RECENT_MESSAGES (12) message history. Only
 #     toggle_state shows "offered but not activated".
 #     -> [GAP - NOT YET IMPLEMENTED IN PROMPT]
 #     -> If only ONE habit is offered: classifier should infer the reply
