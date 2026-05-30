@@ -667,10 +667,10 @@ class TestSelfCareOffer:
     """Tests for self-care offer. No goal question - just tracking."""
 
     def test_accept_self_care(self):
-        """User accepts self-care -> conversation_reply."""
+        """User accepts self-care (naive user says simply yes) -> conversation_reply."""
         analyzer = _make_analyzer()
         result = _classify(
-            analyzer, "למה לא",
+            analyzer, "כן",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "self_care"}},
             toggle_state=_build_toggle_state(self_care="offered"),
         )
