@@ -432,6 +432,18 @@ a:hover {
     line-height: 1.55;
 }
 
+.section-bridge {
+    text-align: center;
+    font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+    font-weight: 700;
+    color: var(--cinnamon-dark);
+    margin-top: 2.5rem;
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.5;
+}
+
 .solution-text p {
     margin-bottom: 1rem;
 }
