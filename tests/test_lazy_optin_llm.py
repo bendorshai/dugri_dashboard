@@ -214,12 +214,7 @@ Skip in CI: pytest -m "not integration"
 # -----------------------------------------------------
 # [CLOSED] Implemented in _check_proactive_reveals in scheduler.py
 # - Previously, reveals ONLY fired as inline hooks after food entries
-# - If a user doesn't log food by a certain hour (e.g., within the
-#   habit's time window), the 28-min poller should proactively offer
-#   the reveal - not wait for a food entry that may never come
-# - This applies to all habits: if Dugri has something to offer and
-#   the user hasn't been active, Dugri should reach out within the
-#   configured time window
+# - Now the 28-min poller also checks for reveals within time windows
 # - Inline hooks (after food) remain the preferred trigger
 # - Poller is the fallback for inactive users
 #
@@ -285,6 +280,89 @@ pytestmark = pytest.mark.integration
 
 
 # ============================================================================
+# REALISTIC CONVERSATION STUBS
+#
+# These represent actual Dugri bot messages as they appear in production.
+# Used to build realistic conversation histories for tests.
+# ============================================================================
+
+FOOD_RESPONSE_SCHNITZEL = (
+    "• שניצל עם אורז\n"
+    "  ~350 גרם | 650 קל׳ | 35 גרם חלבון\n\n"
+    "סה\"כ: 650 קל׳ | 35 גרם חלבון\n\n"
+    "📊 סיכום יומי:\n"
+    "✅ קלוריות: 650/2000 (33%, נותרו: 1350)\n"
+    "⚠️ גרם חלבון: 35/150 (23%, נותרו: 115)"
+)
+
+FOOD_RESPONSE_COFFEE = (
+    "• קפה עם חלב\n"
+    "  ~200 גרם | 50 קל׳ | 2 גרם חלבון\n\n"
+    "📊 סיכום יומי:\n"
+    "✅ קלוריות: 700/2000 (35%, נותרו: 1300)\n"
+    "⚠️ גרם חלבון: 37/150 (25%, נותרו: 113)"
+)
+
+FOOD_RESPONSE_EGGS = (
+    "• 2 ביצים\n"
+    "  ~100 גרם | 155 קל׳ | 13 גרם חלבון\n"
+    "• סלט ירקות\n"
+    "  ~150 גרם | 45 קל׳ | 2 גרם חלבון\n\n"
+    "סה\"כ: 200 קל׳ | 15 גרם חלבון\n\n"
+    "📊 סיכום יומי:\n"
+    "✅ קלוריות: 900/2000 (45%, נותרו: 1100)\n"
+    "⚠️ גרם חלבון: 52/150 (35%, נותרו: 98)"
+)
+
+FOOD_RESPONSE_SALAD = (
+    "• סלט טונה\n"
+    "  ~200 גרם | 250 קל׳ | 25 גרם חלבון\n\n"
+    "📊 סיכום יומי:\n"
+    "✅ קלוריות: 1150/2000 (58%, נותרו: 850)\n"
+    "⚠️ גרם חלבון: 77/150 (51%, נותרו: 73)"
+)
+
+NUTRITION_OFFER = (
+    "אגב, אני יכול לחשב לך יעד קלוריות וחלבון יומי מותאם אישית. "
+    "ככה תדע כל ארוחה איפה אתה עומד. רוצה שננסה?"
+)
+
+BODY_STATS_ASK = "בשביל החישוב אני צריך לדעת גובה, משקל וגיל. ספר לי."
+
+WEIGHT_GOAL_ASK = "מה הכיוון? ירידה, שמירה, או עלייה במשקל?"
+
+NUTRITION_SUGGESTION = (
+    "לפי הנתונים שלך, אני ממליץ על 1800 קלוריות ו-160 גרם חלבון ביום. נשמע טוב?"
+)
+
+SLEEP_OFFER = (
+    "אגב — בא לי להציע לך משהו חדש. אם תרשום לי מתי הלכת לישון, "
+    "אני אעקוב איתך אחרי דפוס השינה. רוצה שננסה?"
+)
+
+SLEEP_GOAL_ASK = "באיזו שעה אתה רוצה ללכת לישון?"
+
+EATING_WINDOW_OFFER = (
+    "אגב - אם בא לך, אני יכול לעקוב גם אחרי חלון האכילה שלך. "
+    "אני אחשב את זה אוטומטית מהארוחות שאתה מתעד. רוצה שננסה?"
+)
+
+WORKOUTS_OFFER = (
+    "היי, יש משהו שבא לי להציע. אם בא לך, אני יכול לעקוב גם אחרי "
+    "האימונים שלך — פעם בשבוע אשאל מה היה. אין לחץ, רק אם זה מעניין אותך. "
+    "רוצה שננסה?"
+)
+
+SELF_CARE_OFFER = (
+    "רוצה לנסות משהו נחמד? פעם בשבוע, בסוף השבוע, לרשום דבר אחד טוב "
+    "שעשית לעצמך. לא כושר, לא אוכל — פשוט משהו שעשה לך טוב. "
+    "רוצה שאזכיר לך בשישי?"
+)
+
+GOAL_REMIND_ASK = "בסדר. רוצה שאזכיר לך בעתיד?"
+
+
+# ============================================================================
 # TEST INFRASTRUCTURE
 # ============================================================================
 
@@ -296,11 +374,7 @@ def _make_analyzer():
 
 
 def _build_toggle_state(**overrides) -> str:
-    """Build a Hebrew toggle state summary string for the classifier.
-
-    Default: all dormant, weekly_summary active. Override with kwargs:
-        _build_toggle_state(nutrition="offered", sleep="active_with_goal")
-    """
+    """Build a Hebrew toggle state summary string for the classifier."""
     defaults = {
         "nutrition": "dormant",
         "sleep": "dormant",
@@ -342,12 +416,12 @@ def _build_history(*messages) -> list[dict]:
     Each message is a tuple: ("bot", "text") or ("user", "text")
     """
     result = []
-    base_time = datetime.now(timezone.utc) - timedelta(minutes=len(messages))
+    base_time = datetime.now(timezone.utc) - timedelta(minutes=len(messages) * 5)
     for i, (role, text) in enumerate(messages):
         msg = {
             "role": role,
-            "text": text,
-            "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+            "text": text[:500],
+            "timestamp": (base_time + timedelta(minutes=i * 5)).isoformat(),
         }
         result.append(msg)
     return result
@@ -382,7 +456,9 @@ class TestNutritionOffer:
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
-                ("bot", "אגב, אני יכול לחשב לך יעד קלוריות וחלבון. רוצה שננסה?"),
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
             ),
         )
         assert result.type == "conversation_reply"
@@ -394,6 +470,11 @@ class TestNutritionOffer:
             analyzer, "אשמח",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -404,6 +485,11 @@ class TestNutritionOffer:
             analyzer, "אוקיי",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -414,6 +500,11 @@ class TestNutritionOffer:
             analyzer, "לא מעניין אותי",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
+            ),
         )
         assert result.type == "toggle_cancel"
 
@@ -424,6 +515,11 @@ class TestNutritionOffer:
             analyzer, "שניצל עם אורז וסלט",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
+            history=_build_history(
+                ("user", "קפה עם חלב"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+                ("bot", NUTRITION_OFFER),
+            ),
         )
         assert result.type == "meal"
 
@@ -435,22 +531,36 @@ class TestNutritionOffer:
             pending=None,  # expired
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
-                ("bot", "אגב, אני יכול לחשב לך יעד קלוריות וחלבון. רוצה שננסה?"),
-                ("user", "חביתה עם גבינה"),  # food, not an answer
-                ("bot", "קלטתי. 300 קלוריות."),
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
+                ("user", "חביתה עם גבינה"),
+                ("bot", FOOD_RESPONSE_EGGS),
             ),
         )
         assert result.type in ("conversation_reply", "toggle_activate")
 
     def test_late_late_reply_out_of_history(self):
         """User says 'אשמח' days later, offer scrolled out of history.
-        Only toggle_state shows 'offered'. Single offered habit -> should infer."""
+        History is full of recent food entries. Only toggle_state shows 'offered'."""
         analyzer = _make_analyzer()
+        # Simulate a full history of food entries that pushed the offer out
         result = _classify(
             analyzer, "אשמח",
             pending=None,
             toggle_state=_build_toggle_state(nutrition="offered"),
-            history=[],  # empty - offer long gone from history
+            history=_build_history(
+                ("user", "קפה בבוקר"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+                ("user", "2 ביצים וסלט"),
+                ("bot", FOOD_RESPONSE_EGGS),
+                ("user", "סלט טונה"),
+                ("bot", FOOD_RESPONSE_SALAD),
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("user", "קפה אחרי הצהריים"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
         )
         assert result.type in ("conversation_reply", "toggle_activate")
 
@@ -461,7 +571,13 @@ class TestNutritionOffer:
             analyzer, "אשמח",
             pending=None,
             toggle_state=_build_toggle_state(nutrition="offered"),
-            reply_context="אגב, אני יכול לחשב לך יעד קלוריות וחלבון. רוצה שננסה?",
+            reply_context=NUTRITION_OFFER,
+            history=_build_history(
+                ("user", "קפה בבוקר"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+                ("user", "סלט טונה"),
+                ("bot", FOOD_RESPONSE_SALAD),
+            ),
         )
         assert result.type in ("conversation_reply", "toggle_activate")
 
@@ -472,6 +588,10 @@ class TestNutritionOffer:
             analyzer, "אשמח לעקוב אחרי הרגלי תזונה",
             pending=None,
             toggle_state=_build_toggle_state(nutrition="dormant"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
         )
         assert result.type == "toggle_activate"
         assert result.toggle_name == "nutrition"
@@ -483,6 +603,11 @@ class TestNutritionOffer:
             analyzer, "למה חלבון? מה זה נותן?",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
+            ),
         )
         assert result.type == "help"
 
@@ -497,6 +622,11 @@ class TestNutritionBodyStats:
             analyzer, "174, 112, 36",
             pending={"kind": "awaiting_body_stats", "data": {}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", NUTRITION_OFFER),
+                ("user", "יאללה"),
+                ("bot", BODY_STATS_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -507,6 +637,11 @@ class TestNutritionBodyStats:
             analyzer, "גובה 174, משקל 112, גיל 36",
             pending={"kind": "awaiting_body_stats", "data": {}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", NUTRITION_OFFER),
+                ("user", "אשמח"),
+                ("bot", BODY_STATS_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -517,6 +652,11 @@ class TestNutritionBodyStats:
             analyzer, "174\n112 קג\n36 שנים",
             pending={"kind": "awaiting_body_stats", "data": {}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", NUTRITION_OFFER),
+                ("user", "בוא"),
+                ("bot", BODY_STATS_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -531,6 +671,11 @@ class TestNutritionWeightGoal:
             analyzer, "ירידה! רוצה להגיע ל 98 קג",
             pending={"kind": "awaiting_weight_goal", "data": {}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", BODY_STATS_ASK),
+                ("user", "174, 112, 36"),
+                ("bot", WEIGHT_GOAL_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -541,6 +686,11 @@ class TestNutritionWeightGoal:
             analyzer, "לשמור על המשקל",
             pending={"kind": "awaiting_weight_goal", "data": {}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", BODY_STATS_ASK),
+                ("user", "גובה 174, משקל 80, גיל 30"),
+                ("bot", WEIGHT_GOAL_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -551,6 +701,11 @@ class TestNutritionWeightGoal:
             analyzer, "רוצה לעלות קצת, להגיע ל-80",
             pending={"kind": "awaiting_weight_goal", "data": {}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", BODY_STATS_ASK),
+                ("user", "175, 65, 25"),
+                ("bot", WEIGHT_GOAL_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -566,7 +721,9 @@ class TestNutritionConfirm:
             pending={"kind": "awaiting_nutrition_confirm", "data": {"calories": 1800, "protein": 160}},
             toggle_state=_build_toggle_state(nutrition="active"),
             history=_build_history(
-                ("bot", "לפי הנתונים שלך, אני ממליץ על 1800 קלוריות ו-160 גרם חלבון ביום. נשמע טוב?"),
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "לרדת"),
+                ("bot", NUTRITION_SUGGESTION),
             ),
         )
         assert result.type == "conversation_reply"
@@ -578,6 +735,11 @@ class TestNutritionConfirm:
             analyzer, "1800 קלוריות אבל 180 חלבון",
             pending={"kind": "awaiting_nutrition_confirm", "data": {"calories": 1800, "protein": 160}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "ירידה"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -596,6 +758,11 @@ class TestSleepOffer:
             analyzer, "כן, בטח",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "sleep"}},
             toggle_state=_build_toggle_state(nutrition="active_with_goal", sleep="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", SLEEP_OFFER),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -606,31 +773,50 @@ class TestSleepOffer:
             analyzer, "אני רוצה לעקוב אחרי השינה שלי",
             pending=None,
             toggle_state=_build_toggle_state(nutrition="active_with_goal", sleep="dormant"),
+            history=_build_history(
+                ("user", "קפה עם חלב"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
         )
         assert result.type == "toggle_activate"
         assert result.toggle_name == "sleep"
 
 
 class TestSleepGoalValue:
-    """Tests for sleep goal value extraction."""
+    """Tests for sleep goal value extraction.
+
+    IMPORTANT: when pending_state is awaiting_goal_value for sleep,
+    a time is the GOAL, not a sleep log. The classifier should return
+    conversation_reply, not sleep.
+    """
 
     def test_sleep_time_natural(self):
-        """User says sleep time naturally -> conversation_reply."""
+        """User says sleep time naturally during goal setting -> conversation_reply."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "23 בלילה",
             pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "sleep"}},
             toggle_state=_build_toggle_state(sleep="active"),
+            history=_build_history(
+                ("bot", SLEEP_OFFER),
+                ("user", "כן"),
+                ("bot", SLEEP_GOAL_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
     def test_sleep_time_formal(self):
-        """User says 23:00 -> conversation_reply."""
+        """User says 23:00 during goal setting -> conversation_reply."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "23:00",
             pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "sleep"}},
             toggle_state=_build_toggle_state(sleep="active"),
+            history=_build_history(
+                ("bot", SLEEP_OFFER),
+                ("user", "בטח"),
+                ("bot", SLEEP_GOAL_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -649,6 +835,11 @@ class TestEatingWindowOffer:
             analyzer, "בוא ננסה",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "eating_window"}},
             toggle_state=_build_toggle_state(eating_window="offered"),
+            history=_build_history(
+                ("user", "2 ביצים וסלט"),
+                ("bot", FOOD_RESPONSE_EGGS),
+                ("bot", EATING_WINDOW_OFFER),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -659,6 +850,11 @@ class TestEatingWindowOffer:
             analyzer, "מ-8 בבוקר עד 8 בערב",
             pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "eating_window"}},
             toggle_state=_build_toggle_state(eating_window="active"),
+            history=_build_history(
+                ("bot", EATING_WINDOW_OFFER),
+                ("user", "כן"),
+                ("bot", "מתי אתה מתחיל ומסיים לאכול?"),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -669,8 +865,11 @@ class TestEatingWindowOffer:
             analyzer, "שומע, אני רוצה לעדכן את חלון האכילה",
             pending=None,
             toggle_state=_build_toggle_state(eating_window="active_with_goal"),
+            history=_build_history(
+                ("user", "סלט טונה"),
+                ("bot", FOOD_RESPONSE_SALAD),
+            ),
         )
-        # Could be toggle_activate (re-configure) or conversation_reply
         assert result.type in ("toggle_activate", "conversation_reply")
 
 
@@ -688,6 +887,11 @@ class TestWorkoutsOffer:
             analyzer, "קדימה",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "workouts"}},
             toggle_state=_build_toggle_state(workouts="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", WORKOUTS_OFFER),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -698,6 +902,11 @@ class TestWorkoutsOffer:
             analyzer, "3 פעמים בשבוע",
             pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "workouts"}},
             toggle_state=_build_toggle_state(workouts="active"),
+            history=_build_history(
+                ("bot", WORKOUTS_OFFER),
+                ("user", "יאללה"),
+                ("bot", "כמה אימונים בשבוע אתה מכוון?"),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -716,6 +925,11 @@ class TestSelfCareOffer:
             analyzer, "כן",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "self_care"}},
             toggle_state=_build_toggle_state(self_care="offered"),
+            history=_build_history(
+                ("user", "סלט טונה"),
+                ("bot", FOOD_RESPONSE_SALAD),
+                ("bot", SELF_CARE_OFFER),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -734,6 +948,11 @@ class TestGoalRemind:
             analyzer, "כן, תזכיר לי",
             pending={"kind": "awaiting_goal_remind", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", NUTRITION_OFFER),
+                ("user", "לא עכשיו"),
+                ("bot", GOAL_REMIND_ASK),
+            ),
         )
         assert result.type == "conversation_reply"
 
@@ -744,6 +963,11 @@ class TestGoalRemind:
             analyzer, "לא, תעזוב",
             pending={"kind": "awaiting_goal_remind", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="active"),
+            history=_build_history(
+                ("bot", NUTRITION_OFFER),
+                ("user", "לא מעניין"),
+                ("bot", GOAL_REMIND_ASK),
+            ),
         )
         assert result.type == "toggle_cancel"
 
@@ -758,6 +982,11 @@ class TestToggleCancel:
             analyzer, "לא רוצה",
             pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "sleep"}},
             toggle_state=_build_toggle_state(sleep="offered"),
+            history=_build_history(
+                ("user", "קפה עם חלב"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+                ("bot", SLEEP_OFFER),
+            ),
         )
         assert result.type == "toggle_cancel"
 
@@ -768,6 +997,10 @@ class TestToggleCancel:
             analyzer, "תפסיק לשאול אותי על שינה",
             pending=None,
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
         )
         assert result.type == "toggle_cancel"
         assert result.toggle_name == "sleep"
@@ -779,6 +1012,10 @@ class TestToggleCancel:
             analyzer, "אני לא רוצה מעקב תזונה",
             pending=None,
             toggle_state=_build_toggle_state(nutrition="active_with_goal"),
+            history=_build_history(
+                ("user", "קפה בבוקר"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
         )
         assert result.type == "toggle_cancel"
         assert result.toggle_name == "nutrition"
@@ -796,6 +1033,11 @@ class TestNoneIsRare:
                 analyzer, msg,
                 pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
                 toggle_state=_build_toggle_state(nutrition="offered"),
+                history=_build_history(
+                    ("user", "שניצל עם אורז"),
+                    ("bot", FOOD_RESPONSE_SCHNITZEL),
+                    ("bot", NUTRITION_OFFER),
+                ),
             )
             assert result.type != "none", f"'{msg}' classified as none with pending state"
 
@@ -806,6 +1048,10 @@ class TestNoneIsRare:
             analyzer, "מה שלומך?",
             pending=None,
             toggle_state=_build_toggle_state(),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
         )
         assert result.type == "none"
         assert result.freeform_response  # should have a natural response
