@@ -9,6 +9,8 @@ food_repository.py — גישה לקולקציית food_entries במונגו.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from bson import ObjectId
 
 from models.food import FoodEntry
@@ -42,3 +44,18 @@ class FoodRepository(BaseRepository[FoodEntry]):
 
     def get_all_for_user(self, telegram_user_id: int) -> list[FoodEntry]:
         return self.find({"telegram_user_id": telegram_user_id})
+
+    def cleanup_expired_edits(self) -> int:
+        """Remove edit-related fields from entries whose edit window has expired (48h)."""
+        result = self._collection.update_many(
+            {"edit_expires_at": {"$lt": datetime.now(timezone.utc)}},
+            {"$unset": {
+                "original_description": "",
+                "original_calories": "",
+                "original_protein": "",
+                "correction_history": "",
+                "photo_file_id": "",
+                "edit_expires_at": "",
+            }},
+        )
+        return result.modified_count

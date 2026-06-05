@@ -30,8 +30,12 @@ class FoodPhotoResult(BaseModel):
     photo_tips: list[str]
 
 
+class CorrectionFoodItem(FoodItem):
+    change_type: Literal["unchanged", "modified", "added", "removed"] = "unchanged"
+
+
 class CorrectionResult(BaseModel):
-    items: list[FoodItem]
+    items: list[CorrectionFoodItem]
     corrected_description: str
     corrected_calories: int
     corrected_protein: int
@@ -80,6 +84,7 @@ class MessageClassification(BaseModel):
 from prompts import (
     BULK_CORRECTION_SYSTEM_PROMPT,
     CLASSIFIER_SYSTEM_PROMPT,
+    CORRECTION_PHOTO_ADDENDUM,
     CORRECTION_SYSTEM_PROMPT,
     EXTRACT_BODY_STATS_PROMPT,
     EXTRACT_EATING_WINDOW_PROMPT,
@@ -227,9 +232,17 @@ class FoodAnalyzer:
         correction_history: list[str],
         new_correction: str,
         today_str: str,
+        photo_base64: str | None = None,
     ) -> CorrectionResult | None:
-        """Re-analyze a food entry given the original + chain of corrections."""
+        """Re-analyze a food entry given the original + chain of corrections.
+
+        When photo_base64 is provided, the photo is included in the prompt
+        so the LLM can visually verify items the user mentions (e.g. overlooked
+        items). In that case gpt-4o is used instead of gpt-4o-mini.
+        """
         system = CORRECTION_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
+        if photo_base64:
+            system += CORRECTION_PHOTO_ADDENDUM
 
         user_parts = [
             f"הרשומה המקורית: {original_description}",
@@ -238,14 +251,24 @@ class FoodAnalyzer:
         for i, prev in enumerate(correction_history, 1):
             user_parts.append(f"\nתיקון {i}: {prev}")
         user_parts.append(f"\nתיקון חדש: {new_correction}")
-        user_msg = "\n".join(user_parts)
+        user_text = "\n".join(user_parts)
+
+        if photo_base64:
+            user_content: str | list = [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{photo_base64}"}},
+                {"type": "text", "text": user_text},
+            ]
+        else:
+            user_content = user_text
+
+        model = "gpt-4o" if photo_base64 else "gpt-4o-mini"
 
         try:
             response = self.client.beta.chat.completions.parse(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": system},
-                    {"role": "user", "content": user_msg},
+                    {"role": "user", "content": user_content},
                 ],
                 response_format=CorrectionResult,
                 temperature=0,

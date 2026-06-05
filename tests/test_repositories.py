@@ -326,3 +326,41 @@ class TestErrorRepository:
         assert doc["update_id"] == 456
         assert "timestamp" in doc
         assert "traceback" in doc
+
+
+# ---------------------------------------------------------------------------
+# FoodRepository - cleanup_expired_edits
+# ---------------------------------------------------------------------------
+
+class TestFoodRepositoryCleanup:
+    def test_cleanup_expired_edits_unsets_fields(self):
+        col = _make_mock_collection()
+        col.update_many.return_value = MagicMock(modified_count=3)
+        from repositories.food_repository import FoodRepository
+        repo = FoodRepository(col)
+
+        result = repo.cleanup_expired_edits()
+
+        assert result == 3
+        col.update_many.assert_called_once()
+        call_args = col.update_many.call_args
+        query = call_args[0][0]
+        update = call_args[0][1]
+        assert "edit_expires_at" in query
+        assert "$unset" in update
+        unset_fields = update["$unset"]
+        assert "original_description" in unset_fields
+        assert "original_calories" in unset_fields
+        assert "original_protein" in unset_fields
+        assert "correction_history" in unset_fields
+        assert "photo_file_id" in unset_fields
+        assert "edit_expires_at" in unset_fields
+
+    def test_cleanup_returns_zero_when_nothing_expired(self):
+        col = _make_mock_collection()
+        col.update_many.return_value = MagicMock(modified_count=0)
+        from repositories.food_repository import FoodRepository
+        repo = FoodRepository(col)
+
+        result = repo.cleanup_expired_edits()
+        assert result == 0

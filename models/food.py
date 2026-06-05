@@ -30,6 +30,11 @@ class FoodEntry(BaseModel):
     protein: int
     within_window: bool = True
     correction_history: list[str] = Field(default_factory=list)
+    photo_file_id: str | None = None
+    original_description: str | None = None
+    original_calories: int | None = None
+    original_protein: int | None = None
+    edit_expires_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("date")

@@ -95,6 +95,7 @@ def schedule_global_poller(
     job_queue, user_repo, toggle_service,
     goal_service=None, eating_day_service=None,
     hook_schedule_store=None,
+    food_repo=None,
 ):
     """Schedule the single unified polling loop.
 
@@ -119,6 +120,7 @@ def schedule_global_poller(
             "goal_service": goal_service,
             "eating_day_service": eating_day_service,
             "hook_schedule_store": hook_schedule_store,
+            "food_repo": food_repo,
         },
     )
     logger.info(
@@ -135,6 +137,15 @@ async def _global_tick(context):
     goal_service = data.get("goal_service")
     eating_day_svc = data.get("eating_day_service")
     hook_schedule_store = data.get("hook_schedule_store")
+
+    food_repo = data.get("food_repo")
+    if food_repo:
+        try:
+            cleaned = food_repo.cleanup_expired_edits()
+            if cleaned:
+                logger.info("Cleaned up edit history from %d expired entries", cleaned)
+        except Exception:
+            logger.exception("Edit history cleanup failed")
 
     all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
     logger.info("Poller tick: checking %d users", len(all_users))

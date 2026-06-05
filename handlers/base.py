@@ -718,18 +718,34 @@ class HealthHandlers:
         self, message, context, correction, last_entry: dict,
         profile: UserProfile, today_str: str, tid: int,
     ):
+        from datetime import timezone as tz
+
         entry_id = last_entry["entry_id"]
         old_cal = last_entry["calories"]
         old_prot = last_entry["protein"]
+        old_desc = last_entry["description"]
 
         new_desc = correction.corrected_description
         new_cal = correction.corrected_calories
         new_prot = correction.corrected_protein
 
+        # Preserve originals on first correction; keep existing originals on subsequent ones
+        orig_desc = last_entry.get("original_description") or old_desc
+        orig_cal = last_entry.get("original_calories") or old_cal
+        orig_prot = last_entry.get("original_protein") or old_prot
+
+        updated_history = context.chat_data.get("correction_histories", {}).get(entry_id, [])
+        updated_history = updated_history + [message.text]
+
         self.food_repo.update(entry_id, {
             "description": new_desc,
             "calories": new_cal,
             "protein": new_prot,
+            "original_description": orig_desc,
+            "original_calories": orig_cal,
+            "original_protein": orig_prot,
+            "correction_history": updated_history,
+            "edit_expires_at": datetime.now(tz.utc) + timedelta(hours=48),
         })
 
         context.chat_data["last_entry"] = {
@@ -737,24 +753,19 @@ class HealthHandlers:
             "calories": new_cal,
             "protein": new_prot,
             "entry_id": entry_id,
+            "photo_file_id": last_entry.get("photo_file_id"),
+            "original_description": orig_desc,
+            "original_calories": orig_cal,
+            "original_protein": orig_prot,
         }
 
         stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
         final_cal, final_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
 
-        cal_diff = new_cal - old_cal
-        prot_diff = new_prot - old_prot
-
-        items_text = self._format_items_text(correction.items, new_cal, new_prot)
-
-        diff_parts = []
-        if cal_diff != 0:
-            diff_parts.append(f"קלוריות: {old_cal} → {new_cal}")
-        if prot_diff != 0:
-            diff_parts.append(f"חלבון: {old_prot} → {new_prot}")
-        diff_line = f"\n({', '.join(diff_parts)})" if diff_parts else ""
-
-        response = f"✏️ עודכן:\n{items_text}{diff_line}"
+        # Build 3-section response: original -> edits -> updated
+        response = self._format_correction_response(
+            correction, orig_desc, orig_cal, orig_prot, new_cal, new_prot,
+        )
         status = format_daily_status(
             final_cal, final_prot, self._target_cal(profile), self._target_prot(profile),
         )
@@ -762,6 +773,45 @@ class HealthHandlers:
 
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(entry_id))
         await safe_react(message, OK_HAND)
+
+    @staticmethod
+    def _format_correction_response(
+        correction, orig_desc: str, orig_cal: int, orig_prot: int,
+        new_cal: int, new_prot: int,
+    ) -> str:
+        """Format the 3-section correction response: original -> edits -> updated."""
+        parts = []
+
+        # Section 1: Original entry
+        parts.append(f"📋 רשומה מקורית: {orig_desc}")
+        parts.append(f"סה\"כ: {orig_cal} קל׳ | {orig_prot} גרם חלבון")
+
+        # Section 2: What changed
+        edit_lines = []
+        for item in correction.items:
+            if item.change_type == "modified":
+                edit_lines.append(f"• {item.description}: ~{item.estimated_grams} גרם | {item.calories} קל׳ | {item.protein} גרם חלבון")
+            elif item.change_type == "added":
+                edit_lines.append(f"• {item.description}: חדש (~{item.estimated_grams} גרם | {item.calories} קל׳ | {item.protein} גרם חלבון)")
+            elif item.change_type == "removed":
+                edit_lines.append(f"• {item.description}: הוסר")
+        if edit_lines:
+            parts.append("")
+            parts.append("✏️ עריכה:")
+            parts.extend(edit_lines)
+
+        # Section 3: Updated entry (all non-removed items)
+        active_items = [i for i in correction.items if i.change_type != "removed"]
+        if active_items:
+            parts.append("")
+            parts.append("✅ רשומה מעודכנת:")
+            for item in active_items:
+                parts.append(f"• {item.description}")
+                parts.append(f"  ~{item.estimated_grams} גרם | {item.calories} קל׳ | {item.protein} גרם חלבון")
+            if len(active_items) > 1:
+                parts.append(f"\nסה\"כ: {new_cal} קל׳ | {new_prot} גרם חלבון")
+
+        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Photo handler
@@ -806,6 +856,7 @@ class HealthHandlers:
             calories=total_cal,
             protein=total_prot,
             within_window=within_window,
+            photo_file_id=photo.file_id,
         )
         saved = self.food_repo.add(entry)
 
@@ -814,6 +865,7 @@ class HealthHandlers:
             "calories": total_cal,
             "protein": total_prot,
             "entry_id": saved.id,
+            "photo_file_id": photo.file_id,
         }
 
         stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
@@ -929,6 +981,17 @@ class HealthHandlers:
         today_str = self._get_today_str(profile)
         entry_id = entry["entry_id"]
 
+        # Re-download photo if available so the LLM has visual context
+        photo_b64 = None
+        photo_file_id = entry.get("photo_file_id")
+        if photo_file_id:
+            try:
+                file = await context.bot.get_file(photo_file_id)
+                photo_bytes = await file.download_as_bytearray()
+                photo_b64 = base64.b64encode(photo_bytes).decode("utf-8")
+            except Exception:
+                logger.warning("Failed to re-download photo %s for correction", photo_file_id)
+
         correction = self.analyzer.analyze_correction(
             original_description=entry["description"],
             original_calories=entry["calories"],
@@ -936,6 +999,7 @@ class HealthHandlers:
             correction_history=correction_history,
             new_correction=message.text,
             today_str=today_str,
+            photo_base64=photo_b64,
         )
 
         if correction:
@@ -1188,13 +1252,18 @@ class HealthHandlers:
                 await query.edit_message_text("❌ הרשומה לא נמצאה.", reply_markup=make_daily_summary_keyboard())
                 return
 
-            existing_history = context.chat_data.get("correction_histories", {}).get(entry_id, [])
+            existing_history = food_entry.correction_history or \
+                context.chat_data.get("correction_histories", {}).get(entry_id, [])
             context.chat_data["pending_correction"] = {
                 "entry": {
                     "description": food_entry.description,
                     "calories": food_entry.calories,
                     "protein": food_entry.protein,
                     "entry_id": entry_id,
+                    "photo_file_id": food_entry.photo_file_id,
+                    "original_description": food_entry.original_description,
+                    "original_calories": food_entry.original_calories,
+                    "original_protein": food_entry.original_protein,
                 },
                 "correction_history": existing_history,
                 "timestamp": time.time(),

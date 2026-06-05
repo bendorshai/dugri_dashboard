@@ -166,6 +166,7 @@ def create_bot(
         goal_service=goal_service,
         eating_day_service=eating_day_service,
         hook_schedule_store=hook_schedule_store,
+        food_repo=food_repo,
     )
 
     return app

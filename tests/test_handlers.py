@@ -21,7 +21,7 @@ mock_ext = sys.modules["telegram.ext"]
 mock_ext.ContextTypes = MagicMock()
 mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
-from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult
+from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult, CorrectionFoodItem
 from keyboards import format_daily_status
 from models.profile import UserProfile, EatingWindow, Targets
 from models.food import FoodEntry
@@ -278,9 +278,9 @@ class TestCorrectionHistory:
 
         correction_result = CorrectionResult(
             items=[
-                FoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=750, protein=45),
-                FoodItem(description="צ'יפס", estimated_grams=150, calories=150, protein=3),
-                FoodItem(description="סלט", estimated_grams=200, calories=50, protein=7),
+                CorrectionFoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=750, protein=45, change_type="modified"),
+                CorrectionFoodItem(description="צ'יפס", estimated_grams=150, calories=150, protein=3),
+                CorrectionFoodItem(description="סלט", estimated_grams=200, calories=50, protein=7),
             ],
             corrected_description="המבורגר 300 גרם, צ'יפס, סלט",
             corrected_calories=950,
@@ -332,9 +332,9 @@ class TestCorrectionHistory:
         entry_id = "abc123def456abc123def456"
         correction_result = CorrectionResult(
             items=[
-                FoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=750, protein=45),
-                FoodItem(description="צ'יפס גדול", estimated_grams=250, calories=300, protein=4),
-                FoodItem(description="סלט", estimated_grams=200, calories=50, protein=6),
+                CorrectionFoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=750, protein=45, change_type="modified"),
+                CorrectionFoodItem(description="צ'יפס גדול", estimated_grams=250, calories=300, protein=4, change_type="modified"),
+                CorrectionFoodItem(description="סלט", estimated_grams=200, calories=50, protein=6),
             ],
             corrected_description="המבורגר 300 גרם, צ'יפס גדול, סלט",
             corrected_calories=1100,
@@ -364,6 +364,217 @@ class TestCorrectionHistory:
         call_kwargs = h.analyzer.analyze_correction.call_args
         assert call_kwargs[1]["correction_history"] == ["ההמבורגר הוא 300 גרם"]
         assert "הצ'יפס היה מנה גדולה" in context.chat_data["correction_histories"][entry_id]
+
+
+class TestCorrectionResponseFormat:
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        h.user_repo = MagicMock()
+        h.food_repo = MagicMock()
+        h.feedback_repo = MagicMock()
+        h.eating_day_svc = MagicMock()
+        h.analyzer = MagicMock()
+        return h
+
+    def test_format_correction_response_shows_three_sections(self):
+        from analyzer import CorrectionResult, CorrectionFoodItem
+        h = self._make_handler()
+        correction = CorrectionResult(
+            items=[
+                CorrectionFoodItem(description="שניצל", estimated_grams=200, calories=300, protein=25, change_type="modified"),
+                CorrectionFoodItem(description="צ'יפס", estimated_grams=200, calories=400, protein=5),
+                CorrectionFoodItem(description="סלט ירקות", estimated_grams=150, calories=45, protein=2, change_type="added"),
+            ],
+            corrected_description="שניצל, צ'יפס, סלט ירקות",
+            corrected_calories=745,
+            corrected_protein=32,
+        )
+        result = h._format_correction_response(
+            correction,
+            orig_desc="שניצל 300 גרם, צ'יפס",
+            orig_cal=850, orig_prot=40,
+            new_cal=745, new_prot=32,
+        )
+        assert "רשומה מקורית" in result
+        assert "שניצל 300 גרם, צ'יפס" in result
+        assert "850" in result
+        assert "עריכה" in result
+        assert "שניצל" in result
+        assert "חדש" in result  # added item
+        assert "רשומה מעודכנת" in result
+        assert "745" in result
+
+    def test_format_correction_response_removed_item(self):
+        from analyzer import CorrectionResult, CorrectionFoodItem
+        h = self._make_handler()
+        correction = CorrectionResult(
+            items=[
+                CorrectionFoodItem(description="שניצל", estimated_grams=300, calories=450, protein=35),
+                CorrectionFoodItem(description="צ'יפס", estimated_grams=200, calories=400, protein=5, change_type="removed"),
+            ],
+            corrected_description="שניצל",
+            corrected_calories=450,
+            corrected_protein=35,
+        )
+        result = h._format_correction_response(
+            correction,
+            orig_desc="שניצל, צ'יפס",
+            orig_cal=850, orig_prot=40,
+            new_cal=450, new_prot=35,
+        )
+        assert "הוסר" in result
+        # Removed item should NOT appear in updated section
+        lines_after_updated = result.split("רשומה מעודכנת:")[1]
+        assert "צ'יפס" not in lines_after_updated
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_persists_original_values(self, mock_send, mock_react, mock_now, _kb):
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult, CorrectionFoodItem
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.eating_day_svc.get_stats_date.return_value = "11/05/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (950, 55)
+
+        entry_id = "abc123def456abc123def456"
+        correction = CorrectionResult(
+            items=[CorrectionFoodItem(description="שניצל 200 גרם", estimated_grams=200, calories=300, protein=25, change_type="modified")],
+            corrected_description="שניצל 200 גרם",
+            corrected_calories=300, corrected_protein=25,
+        )
+
+        last_entry = {
+            "description": "שניצל 300 גרם",
+            "calories": 450,
+            "protein": 35,
+            "entry_id": entry_id,
+        }
+        message = AsyncMock()
+        message.text = "השניצל היה 200 גרם"
+        context = MagicMock()
+        context.chat_data = {}
+
+        await h._handle_correction(message, context, correction, last_entry, profile, "11/05/2026", 123)
+
+        update_args = h.food_repo.update.call_args
+        fields = update_args[0][1]
+        assert fields["original_description"] == "שניצל 300 גרם"
+        assert fields["original_calories"] == 450
+        assert fields["original_protein"] == 35
+        assert fields["correction_history"] == ["השניצל היה 200 גרם"]
+        assert "edit_expires_at" in fields
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_preserves_existing_originals(self, mock_send, mock_react, mock_now, _kb):
+        """Second correction should keep the first correction's original values."""
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult, CorrectionFoodItem
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.eating_day_svc.get_stats_date.return_value = "11/05/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (300, 25)
+
+        entry_id = "abc123def456abc123def456"
+        correction = CorrectionResult(
+            items=[CorrectionFoodItem(description="שניצל 150 גרם", estimated_grams=150, calories=225, protein=18, change_type="modified")],
+            corrected_description="שניצל 150 גרם",
+            corrected_calories=225, corrected_protein=18,
+        )
+
+        # Second correction - already has original_* from first correction
+        last_entry = {
+            "description": "שניצל 200 גרם",
+            "calories": 300,
+            "protein": 25,
+            "entry_id": entry_id,
+            "original_description": "שניצל 300 גרם",
+            "original_calories": 450,
+            "original_protein": 35,
+        }
+        message = AsyncMock()
+        message.text = "עכשיו 150"
+        context = MagicMock()
+        context.chat_data = {"correction_histories": {entry_id: ["השניצל 200 גרם"]}}
+
+        await h._handle_correction(message, context, correction, last_entry, profile, "11/05/2026", 123)
+
+        fields = h.food_repo.update.call_args[0][1]
+        # Should keep the FIRST original, not the second correction's values
+        assert fields["original_description"] == "שניצל 300 גרם"
+        assert fields["original_calories"] == 450
+        assert fields["original_protein"] == 35
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_passes_photo_to_analyzer(self, mock_send, mock_react, mock_now, _kb):
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult, CorrectionFoodItem
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 5, 11, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.eating_day_svc.get_stats_date.return_value = "11/05/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (500, 30)
+
+        correction = CorrectionResult(
+            items=[CorrectionFoodItem(description="test", estimated_grams=100, calories=100, protein=10)],
+            corrected_description="test", corrected_calories=100, corrected_protein=10,
+        )
+        h.analyzer.analyze_correction.return_value = correction
+
+        # Mock bot.get_file for photo re-download
+        mock_file = AsyncMock()
+        mock_file.download_as_bytearray.return_value = bytearray(b"fake_photo_data")
+
+        message = AsyncMock()
+        message.text = "שכחת את הסלט"
+        context = MagicMock()
+        context.bot.get_file = AsyncMock(return_value=mock_file)
+        context.chat_data = {
+            "pending_correction": {
+                "entry": {
+                    "description": "שניצל",
+                    "calories": 400,
+                    "protein": 30,
+                    "entry_id": "abc123def456abc123def456",
+                    "photo_file_id": "AgACAgIAAx0CfakePhotoId",
+                },
+                "correction_history": [],
+                "timestamp": __import__("time").time(),
+            }
+        }
+
+        await h._handle_pending_correction(message, context, 123, profile)
+
+        # Should have called get_file with the photo_file_id
+        context.bot.get_file.assert_called_once_with("AgACAgIAAx0CfakePhotoId")
+        # Should have passed photo_base64 to analyzer
+        call_kwargs = h.analyzer.analyze_correction.call_args[1]
+        assert call_kwargs["photo_base64"] is not None
 
 
 class TestFoodAgainCallback:
