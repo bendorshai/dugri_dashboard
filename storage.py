@@ -209,6 +209,48 @@ class DashboardStorage:
             "targets": targets,
         }
 
+    # -- Calorie trend --
+
+    def get_daily_calorie_totals(self, email: str, days: int = 30) -> dict:
+        """Get daily calorie totals for the last N days.
+
+        Returns {"days": [{"date": "DD/MM/YYYY", "calories": int}, ...], "target": int|None}
+        sorted chronologically (oldest first).
+        """
+        user = self._users.find_one({"_id": email})
+        if not user or not user.get("telegram_user_id"):
+            return {"days": [], "target": None}
+
+        tid = user["telegram_user_id"]
+        target = user.get("targets", {}).get("calories")
+
+        # Generate date strings for the range
+        today = date.today()
+        start = today - timedelta(days=days - 1)
+        date_strings = []
+        current = start
+        while current <= today:
+            date_strings.append(current.strftime("%d/%m/%Y"))
+            current += timedelta(days=1)
+
+        # Query food entries
+        entries = list(self._db["food_entries"].find(
+            {"telegram_user_id": tid, "date": {"$in": date_strings}},
+        ))
+
+        # Aggregate by date
+        cal_by_date: dict[str, int] = {}
+        for entry in entries:
+            d = entry["date"]
+            cal_by_date[d] = cal_by_date.get(d, 0) + entry.get("calories", 0)
+
+        # Build result with all days filled (0 for missing)
+        result_days = []
+        for ds in date_strings:
+            result_days.append({"date": ds, "calories": cal_by_date.get(ds, 0)})
+
+        return {"days": result_days, "target": target}
+
     # -- Weekly summaries --
 
     def get_weekly_summaries(self, email: str, limit: int = 20) -> list[dict]:

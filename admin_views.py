@@ -54,6 +54,7 @@ def dashboard():
 
     return render_template(
         "admin/dashboard.html",
+        active_sub="dashboard",
         total_users=total_users,
         total_signups=total_signups,
         active_week=active_week,
@@ -69,6 +70,23 @@ def dashboard():
         stuck=stuck,
         outreach_templates=OUTREACH_TEMPLATES,
         active_tab="admin",
+    )
+
+
+@admin_bp.route("/errors")
+@admin_required
+def errors():
+    storage = _get_admin_storage()
+    error_groups = storage.get_error_groups()
+    daily_counts = storage.get_error_daily_counts()
+    return render_template(
+        "admin/errors.html",
+        error_groups=error_groups,
+        daily_counts_json=json.dumps(daily_counts, default=str),
+        total_errors=sum(g["count"] for g in error_groups),
+        unique_errors=len(error_groups),
+        active_tab="admin",
+        active_sub="errors",
     )
 
 

@@ -28,6 +28,7 @@ def storage():
         s._sleep = mock_db["sleep_logs"]
         s._workouts = mock_db["workout_logs"]
         s._self_care = mock_db["self_care_logs"]
+        s._errors = mock_db["error_logs"]
         return s
 
 
@@ -150,3 +151,77 @@ class TestEnrichLeads:
 
     def test_empty_input(self, storage):
         assert storage._enrich_leads([], "churning") == []
+
+
+class TestErrorGroups:
+    def test_groups_errors_by_type_and_message(self, storage):
+        storage._errors.aggregate.return_value = [
+            {
+                "_id": {"error_type": "ValueError", "error_message": "bad input"},
+                "count": 5,
+                "last_seen": datetime(2026, 6, 5, 12, 0, tzinfo=timezone.utc),
+                "first_seen": datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
+                "handlers": ["message", "callback:settings"],
+                "sample_traceback": ["Traceback ...\n", "ValueError: bad input\n"],
+            },
+            {
+                "_id": {"error_type": "KeyError", "error_message": "'name'"},
+                "count": 2,
+                "last_seen": datetime(2026, 6, 4, 10, 0, tzinfo=timezone.utc),
+                "first_seen": datetime(2026, 6, 3, 9, 0, tzinfo=timezone.utc),
+                "handlers": ["message"],
+                "sample_traceback": ["Traceback ...\n", "KeyError: 'name'\n"],
+            },
+        ]
+        result = storage.get_error_groups()
+        assert len(result) == 2
+        assert result[0]["error_type"] == "ValueError"
+        assert result[0]["error_message"] == "bad input"
+        assert result[0]["count"] == 5
+        assert result[0]["last_seen"] == datetime(2026, 6, 5, 12, 0, tzinfo=timezone.utc)
+        assert result[0]["first_seen"] == datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc)
+        assert result[0]["handlers"] == ["message", "callback:settings"]
+        assert result[0]["sample_traceback"] == ["Traceback ...\n", "ValueError: bad input\n"]
+        assert result[1]["error_type"] == "KeyError"
+        assert result[1]["count"] == 2
+
+    def test_empty_collection_returns_empty_list(self, storage):
+        storage._errors.aggregate.return_value = []
+        result = storage.get_error_groups()
+        assert result == []
+
+    def test_result_is_cached(self, storage):
+        storage._errors.aggregate.return_value = []
+        storage.get_error_groups()
+        storage.get_error_groups()
+        assert storage._errors.aggregate.call_count == 1
+
+
+class TestErrorDailyCounts:
+    def test_returns_days_with_zero_fill(self, storage):
+        storage._errors.aggregate.return_value = [
+            {"_id": (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d"), "count": 3},
+            {"_id": (datetime.now(timezone.utc) - timedelta(days=5)).strftime("%Y-%m-%d"), "count": 1},
+        ]
+        result = storage.get_error_daily_counts()
+        assert len(result) == 30
+        # All entries should have date and count keys
+        for entry in result:
+            assert "date" in entry
+            assert "count" in entry
+        # Zero-filled days should have count 0
+        counts_by_date = {e["date"]: e["count"] for e in result}
+        two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
+        assert counts_by_date[two_days_ago] == 3
+
+    def test_empty_collection_returns_zeros(self, storage):
+        storage._errors.aggregate.return_value = []
+        result = storage.get_error_daily_counts()
+        assert len(result) == 30
+        assert all(e["count"] == 0 for e in result)
+
+    def test_result_is_cached(self, storage):
+        storage._errors.aggregate.return_value = []
+        storage.get_error_daily_counts()
+        storage.get_error_daily_counts()
+        assert storage._errors.aggregate.call_count == 1

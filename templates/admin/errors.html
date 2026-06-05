@@ -1,0 +1,145 @@
+{% extends "dashboard/layout.html" %}
+
+{% block title %}Dugri — Errors{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="admin-dashboard">
+
+    <!-- Admin Sub-tabs -->
+    <div class="admin-tabs">
+        <a href="{{ url_for('admin.dashboard') }}" class="admin-tab">Dashboard</a>
+        <a href="{{ url_for('admin.errors') }}" class="admin-tab active">Errors</a>
+    </div>
+
+    <!-- KPI Cards -->
+    <section class="admin-kpis" style="grid-template-columns: 1fr 1fr;">
+        <div class="kpi-card">
+            <span class="kpi-label">Total Errors (30d)</span>
+            <span class="kpi-value">{{ total_errors }}</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Unique Error Types</span>
+            <span class="kpi-value">{{ unique_errors }}</span>
+        </div>
+    </section>
+
+    <!-- Daily Error Count Chart -->
+    <section class="admin-charts" style="grid-template-columns: 1fr;">
+        <div class="chart-card">
+            <h3>Errors Per Day (30 days)</h3>
+            <canvas id="errorDailyChart"></canvas>
+        </div>
+    </section>
+
+    <!-- Error Groups Table -->
+    <section class="admin-leads" x-data="{ expanded: null }">
+        <h2>Error Groups</h2>
+        {% if error_groups %}
+        <table class="leads-table error-table">
+            <thead>
+                <tr>
+                    <th>Error Type</th>
+                    <th>Message</th>
+                    <th>Count</th>
+                    <th>Last Seen</th>
+                    <th>Handler(s)</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in error_groups %}
+                <tr class="error-row" @click="expanded = expanded === {{ loop.index0 }} ? null : {{ loop.index0 }}" style="cursor: pointer;">
+                    <td><code class="error-type-badge">{{ g.error_type }}</code></td>
+                    <td class="error-msg-cell" title="{{ g.error_message }}">{{ g.error_message[:80] }}{% if g.error_message|length > 80 %}...{% endif %}</td>
+                    <td><strong>{{ g.count }}</strong></td>
+                    <td>{{ g.last_seen[:16] if g.last_seen is string else g.last_seen.strftime('%Y-%m-%d %H:%M') if g.last_seen else '-' }}</td>
+                    <td>{{ g.handlers | join(', ') }}</td>
+                    <td class="lead-actions" @click.stop>
+                        <button class="btn-copy-msg" onclick='copyErrorDetails({{ loop.index0 }})'>Copy</button>
+                    </td>
+                </tr>
+                <tr x-show="expanded === {{ loop.index0 }}" x-transition>
+                    <td colspan="6" class="error-expand-cell">
+                        <div class="error-meta">
+                            <span>First seen: {{ g.first_seen[:16] if g.first_seen is string else g.first_seen.strftime('%Y-%m-%d %H:%M') if g.first_seen else '-' }}</span>
+                        </div>
+                        <pre class="error-traceback">{{ g.sample_traceback | join('') if g.sample_traceback else 'No traceback available' }}</pre>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="leads-empty">No errors in the last 30 days.</p>
+        {% endif %}
+    </section>
+
+</div>
+
+<script>
+// -- Error details for copy --
+const errorDetails = {{ error_groups | tojson }};
+
+function copyErrorDetails(index) {
+    const g = errorDetails[index];
+    const text = [
+        'Error Type: ' + g.error_type,
+        'Message: ' + g.error_message,
+        'Count: ' + g.count,
+        'First Seen: ' + (g.first_seen || '-'),
+        'Last Seen: ' + (g.last_seen || '-'),
+        'Handlers: ' + (g.handlers || []).join(', '),
+        '',
+        'Traceback:',
+        (g.sample_traceback || []).join(''),
+    ].join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Error details copied!');
+    });
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('copyToast');
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// -- Chart.js setup --
+const TERRA = '#C97A6B';
+const GRAY = '#5A554D';
+
+Chart.defaults.font.family = "'Segoe UI', Tahoma, Arial, sans-serif";
+Chart.defaults.color = GRAY;
+
+const dailyData = {{ daily_counts_json | safe }};
+new Chart(document.getElementById('errorDailyChart'), {
+    type: 'bar',
+    data: {
+        labels: dailyData.map(d => d.date.slice(5)),
+        datasets: [{
+            label: 'Errors',
+            data: dailyData.map(d => d.count),
+            backgroundColor: TERRA + '99',
+            borderColor: TERRA,
+            borderWidth: 1,
+            borderRadius: 2,
+        }],
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+            x: { ticks: { maxTicksLimit: 10 } },
+        },
+    },
+});
+</script>
+
+<div id="copyToast" class="copy-toast">Copied!</div>
+{% endblock %}

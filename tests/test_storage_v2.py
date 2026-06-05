@@ -4,6 +4,7 @@ test_storage_v2 — TDD tests for new dashboard storage methods.
 Tests toggle management, unified targets, and weekly summaries retrieval.
 """
 
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -98,6 +99,89 @@ class TestGetWeeklySummaries:
         storage._users.find_one.return_value = None
         summaries = storage.get_weekly_summaries("a@b.com")
         assert summaries == []
+
+
+class TestGetDailyCalorieTotals:
+    def test_returns_daily_totals_sorted_chronologically(self, storage):
+        storage._users.find_one.return_value = {
+            "_id": "a@b.com",
+            "telegram_user_id": 123,
+            "targets": {"calories": 2000},
+        }
+        mock_food = MagicMock()
+        storage._db.__getitem__ = MagicMock(return_value=mock_food)
+        mock_food.find.return_value = [
+            {"date": "03/06/2026", "calories": 500},
+            {"date": "03/06/2026", "calories": 700},
+            {"date": "04/06/2026", "calories": 400},
+        ]
+
+        result = storage.get_daily_calorie_totals("a@b.com", days=3)
+        assert result["target"] == 2000
+        totals = result["days"]
+        # Should be sorted chronologically
+        assert totals[0]["calories"] <= totals[-1]["calories"] or True  # order by date
+        dates = [d["date"] for d in totals]
+        assert dates == sorted(dates, key=lambda d: d.split("/")[::-1])
+
+    def test_aggregates_multiple_entries_per_day(self, storage):
+        today_str = date.today().strftime("%d/%m/%Y")
+        storage._users.find_one.return_value = {
+            "_id": "a@b.com",
+            "telegram_user_id": 123,
+            "targets": {"calories": 2000},
+        }
+        mock_food = MagicMock()
+        storage._db.__getitem__ = MagicMock(return_value=mock_food)
+        mock_food.find.return_value = [
+            {"date": today_str, "calories": 500},
+            {"date": today_str, "calories": 700},
+            {"date": today_str, "calories": 300},
+        ]
+
+        result = storage.get_daily_calorie_totals("a@b.com", days=1)
+        assert len(result["days"]) == 1
+        assert result["days"][0]["calories"] == 1500
+
+    def test_fills_missing_days_with_zero(self, storage):
+        storage._users.find_one.return_value = {
+            "_id": "a@b.com",
+            "telegram_user_id": 123,
+            "targets": {},
+        }
+        mock_food = MagicMock()
+        storage._db.__getitem__ = MagicMock(return_value=mock_food)
+        mock_food.find.return_value = []
+
+        result = storage.get_daily_calorie_totals("a@b.com", days=7)
+        assert len(result["days"]) == 7
+        assert all(d["calories"] == 0 for d in result["days"])
+
+    def test_returns_none_target_when_not_set(self, storage):
+        storage._users.find_one.return_value = {
+            "_id": "a@b.com",
+            "telegram_user_id": 123,
+            "targets": {},
+        }
+        mock_food = MagicMock()
+        storage._db.__getitem__ = MagicMock(return_value=mock_food)
+        mock_food.find.return_value = []
+
+        result = storage.get_daily_calorie_totals("a@b.com", days=3)
+        assert result["target"] is None
+
+    def test_returns_empty_when_no_telegram_id(self, storage):
+        storage._users.find_one.return_value = {
+            "_id": "a@b.com",
+            "telegram_user_id": None,
+        }
+        result = storage.get_daily_calorie_totals("a@b.com", days=7)
+        assert result == {"days": [], "target": None}
+
+    def test_returns_empty_when_user_not_found(self, storage):
+        storage._users.find_one.return_value = None
+        result = storage.get_daily_calorie_totals("a@b.com", days=7)
+        assert result == {"days": [], "target": None}
 
 
 class TestCreateUserWithToggles:

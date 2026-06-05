@@ -1,6 +1,30 @@
 {% extends "dashboard/layout.html" %}
 
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block dashboard_content %}
+<!-- Calorie trend chart -->
+<div class="dashboard-card" style="max-width: 700px; margin-bottom: 24px;"
+     x-data="calorieTrend()" x-init="init()">
+    <h2>מגמת קלוריות</h2>
+    <p class="text-muted">הצריכה היומית שלך לאורך זמן.</p>
+
+    <div style="display: flex; gap: 8px; margin: 16px 0;">
+        <template x-for="option in rangeOptions" :key="option.days">
+            <button @click="switchRange(option.days)"
+                    :class="activeDays === option.days ? 'btn-range active' : 'btn-range'"
+                    x-text="option.label"></button>
+        </template>
+    </div>
+
+    <div style="position: relative; height: 260px;">
+        <canvas id="calorieChart"></canvas>
+    </div>
+</div>
+
+<!-- Weekly summaries -->
 <div class="dashboard-card" style="max-width: 700px;">
     <h2>סיכומים שבועיים</h2>
     <p class="text-muted">הסיכומים שדוגרי הכין לך, לפי שבועות.</p>
@@ -26,4 +50,131 @@
     <p style="color: #999; margin-top: 20px;">עדיין אין סיכומים. הם יופיעו כאן אחרי שדוגרי ייצר אותם.</p>
     {% endif %}
 </div>
+
+<style>
+.btn-range {
+    padding: 6px 16px;
+    border: 1px solid var(--border, #E0D8CC);
+    border-radius: var(--radius-sm, 8px);
+    background: white;
+    color: var(--text, #5A554D);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-range:hover {
+    border-color: var(--accent, #5BA8C4);
+    color: var(--accent, #5BA8C4);
+}
+.btn-range.active {
+    background: var(--accent, #5BA8C4);
+    border-color: var(--accent, #5BA8C4);
+    color: white;
+}
+</style>
+
+<script>
+function calorieTrend() {
+    return {
+        chart: null,
+        activeDays: 30,
+        rangeOptions: [
+            { days: 7, label: 'שבוע' },
+            { days: 14, label: 'שבועיים' },
+            { days: 30, label: 'חודש' },
+        ],
+        // Initial data from server
+        initialDays: {{ trend_days | tojson }},
+        initialTarget: {{ trend_target | tojson }},
+
+        init() {
+            this.renderChart(this.initialDays, this.initialTarget);
+        },
+
+        renderChart(days, target) {
+            const labels = days.map(d => {
+                // Convert DD/MM/YYYY to DD/MM for display
+                const parts = d.date.split('/');
+                return parts[0] + '/' + parts[1];
+            });
+            const data = days.map(d => d.calories);
+
+            const datasets = [{
+                label: 'קלוריות',
+                data: data,
+                borderColor: '#5BA8C4',
+                backgroundColor: 'rgba(91, 168, 196, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                borderWidth: 2,
+            }];
+
+            if (target) {
+                datasets.push({
+                    label: 'יעד',
+                    data: Array(days.length).fill(target),
+                    borderColor: '#A67448',
+                    borderDash: [6, 4],
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false,
+                });
+            }
+
+            if (this.chart) {
+                this.chart.destroy();
+            }
+
+            const ctx = document.getElementById('calorieChart').getContext('2d');
+            this.chart = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index',
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            rtl: true,
+                            textDirection: 'rtl',
+                            callbacks: {
+                                label: (ctx) => ctx.dataset.label + ': ' + ctx.parsed.y,
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            reverse: true,  // RTL: newest on left
+                            ticks: { maxTicksLimit: 10, font: { size: 11 } },
+                            grid: { display: false },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { font: { size: 11 } },
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                        },
+                    },
+                },
+            });
+        },
+
+        async switchRange(days) {
+            this.activeDays = days;
+            try {
+                const resp = await fetch('/dashboard/api/calorie-trend?days=' + days);
+                const data = await resp.json();
+                this.renderChart(data.days, data.target);
+            } catch (e) {
+                console.error('Failed to load trend data', e);
+            }
+        },
+    };
+}
+</script>
 {% endblock %}

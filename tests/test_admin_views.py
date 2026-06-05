@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import patch, MagicMock
 
 
@@ -116,3 +117,73 @@ class TestAdminAuth:
         assert "Active User" in html
         assert "active@test.com" in html
         assert "sendOutreach(99999" in html
+
+
+def _mock_errors_storage():
+    """Return a MagicMock AdminStorage with all methods stubbed for the errors route."""
+    mock_storage = MagicMock()
+    mock_storage.get_error_groups.return_value = []
+    mock_storage.get_error_daily_counts.return_value = []
+    return mock_storage
+
+
+class TestAdminErrors:
+    def test_unauthenticated_redirects(self, client):
+        resp = client.get("/admin/errors")
+        assert resp.status_code == 302
+        assert "/auth/login" in resp.headers["Location"]
+
+    def test_non_admin_gets_403(self, client):
+        with client.session_transaction() as sess:
+            sess["user_email"] = "regular@example.com"
+        resp = client.get("/admin/errors")
+        assert resp.status_code == 403
+
+    @patch("admin_views.AdminStorage")
+    def test_admin_can_access_errors_page(self, mock_storage_cls, client):
+        mock_storage_cls.return_value = _mock_errors_storage()
+        with client.session_transaction() as sess:
+            sess["user_email"] = "admin@test.com"
+        resp = client.get("/admin/errors")
+        assert resp.status_code == 200
+
+    @patch("admin_views.AdminStorage")
+    def test_error_groups_rendered(self, mock_storage_cls, client):
+        mock_storage = _mock_errors_storage()
+        mock_storage.get_error_groups.return_value = [
+            {
+                "error_type": "ValueError",
+                "error_message": "bad input",
+                "count": 5,
+                "last_seen": "2026-06-05T12:00:00",
+                "first_seen": "2026-06-01T10:00:00",
+                "handlers": ["message"],
+                "sample_traceback": ["Traceback ...\n", "ValueError: bad input\n"],
+            },
+        ]
+        mock_storage_cls.return_value = mock_storage
+        with client.session_transaction() as sess:
+            sess["user_email"] = "admin@test.com"
+        resp = client.get("/admin/errors")
+        html = resp.data.decode()
+        assert "ValueError" in html
+        assert "bad input" in html
+        assert "5" in html
+
+    @patch("admin_views.AdminStorage")
+    def test_kpi_totals(self, mock_storage_cls, client):
+        mock_storage = _mock_errors_storage()
+        mock_storage.get_error_groups.return_value = [
+            {"error_type": "A", "error_message": "a", "count": 3,
+             "last_seen": "", "first_seen": "", "handlers": [], "sample_traceback": []},
+            {"error_type": "B", "error_message": "b", "count": 7,
+             "last_seen": "", "first_seen": "", "handlers": [], "sample_traceback": []},
+        ]
+        mock_storage_cls.return_value = mock_storage
+        with client.session_transaction() as sess:
+            sess["user_email"] = "admin@test.com"
+        resp = client.get("/admin/errors")
+        html = resp.data.decode()
+        # total_errors = 10, unique_errors = 2
+        assert "10" in html
+        assert "2" in html

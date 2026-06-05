@@ -4,7 +4,7 @@ import logging
 
 import requests
 from flask import (
-    Blueprint, render_template, redirect, url_for, request, session, current_app,
+    Blueprint, jsonify, render_template, redirect, url_for, request, session, current_app,
 )
 
 from auth import login_required
@@ -176,12 +176,30 @@ def history():
 @login_required
 def weekly_summaries():
     storage = _get_storage()
-    summaries = storage.get_weekly_summaries(session["user_email"])
+    email = session["user_email"]
+    summaries = storage.get_weekly_summaries(email)
+    trend = storage.get_daily_calorie_totals(email, days=30)
     return render_template(
         "dashboard/weekly_summaries.html",
         summaries=summaries,
+        trend_days=trend["days"],
+        trend_target=trend["target"],
         active_tab="weekly_summaries",
     )
+
+
+@dashboard_bp.route("/api/calorie-trend")
+@login_required
+def calorie_trend_api():
+    """JSON endpoint for calorie trend data (used by range toggle)."""
+    storage = _get_storage()
+    try:
+        days = int(request.args.get("days", 30))
+    except (ValueError, TypeError):
+        days = 30
+    days = min(days, 90)
+    data = storage.get_daily_calorie_totals(session["user_email"], days=days)
+    return jsonify(data)
 
 
 # ------------------------------------------------------------------

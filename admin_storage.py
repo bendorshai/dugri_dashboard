@@ -74,6 +74,62 @@ class AdminStorage:
         self._sleep = self._db["sleep_logs"]
         self._workouts = self._db["workout_logs"]
         self._self_care = self._db["self_care_logs"]
+        self._errors = self._db["error_logs"]
+
+    # -- Error Analytics --
+
+    def get_error_groups(self, days: int = 30) -> list[dict]:
+        def _fetch():
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            pipeline = [
+                {"$match": {"timestamp": {"$gte": cutoff}}},
+                {"$group": {
+                    "_id": {"error_type": "$error_type", "error_message": "$error_message"},
+                    "count": {"$sum": 1},
+                    "last_seen": {"$max": "$timestamp"},
+                    "first_seen": {"$min": "$timestamp"},
+                    "handlers": {"$addToSet": "$handler"},
+                    "sample_traceback": {"$first": "$traceback"},
+                }},
+                {"$sort": {"count": -1}},
+            ]
+            rows = list(self._errors.aggregate(pipeline))
+            return [
+                {
+                    "error_type": r["_id"]["error_type"],
+                    "error_message": r["_id"]["error_message"],
+                    "count": r["count"],
+                    "last_seen": r["last_seen"],
+                    "first_seen": r["first_seen"],
+                    "handlers": r["handlers"],
+                    "sample_traceback": r["sample_traceback"],
+                }
+                for r in rows
+            ]
+
+        return _cached("error_groups", _fetch)
+
+    def get_error_daily_counts(self, days: int = 30) -> list[dict]:
+        def _fetch():
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            pipeline = [
+                {"$match": {"timestamp": {"$gte": cutoff}}},
+                {"$group": {
+                    "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$timestamp"}},
+                    "count": {"$sum": 1},
+                }},
+                {"$sort": {"_id": 1}},
+            ]
+            rows = list(self._errors.aggregate(pipeline))
+            counts_by_date = {r["_id"]: r["count"] for r in rows}
+
+            result = []
+            for i in range(days):
+                d = (datetime.now(timezone.utc) - timedelta(days=days - 1 - i)).strftime("%Y-%m-%d")
+                result.append({"date": d, "count": counts_by_date.get(d, 0)})
+            return result
+
+        return _cached("error_daily_counts", _fetch)
 
     # -- KPI Cards --
 

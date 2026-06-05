@@ -99,3 +99,52 @@ class TestDashboardAuth:
         _login(client)
         resp = client.get("/dashboard/")
         assert resp.status_code == 302
+
+
+class TestCalorieTrendAPI:
+    @patch("dashboard_views.DashboardStorage")
+    def test_returns_json_with_days_and_target(self, mock_storage_cls, client):
+        mock_storage = MagicMock()
+        mock_storage.get_daily_calorie_totals.return_value = {
+            "days": [
+                {"date": "01/06/2026", "calories": 1800},
+                {"date": "02/06/2026", "calories": 2100},
+            ],
+            "target": 2000,
+        }
+        mock_storage_cls.return_value = mock_storage
+        _login(client)
+        resp = client.get("/dashboard/api/calorie-trend?days=7")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "days" in data
+        assert "target" in data
+        assert len(data["days"]) == 2
+
+    @patch("dashboard_views.DashboardStorage")
+    def test_defaults_to_30_days(self, mock_storage_cls, client):
+        mock_storage = MagicMock()
+        mock_storage.get_daily_calorie_totals.return_value = {"days": [], "target": None}
+        mock_storage_cls.return_value = mock_storage
+        _login(client)
+        resp = client.get("/dashboard/api/calorie-trend")
+        assert resp.status_code == 200
+        mock_storage.get_daily_calorie_totals.assert_called_once_with(
+            "test@example.com", days=30,
+        )
+
+    @patch("dashboard_views.DashboardStorage")
+    def test_caps_days_at_90(self, mock_storage_cls, client):
+        mock_storage = MagicMock()
+        mock_storage.get_daily_calorie_totals.return_value = {"days": [], "target": None}
+        mock_storage_cls.return_value = mock_storage
+        _login(client)
+        resp = client.get("/dashboard/api/calorie-trend?days=999")
+        assert resp.status_code == 200
+        mock_storage.get_daily_calorie_totals.assert_called_once_with(
+            "test@example.com", days=90,
+        )
+
+    def test_requires_login(self, client):
+        resp = client.get("/dashboard/api/calorie-trend")
+        assert resp.status_code == 302
