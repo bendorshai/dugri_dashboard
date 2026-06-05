@@ -178,27 +178,28 @@ def weekly_summaries():
     storage = _get_storage()
     email = session["user_email"]
     summaries = storage.get_weekly_summaries(email)
-    trend = storage.get_daily_calorie_totals(email, days=30)
+    trend = storage.get_trend_data(email, days=30)
     return render_template(
         "dashboard/weekly_summaries.html",
         summaries=summaries,
         trend_days=trend["days"],
-        trend_target=trend["target"],
+        trend_targets=trend["targets"],
         active_tab="weekly_summaries",
     )
 
 
-@dashboard_bp.route("/api/calorie-trend")
+@dashboard_bp.route("/api/trend")
 @login_required
-def calorie_trend_api():
-    """JSON endpoint for calorie trend data (used by range toggle)."""
+def trend_api():
+    """JSON endpoint for trend data (calories, protein, workouts)."""
     storage = _get_storage()
     try:
         days = int(request.args.get("days", 30))
     except (ValueError, TypeError):
         days = 30
-    days = min(days, 90)
-    data = storage.get_daily_calorie_totals(session["user_email"], days=days)
+    if days < 0:
+        days = 30
+    data = storage.get_trend_data(session["user_email"], days=days)
     return jsonify(data)
 
 

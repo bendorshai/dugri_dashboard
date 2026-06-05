@@ -5,13 +5,23 @@
 {% endblock %}
 
 {% block dashboard_content %}
-<!-- Calorie trend chart -->
+<!-- Trend chart -->
 <div class="dashboard-card" style="max-width: 700px; margin-bottom: 24px;"
-     x-data="calorieTrend()" x-init="init()">
-    <h2>מגמת קלוריות</h2>
-    <p class="text-muted">הצריכה היומית שלך לאורך זמן.</p>
+     x-data="trendChart()" x-init="init()">
+    <h2>מגמות</h2>
+    <p class="text-muted">ההתקדמות שלך לאורך זמן.</p>
 
-    <div style="display: flex; gap: 8px; margin: 16px 0;">
+    <!-- Metric tabs -->
+    <div style="display: flex; gap: 6px; margin: 16px 0 8px;">
+        <template x-for="m in metrics" :key="m.key">
+            <button @click="switchMetric(m.key)"
+                    :class="activeMetric === m.key ? 'btn-metric active' : 'btn-metric'"
+                    x-text="m.label"></button>
+        </template>
+    </div>
+
+    <!-- Range buttons -->
+    <div style="display: flex; gap: 8px; margin: 8px 0 16px;">
         <template x-for="option in rangeOptions" :key="option.days">
             <button @click="switchRange(option.days)"
                     :class="activeDays === option.days ? 'btn-range active' : 'btn-range'"
@@ -20,7 +30,7 @@
     </div>
 
     <div style="position: relative; height: 260px;">
-        <canvas id="calorieChart"></canvas>
+        <canvas id="trendChart"></canvas>
     </div>
 </div>
 
@@ -52,7 +62,7 @@
 </div>
 
 <style>
-.btn-range {
+.btn-range, .btn-metric {
     padding: 6px 16px;
     border: 1px solid var(--border, #E0D8CC);
     border-radius: var(--radius-sm, 8px);
@@ -62,7 +72,7 @@
     cursor: pointer;
     transition: all 0.15s ease;
 }
-.btn-range:hover {
+.btn-range:hover, .btn-metric:hover {
     border-color: var(--accent, #5BA8C4);
     color: var(--accent, #5BA8C4);
 }
@@ -71,53 +81,98 @@
     border-color: var(--accent, #5BA8C4);
     color: white;
 }
+.btn-metric.active {
+    background: var(--text, #5A554D);
+    border-color: var(--text, #5A554D);
+    color: white;
+}
 </style>
 
 <script>
-function calorieTrend() {
+function trendChart() {
+    const METRIC_CONFIG = {
+        calories: {
+            label: 'קלוריות',
+            color: '#5BA8C4',
+            fill: 'rgba(91, 168, 196, 0.1)',
+            targetKey: 'calories',
+            targetLabel: 'יעד קלוריות',
+        },
+        protein: {
+            label: 'חלבון (גרם)',
+            color: '#8FA876',
+            fill: 'rgba(143, 168, 118, 0.1)',
+            targetKey: 'protein',
+            targetLabel: 'יעד חלבון',
+        },
+        workouts: {
+            label: 'אימונים',
+            color: '#C97A6B',
+            fill: 'rgba(201, 122, 107, 0.1)',
+            targetKey: null,  // weekly target, not daily - shown differently
+            targetLabel: null,
+        },
+    };
+
     return {
         chart: null,
+        activeMetric: 'calories',
         activeDays: 30,
+        currentData: null,
+
+        metrics: [
+            { key: 'calories', label: 'קלוריות' },
+            { key: 'protein', label: 'חלבון' },
+            { key: 'workouts', label: 'אימונים' },
+        ],
         rangeOptions: [
             { days: 7, label: 'שבוע' },
             { days: 14, label: 'שבועיים' },
             { days: 30, label: 'חודש' },
+            { days: 90, label: '3 חודשים' },
+            { days: 0, label: 'הכל' },
         ],
-        // Initial data from server
+
         initialDays: {{ trend_days | tojson }},
-        initialTarget: {{ trend_target | tojson }},
+        initialTargets: {{ trend_targets | tojson }},
 
         init() {
-            this.renderChart(this.initialDays, this.initialTarget);
+            this.currentData = { days: this.initialDays, targets: this.initialTargets };
+            this.renderChart();
         },
 
-        renderChart(days, target) {
-            const labels = days.map(d => {
-                // Convert DD/MM/YYYY to DD/MM for display
+        renderChart() {
+            const data = this.currentData;
+            const metric = this.activeMetric;
+            const cfg = METRIC_CONFIG[metric];
+
+            const labels = data.days.map(d => {
                 const parts = d.date.split('/');
                 return parts[0] + '/' + parts[1];
             });
-            const data = days.map(d => d.calories);
+            const values = data.days.map(d => d[metric] || 0);
 
             const datasets = [{
-                label: 'קלוריות',
-                data: data,
-                borderColor: '#5BA8C4',
-                backgroundColor: 'rgba(91, 168, 196, 0.1)',
+                label: cfg.label,
+                data: values,
+                borderColor: cfg.color,
+                backgroundColor: cfg.fill,
                 fill: true,
                 tension: 0.3,
-                pointRadius: 3,
+                pointRadius: data.days.length > 60 ? 1 : 3,
                 pointHoverRadius: 6,
                 borderWidth: 2,
             }];
 
-            if (target) {
+            // Target line (red, dashed)
+            const targetVal = cfg.targetKey ? data.targets[cfg.targetKey] : null;
+            if (targetVal) {
                 datasets.push({
-                    label: 'יעד',
-                    data: Array(days.length).fill(target),
-                    borderColor: '#A67448',
+                    label: cfg.targetLabel,
+                    data: Array(data.days.length).fill(targetVal),
+                    borderColor: '#D94444',
                     borderDash: [6, 4],
-                    borderWidth: 1.5,
+                    borderWidth: 2,
                     pointRadius: 0,
                     fill: false,
                 });
@@ -127,7 +182,7 @@ function calorieTrend() {
                 this.chart.destroy();
             }
 
-            const ctx = document.getElementById('calorieChart').getContext('2d');
+            const ctx = document.getElementById('trendChart').getContext('2d');
             this.chart = new Chart(ctx, {
                 type: 'line',
                 data: { labels, datasets },
@@ -139,7 +194,11 @@ function calorieTrend() {
                         mode: 'index',
                     },
                     plugins: {
-                        legend: { display: false },
+                        legend: {
+                            display: !!targetVal,
+                            rtl: true,
+                            labels: { font: { size: 12 }, usePointStyle: true },
+                        },
                         tooltip: {
                             rtl: true,
                             textDirection: 'rtl',
@@ -150,8 +209,11 @@ function calorieTrend() {
                     },
                     scales: {
                         x: {
-                            reverse: true,  // RTL: newest on left
-                            ticks: { maxTicksLimit: 10, font: { size: 11 } },
+                            reverse: true,
+                            ticks: {
+                                maxTicksLimit: data.days.length > 60 ? 8 : 10,
+                                font: { size: 11 },
+                            },
                             grid: { display: false },
                         },
                         y: {
@@ -164,12 +226,18 @@ function calorieTrend() {
             });
         },
 
+        switchMetric(metric) {
+            this.activeMetric = metric;
+            this.renderChart();
+        },
+
         async switchRange(days) {
             this.activeDays = days;
             try {
-                const resp = await fetch('/dashboard/api/calorie-trend?days=' + days);
+                const resp = await fetch('/dashboard/api/trend?days=' + days);
                 const data = await resp.json();
-                this.renderChart(data.days, data.target);
+                this.currentData = data;
+                this.renderChart();
             } catch (e) {
                 console.error('Failed to load trend data', e);
             }

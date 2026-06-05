@@ -101,50 +101,52 @@ class TestDashboardAuth:
         assert resp.status_code == 302
 
 
-class TestCalorieTrendAPI:
+class TestTrendAPI:
+    MOCK_TREND = {
+        "days": [
+            {"date": "01/06/2026", "calories": 1800, "protein": 120, "workouts": 0},
+            {"date": "02/06/2026", "calories": 2100, "protein": 140, "workouts": 1},
+        ],
+        "targets": {"calories": 2000, "protein": 150, "workouts_per_week": 3},
+    }
+
     @patch("dashboard_views.DashboardStorage")
-    def test_returns_json_with_days_and_target(self, mock_storage_cls, client):
+    def test_returns_json_with_days_and_targets(self, mock_storage_cls, client):
         mock_storage = MagicMock()
-        mock_storage.get_daily_calorie_totals.return_value = {
-            "days": [
-                {"date": "01/06/2026", "calories": 1800},
-                {"date": "02/06/2026", "calories": 2100},
-            ],
-            "target": 2000,
-        }
+        mock_storage.get_trend_data.return_value = self.MOCK_TREND
         mock_storage_cls.return_value = mock_storage
         _login(client)
-        resp = client.get("/dashboard/api/calorie-trend?days=7")
+        resp = client.get("/dashboard/api/trend?days=7")
         assert resp.status_code == 200
         data = resp.get_json()
         assert "days" in data
-        assert "target" in data
+        assert "targets" in data
         assert len(data["days"]) == 2
 
     @patch("dashboard_views.DashboardStorage")
     def test_defaults_to_30_days(self, mock_storage_cls, client):
         mock_storage = MagicMock()
-        mock_storage.get_daily_calorie_totals.return_value = {"days": [], "target": None}
+        mock_storage.get_trend_data.return_value = {"days": [], "targets": {}}
         mock_storage_cls.return_value = mock_storage
         _login(client)
-        resp = client.get("/dashboard/api/calorie-trend")
+        resp = client.get("/dashboard/api/trend")
         assert resp.status_code == 200
-        mock_storage.get_daily_calorie_totals.assert_called_once_with(
+        mock_storage.get_trend_data.assert_called_once_with(
             "test@example.com", days=30,
         )
 
     @patch("dashboard_views.DashboardStorage")
-    def test_caps_days_at_90(self, mock_storage_cls, client):
+    def test_days_zero_for_all_history(self, mock_storage_cls, client):
         mock_storage = MagicMock()
-        mock_storage.get_daily_calorie_totals.return_value = {"days": [], "target": None}
+        mock_storage.get_trend_data.return_value = {"days": [], "targets": {}}
         mock_storage_cls.return_value = mock_storage
         _login(client)
-        resp = client.get("/dashboard/api/calorie-trend?days=999")
+        resp = client.get("/dashboard/api/trend?days=0")
         assert resp.status_code == 200
-        mock_storage.get_daily_calorie_totals.assert_called_once_with(
-            "test@example.com", days=90,
+        mock_storage.get_trend_data.assert_called_once_with(
+            "test@example.com", days=0,
         )
 
     def test_requires_login(self, client):
-        resp = client.get("/dashboard/api/calorie-trend")
+        resp = client.get("/dashboard/api/trend")
         assert resp.status_code == 302
