@@ -83,6 +83,42 @@ class GoalService:
         self._toggle_service.set_goal_offered(tid, toggle_name)
         return text
 
+    def offer_goal_with_shortcut(
+        self, tid: int, toggle_name: str, user_text: str,
+    ) -> str:
+        """Offer a goal, but first try to extract a value from the user's text.
+
+        If the user's acceptance message already contains the goal value
+        (e.g., "יאללה, 3 פעמים בשבוע"), skip the goal question and jump
+        straight to confirmation. Falls back to normal offer_goal() if
+        no value is found.
+        """
+        import messages as M
+
+        if toggle_name == "nutrition":
+            return self.start_nutrition_onboarding(tid)
+
+        extraction_types = {
+            "sleep": "sleep_time",
+            "workouts": "workout_count",
+            "eating_window": "eating_window",
+        }
+        goal_type = extraction_types.get(toggle_name)
+        if goal_type and self._analyzer:
+            parsed = self._analyzer.extract_goal_value(user_text, goal_type)
+            if parsed is not None:
+                self._toggle_service.set_goal_value(tid, toggle_name, parsed)
+                if toggle_name == "eating_window" and "start" in parsed and "end" in parsed:
+                    self._user_repo.update_fields(tid, {
+                        "eating_window": {"start": parsed["start"], "end": parsed["end"]},
+                    })
+                pool = self._get_goal_set_pool(toggle_name)
+                text = random.choice(pool)
+                loop_close = M.LOOP_CLOSE_GOAL_SET.get(toggle_name, "")
+                return text + loop_close
+
+        return self.offer_goal(tid, toggle_name)
+
     # ------------------------------------------------------------------
     # Goal consent (yes/no to "want to set a goal?")
     # ------------------------------------------------------------------
@@ -139,7 +175,9 @@ class GoalService:
             })
 
         pool = self._get_goal_set_pool(toggle_name)
-        return random.choice(pool)
+        text = random.choice(pool)
+        loop_close = M.LOOP_CLOSE_GOAL_SET.get(toggle_name, "")
+        return text + loop_close
 
     # ------------------------------------------------------------------
     # Goal remind (yes/no to "want me to remind you?")
@@ -259,17 +297,19 @@ class GoalService:
         """
         import messages as M
 
+        loop_close = M.LOOP_CLOSE_GOAL_SET.get("nutrition", "")
+
         # Try to extract corrected numbers from natural text
         if self._analyzer:
             parsed = self._analyzer.extract_goal_value(text, "nutrition_targets")
             if parsed and parsed.get("calories") and parsed.get("protein"):
                 self._toggle_service.set_goal_value(tid, "nutrition",
                                                     {"calories": parsed["calories"], "protein": parsed["protein"]})
-                return random.choice(self._get_goal_set_pool("nutrition"))
+                return random.choice(self._get_goal_set_pool("nutrition")) + loop_close
 
         # No corrected numbers - accept the original suggestion
         self._toggle_service.set_goal_status(tid, "nutrition", "set")
-        return random.choice(self._get_goal_set_pool("nutrition"))
+        return random.choice(self._get_goal_set_pool("nutrition")) + loop_close
 
     # ------------------------------------------------------------------
     # Ghosting detection (called by poller)

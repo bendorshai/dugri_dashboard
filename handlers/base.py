@@ -141,6 +141,36 @@ class HealthHandlers:
             self.user_repo.update_fields(tid, {f"toggles.{toggle_name}.edu_intro_shown": True})
         return text
 
+    def _process_habit_entries(self, tid: int, entries, today_str: str) -> str | None:
+        """Process multi-type habit entries and return combined confirmation text."""
+        if not entries:
+            return None
+        lines = []
+        for entry in entries:
+            if entry.habit_type == "sleep" and entry.sleep_time and self.message_router:
+                self.message_router.route_sleep(tid, entry.sleep_time, entry.date or today_str)
+                lines.append(f"שינה {entry.temporal_label}: {entry.sleep_time}")
+            elif entry.habit_type == "workout" and self.message_router:
+                self.message_router.route_workout(tid, entry.date or today_str, entry.workout_note)
+                label = f"אימון {entry.temporal_label}"
+                if entry.workout_note:
+                    label += f" ({entry.workout_note})"
+                lines.append(label)
+            elif entry.habit_type == "self_care" and entry.self_care_description and self.message_router:
+                from datetime import datetime as dt
+                date_str = entry.date or today_str
+                try:
+                    week_id = dt.strptime(date_str, "%d/%m/%Y").strftime("%G-W%V")
+                except ValueError:
+                    week_id = dt.now().strftime("%G-W%V")
+                self.message_router.route_self_care(tid, entry.self_care_description, week_id)
+                lines.append(f"משהו לעצמך {entry.temporal_label}: {entry.self_care_description}")
+        if not lines:
+            return None
+        if len(lines) == 1:
+            return f"רשמתי: {lines[0]}"
+        return "רשמתי:\n" + "\n".join(f"- {l}" for l in lines)
+
     def _build_food_response(
         self, items_text: str, total_cal: int, total_protein: int, profile: UserProfile,
     ) -> str:
@@ -266,9 +296,11 @@ class HealthHandlers:
             if toggle and toggle.revealed_at and toggle.status == "dormant":
                 self.toggle_service.activate_toggle(tid, name)
                 if self.goal_service and self.goal_service.should_offer_goal(profile, name):
-                    response = self.goal_service.offer_goal(tid, name)
+                    response = self.goal_service.offer_goal_with_shortcut(tid, name, text)
                 else:
-                    response = "יפה, נרשמתי."
+                    import messages as M
+                    loop_close = M.LOOP_CLOSE_ACTIVATION.get(name, "")
+                    response = "יפה, נרשמתי." + loop_close
                 await message.reply_text(response)
                 self._save_bot_message(tid, response)
                 return
@@ -475,27 +507,39 @@ class HealthHandlers:
             return
 
         if classification.type == "sleep" and self.message_router:
-            result = self.message_router.route_sleep(tid, classification.sleep_time or time_str, today_str)
+            if classification.habit_entries:
+                text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+            else:
+                result = self.message_router.route_sleep(tid, classification.sleep_time or time_str, today_str)
+                text = result.response_text
             edu = self._get_education_intro(tid, "sleep", profile)
-            text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
+            text = f"{text}\n\n{edu}" if edu else text
             await message.reply_text(text)
             self._save_bot_message(tid, text)
             return
 
         if classification.type == "workout" and self.message_router:
-            result = self.message_router.route_workout(tid, today_str, classification.workout_note)
+            if classification.habit_entries:
+                text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+            else:
+                result = self.message_router.route_workout(tid, today_str, classification.workout_note)
+                text = result.response_text
             edu = self._get_education_intro(tid, "workouts", profile)
-            text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
+            text = f"{text}\n\n{edu}" if edu else text
             await message.reply_text(text)
             self._save_bot_message(tid, text)
             return
 
         if classification.type == "self_care" and self.message_router:
-            from datetime import datetime as dt
-            week_id = dt.strptime(today_str, "%d/%m/%Y").strftime("%G-W%V")
-            result = self.message_router.route_self_care(tid, classification.self_care_description or message.text, week_id)
+            if classification.habit_entries:
+                text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+            else:
+                from datetime import datetime as dt
+                week_id = dt.strptime(today_str, "%d/%m/%Y").strftime("%G-W%V")
+                result = self.message_router.route_self_care(tid, classification.self_care_description or message.text, week_id)
+                text = result.response_text
             edu = self._get_education_intro(tid, "self_care", profile)
-            text = f"{result.response_text}\n\n{edu}" if edu else result.response_text
+            text = f"{text}\n\n{edu}" if edu else text
             await message.reply_text(text)
             self._save_bot_message(tid, text)
             return
@@ -536,11 +580,14 @@ class HealthHandlers:
             if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"}:
                 self.toggle_service.activate_toggle(tid, toggle_name)
                 if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
-                    response = self.goal_service.offer_goal(tid, toggle_name)
+                    response = self.goal_service.offer_goal_with_shortcut(tid, toggle_name, text)
                     await message.reply_text(response)
                     self._save_bot_message(tid, response)
                 else:
-                    await message.reply_text("יפה, נרשמתי. מעכשיו אני עוקב.")
+                    import messages as M
+                    loop_close = M.LOOP_CLOSE_ACTIVATION.get(toggle_name, "")
+                    response = "יפה, נרשמתי. מעכשיו אני עוקב." + loop_close
+                    await message.reply_text(response)
             else:
                 await message.reply_text("לא הבנתי איזה מעקב להדליק. נסה שוב?")
             return
@@ -632,6 +679,13 @@ class HealthHandlers:
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(last_entry_id))
         await safe_react(message, OK_HAND)
         self._save_bot_message(tid, response)
+
+        # Mixed-type: process habit entries that came alongside the meal
+        if classification.habit_entries:
+            habit_text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+            if habit_text:
+                await message.reply_text(habit_text)
+                self._save_bot_message(tid, habit_text)
 
         # Protein education on first meal ever
         if len(self.food_repo.get_all_for_user(tid)) == 1:

@@ -76,6 +76,20 @@ class WeeklyFeedbackResult(BaseModel):
     feedback_text: str
 
 
+class HabitEntry(BaseModel):
+    """A single habit log entry with temporal context.
+
+    Used for multi-entry and mixed-type messages, e.g.,
+    "שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, והיום אכלתי צ'יזבורגר"
+    """
+    habit_type: Literal["sleep", "workout", "self_care"]
+    temporal_label: str
+    date: str
+    sleep_time: str | None = None
+    workout_note: str | None = None
+    self_care_description: str | None = None
+
+
 class MessageClassification(BaseModel):
     type: Literal[
         "meal", "correction", "sleep", "workout", "self_care",
@@ -89,6 +103,7 @@ class MessageClassification(BaseModel):
     sleep_time: str | None = None
     workout_note: str | None = None
     self_care_description: str | None = None
+    habit_entries: list[HabitEntry] | None = None
     question_text: str | None = None
     toggle_name: str | None = None
     freeform_response: str | None = None

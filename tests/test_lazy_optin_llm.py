@@ -288,7 +288,65 @@ Skip in CI: pytest -m "not integration"
 # exact production messages from messages.py. Food response stubs are
 # realistic approximations of GPT output (varies by nature).
 #
+# COOPERATIVE USER SHORTCUT (offer acceptance with embedded value)
+# ----------------------------------------------------------------
+# When a user's acceptance message already contains the answer to the
+# NEXT question in the flow, Dugri detects this and skips the redundant
+# question. The extraction layer runs on the acceptance text before the
+# goal offer question is sent.
+#
+# Examples:
+#   - "יאללה, 3 פעמים בשבוע" to workouts offer -> goal set to 3,
+#     skip "כמה אימונים בשבוע?" entirely.
+#   - "כן, אני מנסה להירדם עד 23:00" to sleep offer -> goal set to
+#     23:00, skip "באיזו שעה אתה רוצה ללכת לישון?".
+#   - "בטח, 8 בבוקר עד 8 בערב" to eating window offer -> window set,
+#     skip "מתי אתה מתחיל ומסיים לאכול?".
+#   - "יאללה" alone -> no value found, normal flow continues.
+#
+# This applies to the offer acceptance path and the toggle_activate path.
+# Nutrition is excluded (multi-step flow: body stats -> weight goal ->
+# suggestion -> confirm).
+#
+# Extraction prompts accept bare numbers: "5" -> weekly_target=5,
+# "23" -> sleep_time=23:00.
+#
+# LOOP-CLOSING MESSAGES (what happens next)
+# ------------------------------------------
+# After a goal is set (or a habit is activated without a goal), Dugri
+# appends a habit-specific suffix explaining what the user should expect:
+#   - sleep: "מחר בבוקר אשאל אותך מתי הלכת לישון."
+#   - workouts: "בימי חמישי אבדוק איתך... תמיד אפשר לדווח מתי שבא לך."
+#   - eating_window: "אני עוקב אוטומטית מהארוחות."
+#   - nutrition: "כל ארוחה שתדווח - אראה לך איפה אתה עומד ביחס ליעד."
+#   - self_care: "בימי שישי אשאל אותך מה עשית לעצמך השבוע."
+#
+# This fires on goal set, nutrition confirm, and the shortcut path.
+#
+# MIXED-TYPE & RETROACTIVE MULTI-ENTRY LOGGING
+# ----------------------------------------------
+# A single message can contain entries across MULTIPLE habit types AND
+# food, for different dates. The classifier populates habit_entries
+# (list of HabitEntry) alongside the primary type.
+#
+# Examples:
+#   - "שלשום הלכתי לישון ב-21:00 ואתמול ב-22:00"
+#     -> type=sleep, habit_entries=[{sleep, שלשום, 21:00}, {sleep, אתמול, 22:00}]
+#   - "שלשום התאמנתי ואתמול הלכתי לישון ב-22:00"
+#     -> type=workout, habit_entries=[{workout, שלשום}, {sleep, אתמול, 22:00}]
+#   - "היום אכלתי צ'יזבורגר, אתמול הלכתי לישון ב-23:00, ושלשום התאמנתי"
+#     -> type=meal, meal={...}, habit_entries=[{sleep, אתמול, 23:00}, {workout, שלשום}]
+#
+# For single-entry messages, the scalar fields (sleep_time, workout_note,
+# self_care_description) are still populated for backward compatibility.
+# habit_entries is only used for multi-entry or mixed-type messages.
+#
+# Temporal rules for habits mirror food's temporal extraction: "אתמול",
+# "שלשום", "ביום שני", etc. "אותו דבר" / "גם" = same value as the
+# previous entry mentioned.
+#
 # ============================================================================
+
 """
 
 import json
@@ -1186,3 +1244,237 @@ class TestNoneIsRare:
         )
         assert result.type == "none"
         assert result.freeform_response  # should have a natural response
+
+
+# ============================================================================
+# GAP 3: COOPERATIVE USER SHORTCUT (skip redundant questions)
+#
+# When a user's response already contains the answer to the NEXT question,
+# Dugri should skip that question. E.g., "יאללה, 3 פעמים בשבוע" to a
+# workouts offer contains both consent AND the goal value.
+# ============================================================================
+
+class TestGoalShortcut:
+    """Tests for extracting goal values from acceptance messages.
+
+    These test the extraction layer directly: can GPT extract a goal value
+    from a message that also contains acceptance language?
+    """
+
+    def test_workouts_accept_with_count(self):
+        """'יאללה, 3 פעמים בשבוע' contains a workout count -> extraction succeeds."""
+        analyzer = _make_analyzer()
+        parsed = analyzer.extract_goal_value("יאללה, 3 פעמים בשבוע", "workout_count")
+        assert parsed is not None
+        assert parsed.get("weekly_target") == 3
+
+    def test_sleep_accept_with_time(self):
+        """'כן, אני מנסה להירדם עד 23:00' contains a sleep time -> extraction succeeds."""
+        analyzer = _make_analyzer()
+        parsed = analyzer.extract_goal_value("כן, אני מנסה להירדם עד 23:00", "sleep_time")
+        assert parsed is not None
+        assert parsed.get("sleep_time") == "23:00"
+
+    def test_eating_window_accept_with_times(self):
+        """'בטח, 8 בבוקר עד 8 בערב' contains eating window times -> extraction succeeds."""
+        analyzer = _make_analyzer()
+        parsed = analyzer.extract_goal_value("בטח, 8 בבוקר עד 8 בערב", "eating_window")
+        assert parsed is not None
+        assert parsed.get("start") == "08:00"
+        assert parsed.get("end") == "20:00"
+
+    def test_plain_acceptance_no_shortcut(self):
+        """'יאללה' alone has no goal value -> extraction returns None."""
+        analyzer = _make_analyzer()
+        parsed = analyzer.extract_goal_value("יאללה", "workout_count")
+        assert parsed is None
+
+    def test_bare_number_workout(self):
+        """Bare '5' should extract as workout count."""
+        analyzer = _make_analyzer()
+        parsed = analyzer.extract_goal_value("5", "workout_count")
+        assert parsed is not None
+        assert parsed.get("weekly_target") == 5
+
+    def test_bare_number_sleep(self):
+        """Bare '23' should extract as sleep time 23:00."""
+        analyzer = _make_analyzer()
+        parsed = analyzer.extract_goal_value("23", "sleep_time")
+        assert parsed is not None
+        assert parsed.get("sleep_time") == "23:00"
+
+
+# ============================================================================
+# GAP 2: MIXED-TYPE & RETROACTIVE MULTI-ENTRY LOGGING
+#
+# A single message can contain entries across MULTIPLE habit types AND food,
+# for different dates. The classifier returns habit_entries for multi-entry
+# and mixed-type cases.
+# ============================================================================
+
+class TestMultiEntryHabits:
+    """Tests for retroactive and mixed-type habit logging.
+
+    These verify that the classifier correctly populates habit_entries
+    when a message contains multiple dates or multiple habit types.
+    """
+
+    # --- Single-type, multi-date ---
+
+    def test_sleep_two_days_retroactive(self):
+        """'שלשום הלכתי לישון ב-21:00 ואתמול ב-22:00' -> 2 sleep entries."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer,
+            "שלשום הלכתי לישון ב-21:00 ואתמול ב-22:00",
+            toggle_state=_build_toggle_state(sleep="active_with_goal"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
+        )
+        assert result.type == "sleep"
+        assert result.habit_entries is not None
+        assert len(result.habit_entries) == 2
+        times = sorted(e.sleep_time for e in result.habit_entries)
+        assert "21:00" in times
+        assert "22:00" in times
+
+    def test_workout_multi_day(self):
+        """'התאמנתי ביום שני וביום רביעי' -> 2 workout entries."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer,
+            "התאמנתי ביום שני וביום רביעי",
+            toggle_state=_build_toggle_state(workouts="active_with_goal"),
+            history=_build_history(
+                ("user", "קפה עם חלב"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
+        )
+        assert result.type == "workout"
+        assert result.habit_entries is not None
+        assert len(result.habit_entries) == 2
+        assert all(e.habit_type == "workout" for e in result.habit_entries)
+
+    def test_sleep_same_time_shorthand(self):
+        """'אתמול הלכתי לישון ב-22:00, שלשום אותו דבר' -> 2 entries both 22:00."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer,
+            "אתמול הלכתי לישון ב-22:00, שלשום אותו דבר",
+            toggle_state=_build_toggle_state(sleep="active_with_goal"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
+        )
+        assert result.type == "sleep"
+        assert result.habit_entries is not None
+        assert len(result.habit_entries) == 2
+        assert all(e.sleep_time == "22:00" for e in result.habit_entries)
+
+    # --- Mixed-type (multiple habit types in one message) ---
+
+    def test_mixed_workout_and_sleep(self):
+        """'שלשום התאמנתי ואתמול הלכתי לישון ב-22:00' -> workout + sleep entries."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer,
+            "שלשום התאמנתי ואתמול הלכתי לישון ב-22:00",
+            toggle_state=_build_toggle_state(
+                sleep="active_with_goal", workouts="active_with_goal",
+            ),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
+        )
+        assert result.habit_entries is not None
+        assert len(result.habit_entries) == 2
+        types = {e.habit_type for e in result.habit_entries}
+        assert "sleep" in types
+        assert "workout" in types
+
+    def test_mixed_food_and_habits(self):
+        """'היום אכלתי צ'יזבורגר, אתמול הלכתי לישון ב-23:00, ושלשום התאמנתי'
+        -> type=meal with food data, plus habit_entries with sleep + workout."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer,
+            "היום אכלתי צ'יזבורגר, אתמול הלכתי לישון ב-23:00, ושלשום התאמנתי",
+            toggle_state=_build_toggle_state(
+                nutrition="active_with_goal",
+                sleep="active_with_goal",
+                workouts="active_with_goal",
+            ),
+            history=_build_history(
+                ("user", "קפה בבוקר"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
+        )
+        assert result.type == "meal"
+        assert result.meal is not None
+        assert result.habit_entries is not None
+        assert len(result.habit_entries) == 2
+        types = {e.habit_type for e in result.habit_entries}
+        assert "sleep" in types
+        assert "workout" in types
+
+    def test_mixed_all_types(self):
+        """Full mixed message: workout + 2 sleep entries + food.
+        'שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר'
+        -> type=meal, habit_entries has 3 entries (1 workout + 2 sleep)."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer,
+            "שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר",
+            toggle_state=_build_toggle_state(
+                nutrition="active_with_goal",
+                sleep="active_with_goal",
+                workouts="active_with_goal",
+            ),
+            history=_build_history(
+                ("user", "קפה בבוקר"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
+        )
+        assert result.type == "meal"
+        assert result.meal is not None
+        assert result.habit_entries is not None
+        assert len(result.habit_entries) == 3
+        sleep_entries = [e for e in result.habit_entries if e.habit_type == "sleep"]
+        workout_entries = [e for e in result.habit_entries if e.habit_type == "workout"]
+        assert len(sleep_entries) == 2
+        assert len(workout_entries) == 1
+
+    # --- Backward compatibility ---
+
+    def test_sleep_single_still_works(self):
+        """Single sleep entry still uses the scalar sleep_time field."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "הלכתי לישון ב-23:00",
+            toggle_state=_build_toggle_state(sleep="active_with_goal"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
+        )
+        assert result.type == "sleep"
+        assert result.sleep_time is not None
+        assert "23:00" in result.sleep_time
+
+    def test_food_single_still_works(self):
+        """Single food entry has no habit_entries."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "שניצל עם אורז",
+            toggle_state=_build_toggle_state(nutrition="active_with_goal"),
+            history=_build_history(
+                ("user", "קפה בבוקר"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
+        )
+        assert result.type == "meal"
+        assert not result.habit_entries

@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "4.5.0"
-VERSION_NOTES = "ניקוי שדות מיותרים, תיקון reset script (subscription_status, name, body stats)"
+VERSION = "4.6.0"
+VERSION_NOTES = "3 שיפורי שיחה: קיצור שאלות מיותרות, הודעת סגירת לולאה, דיווח רטרואקטיבי מעורב"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
