@@ -52,7 +52,7 @@ class TestTogglesDefaults:
         assert toggles.eating_window.status == "dormant"
         assert toggles.workouts.status == "dormant"
         assert toggles.self_care.status == "dormant"
-        assert toggles.target_data.status == "dormant"
+        assert toggles.nutrition.status == "dormant"
 
     def test_weekly_summary_starts_active(self):
         """Weekly summary is opt-out default — born active."""
@@ -62,7 +62,7 @@ class TestTogglesDefaults:
     def test_toggle_names(self):
         """All expected toggle names exist."""
         toggles = Toggles()
-        expected = {"sleep", "eating_window", "workouts", "self_care", "target_data", "weekly_summary"}
+        expected = {"sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"}
         actual = set(Toggles.model_fields.keys())
         assert expected == actual
 
@@ -129,7 +129,7 @@ class TestToggleMigration:
         assert user.toggles.sleep.status == "dormant"
         assert user.toggles.workouts.status == "dormant"
         assert user.toggles.self_care.status == "dormant"
-        assert user.toggles.target_data.status == "dormant"
+        assert user.toggles.nutrition.status == "dormant"
         assert user.toggles.eating_window.status == "dormant"
 
     def test_migrates_offered_to_dormant(self):
@@ -202,8 +202,8 @@ class TestToggleMigration:
         # toggles field takes precedence — sleep stays active, not cancelled
         assert user.toggles.sleep.status == "active"
 
-    def test_migration_maps_nutrition_to_target_data(self):
-        """Old 'nutrition' habit maps to 'target_data' toggle."""
+    def test_migration_maps_nutrition_habit_to_nutrition_toggle(self):
+        """Old 'nutrition' habit maps to 'nutrition' toggle."""
         doc = {
             "_id": "a@b.com",
             "onboarding": {
@@ -214,7 +214,7 @@ class TestToggleMigration:
             },
         }
         user = User.from_mongo_dict(doc)
-        assert user.toggles.target_data.status == "active"
+        assert user.toggles.nutrition.status == "active"
 
 
 class TestBackwardCompatibility:

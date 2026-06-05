@@ -16,7 +16,6 @@ from analyzer import FoodAnalyzer
 from repositories.food_repository import FoodRepository
 from repositories.user_repository import UserRepository
 from repositories.feedback_repository import WeeklyFeedbackRepository
-from services.conversation_state_service import ConversationStateService
 
 
 class FeedbackService:
@@ -26,13 +25,11 @@ class FeedbackService:
         food_repo: FoodRepository,
         user_repo: UserRepository,
         feedback_repo: WeeklyFeedbackRepository,
-        state_service: ConversationStateService,
     ):
         self._analyzer = analyzer
         self._food_repo = food_repo
         self._user_repo = user_repo
         self._feedback_repo = feedback_repo
-        self._state_service = state_service
 
     def give_feedback(
         self,
@@ -81,9 +78,6 @@ class FeedbackService:
         else:
             closing = "\n\nעבד לך? יותר מדי? פחות?"
 
-        # Set pending state for reaction
-        self._state_service.set_pending(telegram_user_id, "awaiting_feedback_reaction")
-
         return f"💬 {feedback_text}{closing}"
 
     def process_reaction(
@@ -111,10 +105,8 @@ class FeedbackService:
             self._user_repo.update_fields(telegram_user_id, {
                 "feedback_steering_prompt": new_steering,
             })
-            self._state_service.clear_pending(telegram_user_id)
             return "תודה, רשמתי. הפידבק הבא יהיה מותאם יותר."
         except Exception:
-            self._state_service.clear_pending(telegram_user_id)
             return "רשמתי, תודה."
 
     def should_offer_weekly(self, last_offered_at: datetime | None, now: datetime) -> bool:

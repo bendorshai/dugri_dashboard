@@ -4,7 +4,7 @@ reset_user.py — Reset a user's opt-in/goal state for testing.
 Usage:
     python scripts/reset_user.py <email>
 
-Resets: toggles, targets, eating_window, trial_started_at, pending_state,
+Resets: toggles, targets, eating_window, trial_started_at,
         recent_messages, dashboard flags.
 Does NOT delete: food_entries, sleep_logs, workout_logs, self_care_logs.
 
@@ -14,24 +14,21 @@ opt-in state machine is rewound so the full onboarding flow restarts.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+
+MONGO_URI = "mongodb://mongo:CeIVOLCoGytTovcrdPkcKLVdgjeoFchP@junction.proxy.rlwy.net:10627"
+
 
 def get_mongo_uri() -> str:
-    """Read MongoDB URI from config (same logic as main.py)."""
-    config_json = os.environ.get("CONFIG2_JSON")
-    if config_json:
-        cfg = json.loads(config_json)
-    else:
-        config_path = Path(__file__).parent.parent / "config" / "config.json"
-        with open(config_path) as f:
-            cfg = json.load(f)
-    mongo = cfg.get("mongodb", {})
-    return mongo.get("uri", "")
+    return MONGO_URI
 
 
 def reset_user(email: str) -> None:
@@ -90,7 +87,6 @@ def reset_user(email: str) -> None:
         },
         "eating_window": None,
         "trial_started_at": now,
-        "pending_state": None,
         "recent_messages": [],
         "dashboard_intro_shown": False,
         "target_retry_done": False,

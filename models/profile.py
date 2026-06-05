@@ -91,6 +91,9 @@ class ToggleState(BaseModel):
     goal_remind_at: datetime | None = None
     goal_offered_at: datetime | None = None
 
+    # Education
+    edu_intro_shown: bool = False
+
 
 class Toggles(BaseModel):
     """All habit toggles. weekly_summary is opt-out (born active); rest are opt-in (born dormant)."""
@@ -105,12 +108,6 @@ class Toggles(BaseModel):
 class Onboarding(BaseModel):
     name_collected: bool = False
     habits: OnboardingHabits = Field(default_factory=OnboardingHabits)
-
-
-class PendingState(BaseModel):
-    kind: str
-    data: dict = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class User(BaseModel):
@@ -128,7 +125,6 @@ class User(BaseModel):
     active_habits: list[str] = Field(default_factory=list)
     toggles: Toggles = Field(default_factory=Toggles)
 
-    pending_state: PendingState | None = None
     recent_messages: list[dict] = Field(default_factory=list)
 
     dashboard_intro_shown: bool = False
@@ -187,7 +183,7 @@ class User(BaseModel):
                 doc["eating_window"] = {"start": start, "end": end}
 
         # Remove any unknown legacy fields that would fail validation
-        for legacy_key in ["chat_id", "onboarding_complete", "terms_accepted", "bot_key"]:
+        for legacy_key in ["chat_id", "onboarding_complete", "terms_accepted", "bot_key", "pending_state"]:
             doc.pop(legacy_key, None)
 
         # Migrate old onboarding.habits to toggles (only if toggles not already set)

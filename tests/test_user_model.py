@@ -34,7 +34,6 @@ class TestUserModelBasics:
         assert user.eating_window is None
         assert user.timezone == "Asia/Jerusalem"
         assert user.active_habits == []
-        assert user.pending_state is None
         assert user.consents == {}
         assert user.goals == {}
         assert user.birth_year is None

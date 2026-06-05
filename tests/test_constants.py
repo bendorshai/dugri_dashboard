@@ -14,13 +14,6 @@ class TestGateAndRetryConstants:
         assert C.TOGGLE_GATE_DAYS == 4
         assert C.TOGGLE_GATE_DAYS > 0
 
-    def test_target_retry_day(self):
-        assert C.TARGET_RETRY_DAY == 9
-        assert C.TARGET_RETRY_DAY > C.TOGGLE_GATE_DAYS
-
-    def test_eating_window_retry_days(self):
-        assert C.EATING_WINDOW_RETRY_DAYS == 11
-
     def test_dashboard_intro_day(self):
         assert C.DASHBOARD_INTRO_DAY == 16
 

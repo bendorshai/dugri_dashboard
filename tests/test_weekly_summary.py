@@ -14,7 +14,6 @@ from services.feedback_service import FeedbackService
 from repositories.food_repository import FoodRepository
 from repositories.user_repository import UserRepository
 from repositories.feedback_repository import WeeklyFeedbackRepository
-from services.conversation_state_service import ConversationStateService
 from analyzer import FoodAnalyzer, MessageClassification
 
 
@@ -23,9 +22,8 @@ def _make_feedback_service():
     food_repo = MagicMock(spec=FoodRepository)
     user_repo = MagicMock(spec=UserRepository)
     feedback_repo = MagicMock(spec=WeeklyFeedbackRepository)
-    state_svc = MagicMock(spec=ConversationStateService)
-    svc = FeedbackService(analyzer, food_repo, user_repo, feedback_repo, state_svc)
-    return svc, analyzer, food_repo, user_repo, feedback_repo, state_svc
+    svc = FeedbackService(analyzer, food_repo, user_repo, feedback_repo)
+    return svc, analyzer, food_repo, user_repo, feedback_repo
 
 
 class TestClassifierToggleTypes:
@@ -46,23 +44,23 @@ class TestClassifierToggleTypes:
 
 class TestFeedbackServiceShouldOfferWeekly:
     def test_should_offer_when_never_offered(self):
-        svc, _, _, _, _, _ = _make_feedback_service()
+        svc, _, _, _, _ = _make_feedback_service()
         assert svc.should_offer_weekly(None, datetime.now(timezone.utc)) is True
 
     def test_should_offer_after_7_days(self):
-        svc, _, _, _, _, _ = _make_feedback_service()
+        svc, _, _, _, _ = _make_feedback_service()
         last = datetime.now(timezone.utc) - timedelta(days=8)
         assert svc.should_offer_weekly(last, datetime.now(timezone.utc)) is True
 
     def test_should_not_offer_before_7_days(self):
-        svc, _, _, _, _, _ = _make_feedback_service()
+        svc, _, _, _, _ = _make_feedback_service()
         last = datetime.now(timezone.utc) - timedelta(days=3)
         assert svc.should_offer_weekly(last, datetime.now(timezone.utc)) is False
 
 
 class TestFeedbackServiceNoData:
     def test_returns_no_data_message(self):
-        svc, analyzer, food_repo, _, feedback_repo, _ = _make_feedback_service()
+        svc, analyzer, food_repo, _, feedback_repo = _make_feedback_service()
         food_repo.get_by_user_and_dates.return_value = []
         feedback_repo.get_recent.return_value = []
 

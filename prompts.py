@@ -185,7 +185,7 @@ CLASSIFIER_SYSTEM_PROMPT = (
     "סווג את ההודעה לאחד מהסוגים הבאים:\n\n"
 
     '1. "conversation_reply" - תשובה למשהו שהבוט שאל. המשתמש משתף פעולה.\n'
-    "   השתמש בתיאור מצב ההמתנה ובהיסטוריית השיחה כדי לזהות.\n"
+    "   השתמש במצב ההרגלים ובהיסטוריית השיחה כדי לזהות.\n"
     "   conversation_reply = שיתוף פעולה. אם המשתמש מסרב, סווג כ-toggle_cancel.\n\n"
 
     '2. "meal" - תיאור של אוכל שהמשתמש אכל. ברירת מחדל כשאין הקשר אחר.\n'
@@ -205,17 +205,26 @@ CLASSIFIER_SYSTEM_PROMPT = (
     "    אם type=none, כתוב ב-freeform_response תגובה קצרה וטבעית בטון של דוגרי.\n"
     "    אם המשתמש מפטפט כבר כמה הודעות, רמוז בעדינות שאתה פה בשביל ההרגלים.\n\n"
 
-    "כללי ניתוב:\n"
-    "- כשיש מצב המתנה, הוא הסיגנל החזק ביותר במערכת. כל הודעה שעשויה להיות "
-    "  רלוונטית למצב ההמתנה = conversation_reply. זה גובר על meal, correction, "
-    "  sleep, ועל כל סוג אחר. סווג כ-meal רק אם ההודעה היא בבירור תיאור של אוכל.\n"
+    "כללי ניתוב לפי מצב ההרגלים (toggle state):\n"
+    "- כשהרגל במצב 'הוצע, ממתין לתשובה' והבוט שאל את המשתמש בהיסטוריה:\n"
+    "  הודעות חיוביות קצרות ('יאללה', 'סבבה', 'כן', 'אוקיי', 'בוא', 'קדימה', 'בטח') "
+    "  = conversation_reply. סירוב ('לא', 'עזוב', 'לא מעניין') = toggle_cancel.\n"
+    "  none כמעט בלתי אפשרי כשיש הרגל שהוצע.\n"
+    "- כשהרגל במצב 'פעיל, בתהליך הגדרת יעד':\n"
+    "  הסתכל בהיסטוריה מה הבוט שאל אחרון - זה מגדיר מה המשתמש עונה עליו.\n"
+    "  כל תשובה שמתאימה לשאלה = conversation_reply.\n"
+    "  שעה כשהבוט שאל 'מתי לישון?' = conversation_reply (יעד, לא דיווח שינה).\n"
+    "  מספרים כשהבוט שאל על קלוריות/חלבון = conversation_reply (לא correction, לא meal).\n"
+    "  זה גובר על meal, correction, sleep, ועל כל סוג אחר.\n"
+    "- כשהרגל במצב 'סירב, שאלנו אם להזכיר':\n"
+    "  הסכמה = conversation_reply. סירוב = toggle_cancel.\n"
+    "- אם הרגל אחד הוצע ולא הופעל, ואין שאלה בהיסטוריה, "
+    "  תגובה חיובית קצרה עדיין = conversation_reply (הבינו שהמשתמש עונה על ההצעה).\n"
+    "- אם יותר מהרגל אחד הוצע ולא הופעל, וההודעה לא ברורה - סווג כ-none "
+    "  וכתוב ב-freeform_response שאלת הבהרה: 'על איזה הרגל אתה מדבר?'\n"
     "- משתמשים כמעט אף פעם לא מתארים ארוחה במונחי קלוריות וחלבון. "
     "  '1800 קלוריות ו-180 חלבון' זה כמעט תמיד יעד, לא ארוחה.\n"
-    "- אם אין מצב המתנה, אבל מצב ההרגלים מראה שהרגל הוצע ולא הופעל, "
-    "  והמשתמש שולח תגובה חיובית קצרה - סווג כ-conversation_reply.\n"
-    "- אם יותר מהרגל אחד הוצע ולא הופעל, סווג כ-none וכתוב ב-freeform_response "
-    "  שאלת הבהרה: 'על איזה הרגל אתה מדבר?'\n"
-    "- אם אין מצב המתנה ואין הרגל שהוצע, meal היא ברירת המחדל לתיאורי אוכל.\n"
+    "- כשאין שום הרגל בתהליך (הכל dormant/active_with_goal), meal היא ברירת המחדל.\n"
     "- none הוא מוצא אחרון - רק כשההודעה לא קשורה לשום סוג אחר.\n\n"
 
     "הבחנות חשובות:\n"
@@ -255,13 +264,6 @@ DUGRI_HELP_SYSTEM_PROMPT = (
     "- משהו לעצמי: הדבר היחיד פה בלי מספרים, כי לא הכל נמדד.\n"
 )
 
-# ---------------------------------------------------------------------------
-# Pending state descriptions for classifier context
-#
-# Injected into the classifier prompt when a pending state exists.
-# Tells GPT what the bot asked, what habit it's about, and what kind
-# of response to expect. Uses {toggle_name} placeholder from pending data.
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Goal value extraction prompts (GPT extracts structured data from natural text)
@@ -298,45 +300,6 @@ EXTRACT_NUTRITION_TARGETS_PROMPT = (
     "החזר JSON: {\"calories\": number, \"protein\": number}."
 )
 
-PENDING_DESCRIPTIONS = {
-    "awaiting_toggle_consent": (
-        "הבוט הציע למשתמש להתחיל מעקב אחרי הרגל: {toggle_name}. "
-        "כל תגובה שמביעה הסכמה, סקרנות, או נכונות = conversation_reply. "
-        "סירוב מפורש = toggle_cancel."
-    ),
-    "awaiting_goal_consent": (
-        "הבוט שאל אם המשתמש רוצה לקבוע יעד ל-{toggle_name}. "
-        "הסכמה או נכונות = conversation_reply. סירוב = toggle_cancel."
-    ),
-    "awaiting_goal_value": (
-        "הבוט מבקש מהמשתמש ערך ליעד של {toggle_name}. "
-        "sleep: שעה - זה היעד, לא דיווח שינה. workouts: מספר בשבוע. eating_window: טווח שעות. "
-        "כל תשובה שמכילה את הערך = conversation_reply. זה לא sleep, לא correction, לא meal."
-    ),
-    "awaiting_goal_remind": (
-        "המשתמש סירב ליעד, הבוט שאל אם להזכיר בעתיד. "
-        "הסכמה = conversation_reply. סירוב = toggle_cancel."
-    ),
-    "awaiting_body_stats": (
-        "הבוט ביקש גובה, משקל וגיל לחישוב יעד תזונתי. "
-        "כל תשובה שמכילה מספרים = conversation_reply."
-    ),
-    "awaiting_weight_goal": (
-        "הבוט שאל מה מטרת המשקל: ירידה, שמירה, או עלייה. "
-        "כל תשובה שמתארת מטרה, כיוון, או משקל יעד = conversation_reply."
-    ),
-    "awaiting_nutrition_confirm": (
-        "הבוט הציע יעד קלוריות וחלבון מחושב. "
-        "הסכמה = conversation_reply. מספרים מתוקנים = conversation_reply. סירוב = toggle_cancel. "
-        "חשוב: מספרי קלוריות וחלבון בהקשר הזה הם תיקון ליעד, לא תיעוד ארוחה ולא correction."
-    ),
-    "awaiting_name": (
-        "הבוט שאל מה שם המשתמש. כל שם = conversation_reply."
-    ),
-    "awaiting_feedback_reaction": (
-        "הבוט שאל מה המשתמש חושב על הפידבק השבועי. כל תגובה = conversation_reply."
-    ),
-}
 
 # ---------------------------------------------------------------------------
 # Feedback steering prompt (Phase 4)

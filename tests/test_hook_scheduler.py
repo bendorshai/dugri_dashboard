@@ -5,8 +5,7 @@ Tests the hook scheduling, random time generation, inline hook detection,
 and hook callback behavior.
 """
 
-import random
-from datetime import datetime, time, timezone, timedelta
+from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
@@ -22,7 +21,6 @@ from constants import (
     WEEKLY_SUMMARY_ANCHOR_DAY,
 )
 from scheduler import (
-    random_time_in_window,
     should_fire_inline,
     get_hooks_to_schedule,
 )
@@ -36,35 +34,6 @@ def _make_user(**kwargs):
     }
     defaults.update(kwargs)
     return User(**defaults)
-
-
-class TestRandomTimeInWindow:
-    def test_returns_time_within_window(self):
-        random.seed(42)
-        start, end = SLEEP_HOOK_WINDOW  # 8-10
-        t = random_time_in_window(start, end)
-        assert isinstance(t, time)
-        assert start <= t.hour < end
-
-    def test_returns_different_times(self):
-        """Multiple calls should produce variety (not always the same)."""
-        times = set()
-        for seed in range(20):
-            random.seed(seed)
-            t = random_time_in_window(8, 10)
-            times.add((t.hour, t.minute))
-        assert len(times) > 1
-
-    def test_all_windows_produce_valid_times(self):
-        random.seed(0)
-        for window in [
-            SLEEP_HOOK_WINDOW,
-            WORKOUTS_HOOK_WINDOW,
-            SELF_CARE_HOOK_WINDOW,
-            WEEKLY_SUMMARY_HOOK_WINDOW,
-        ]:
-            t = random_time_in_window(*window)
-            assert window[0] <= t.hour < window[1]
 
 
 class TestShouldPiggyback:

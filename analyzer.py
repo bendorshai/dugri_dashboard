@@ -166,38 +166,15 @@ class FoodAnalyzer:
     def classify_message(
         self, text: str, today_str: str, last_entry: dict | None = None,
         recent_messages: list[dict] | None = None,
-        pending_state: dict | None = None,
         toggle_state: str | None = None,
         reply_context: str | None = None,
     ) -> MessageClassification:
         """Classify a message using GPT. This is the ONLY entry point for all user messages."""
-        from prompts import PENDING_DESCRIPTIONS
         system = ""
 
         # Telegram reply context (user swiped left on a specific message)
         if reply_context:
             system += f"ההודעה הנוכחית היא תגובה ישירה להודעת הבוט:\n\"{reply_context}\"\n\n"
-
-        # Pending state (highest priority context)
-        if pending_state:
-            kind = pending_state.get("kind", "")
-            data = pending_state.get("data", {})
-            desc = PENDING_DESCRIPTIONS.get(kind, "")
-            if desc:
-                try:
-                    desc = desc.format(**{k: v for k, v in data.items() if isinstance(v, str)})
-                except (KeyError, IndexError):
-                    pass
-            if desc:
-                system += f"חשוב - {desc}\n"
-            else:
-                system += f"חשוב - הבוט מחכה לתשובה. סוג: {kind}\n"
-            system += (
-                "סווג כ-meal רק אם ההודעה היא בבירור תיאור של אוכל.\n"
-                "כשיש מצב המתנה, none כמעט בלתי אפשרי. "
-                "הודעות קצרות כמו 'יאללה', 'סבבה', 'כן', 'אוקיי', 'בוא' "
-                "הן תמיד conversation_reply או toggle_cancel - לעולם לא none.\n\n"
-            )
 
         # Toggle state (always present - gives the classifier the full picture)
         if toggle_state:

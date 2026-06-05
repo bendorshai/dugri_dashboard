@@ -7,7 +7,10 @@ Handles the multi-step goal conversation for each habit:
 Each habit owns its goal independently. Nutrition has a special flow
 (body stats -> GPT suggestion or manual entry).
 
-Depends on: toggle_service, conversation_state_service, user_repository, analyzer.
+Routing is done by toggle_state + conversation history in the handler.
+This service only handles the business logic for each step.
+
+Depends on: toggle_service, user_repository, analyzer.
 Used by: handlers/base.py, scheduler.py.
 """
 
@@ -20,32 +23,19 @@ from datetime import datetime, timedelta, timezone
 from constants import HOOK_CONFIG, DEFAULT_GOAL_REMINDER_DAYS
 from models.profile import User
 from repositories.user_repository import UserRepository
-from services.conversation_state_service import ConversationStateService
 from services.toggle_service import ToggleService
 
 logger = logging.getLogger(__name__)
-
-# Pending state kinds owned by GoalService
-GOAL_PENDING_KINDS = frozenset({
-    "awaiting_goal_consent",
-    "awaiting_goal_value",
-    "awaiting_goal_remind",
-    "awaiting_body_stats",
-    "awaiting_weight_goal",
-    "awaiting_nutrition_confirm",
-})
 
 
 class GoalService:
     def __init__(
         self,
         user_repo: UserRepository,
-        state_service: ConversationStateService,
         toggle_service: ToggleService,
         analyzer=None,
     ):
         self._user_repo = user_repo
-        self._state_service = state_service
         self._toggle_service = toggle_service
         self._analyzer = analyzer
 
@@ -81,7 +71,7 @@ class GoalService:
     # ------------------------------------------------------------------
 
     def offer_goal(self, tid: int, toggle_name: str) -> str:
-        """Offer a goal for the given habit. Sets pending state."""
+        """Offer a goal for the given habit."""
         import messages as M
 
         if toggle_name == "nutrition":
@@ -90,9 +80,6 @@ class GoalService:
         pool = self._get_goal_offer_pool(toggle_name)
         text = random.choice(pool)
 
-        self._state_service.set_pending(
-            tid, "awaiting_goal_consent", data={"toggle_name": toggle_name},
-        )
         self._toggle_service.set_goal_offered(tid, toggle_name)
         return text
 
@@ -110,10 +97,6 @@ class GoalService:
 
         pool = self._get_goal_value_ask_pool(toggle_name)
         text = random.choice(pool)
-
-        self._state_service.set_pending(
-            tid, "awaiting_goal_value", data={"toggle_name": toggle_name},
-        )
         return text
 
     def _ask_remind(self, tid: int, toggle_name: str) -> str:
@@ -121,9 +104,7 @@ class GoalService:
         import messages as M
 
         text = random.choice(M.GOAL_DECLINED_REMIND_ASK)
-        self._state_service.set_pending(
-            tid, "awaiting_goal_remind", data={"toggle_name": toggle_name},
-        )
+        self._toggle_service.set_goal_status(tid, toggle_name, "remind_pending")
         return text
 
     # ------------------------------------------------------------------
@@ -150,7 +131,6 @@ class GoalService:
             return random.choice(pool)
 
         self._toggle_service.set_goal_value(tid, toggle_name, parsed)
-        self._state_service.clear_pending(tid)
 
         # For eating_window, also update the User.eating_window field
         if toggle_name == "eating_window" and "start" in parsed and "end" in parsed:
@@ -169,7 +149,6 @@ class GoalService:
         """User agreed to be reminded later. Set reminder."""
         import messages as M
 
-        self._state_service.clear_pending(tid)
         days = HOOK_CONFIG.get(toggle_name, {}).get(
             "goal_reminder_days", DEFAULT_GOAL_REMINDER_DAYS,
         )
@@ -196,15 +175,12 @@ class GoalService:
         return due
 
     def fire_goal_reminder(self, tid: int, toggle_name: str) -> str:
-        """Re-offer a goal after a reminder period. Sets pending state."""
+        """Re-offer a goal after a reminder period."""
         import messages as M
 
         pool = self._get_goal_reminder_pool(toggle_name)
         text = random.choice(pool)
 
-        self._state_service.set_pending(
-            tid, "awaiting_goal_consent", data={"toggle_name": toggle_name},
-        )
         self._toggle_service.set_goal_offered(tid, toggle_name)
         return text
 
@@ -219,7 +195,6 @@ class GoalService:
         import messages as M
 
         text = random.choice(M.NUTRITION_BODY_STATS_ASK)
-        self._state_service.set_pending(tid, "awaiting_body_stats")
         self._toggle_service.set_goal_offered(tid, "nutrition")
         return text
 
@@ -245,7 +220,6 @@ class GoalService:
             "birth_year": birth_year,
         })
 
-        self._state_service.set_pending(tid, "awaiting_weight_goal")
         return random.choice(M.NUTRITION_WEIGHT_GOAL_ASK)
 
     def handle_weight_goal(self, tid: int, text: str, profile: User | None = None) -> str:
@@ -263,11 +237,6 @@ class GoalService:
         suggestion = self._analyzer.suggest_targets(height, weight, age, text)
 
         if not suggestion:
-            # Keep pending at awaiting_weight_goal so next message retries
-            # Store the weight goal text so we don't lose it
-            self._state_service.set_pending(
-                tid, "awaiting_weight_goal", data={"weight_goal_text": text},
-            )
             return "לא הצלחתי לחשב עכשיו. ננסה שוב בהודעה הבאה."
 
         cal = suggestion.get("target_calories", 2000)
@@ -278,8 +247,6 @@ class GoalService:
             "toggles.nutrition.goal_value": {"calories": cal, "protein": prot},
         })
 
-        self._state_service.set_pending(tid, "awaiting_nutrition_confirm",
-                                        data={"calories": cal, "protein": prot})
         return random.choice(M.NUTRITION_SUGGESTION).format(calories=cal, protein=prot)
 
     def handle_nutrition_confirm(self, tid: int, text: str) -> str:
@@ -296,41 +263,41 @@ class GoalService:
             if parsed and parsed.get("calories") and parsed.get("protein"):
                 self._toggle_service.set_goal_value(tid, "nutrition",
                                                     {"calories": parsed["calories"], "protein": parsed["protein"]})
-                self._state_service.clear_pending(tid)
                 return random.choice(self._get_goal_set_pool("nutrition"))
 
         # No corrected numbers - accept the original suggestion
         self._toggle_service.set_goal_status(tid, "nutrition", "set")
-        self._state_service.clear_pending(tid)
         return random.choice(self._get_goal_set_pool("nutrition"))
 
     # ------------------------------------------------------------------
-    # Ghosting handler
+    # Ghosting detection (called by poller)
     # ------------------------------------------------------------------
 
-    def handle_expired_goal_pending(
-        self, tid: int, kind: str, data: dict,
-    ) -> None:
-        """Called when a goal-related pending state expires (ghosting).
-        Auto-sets a goal reminder so we ask again later.
+    def check_ghosting(self, profile: User) -> None:
+        """Check if any goal flow has been ghosted (offer scrolled out of history).
+
+        Called by the poller. If a toggle has goal_offered_at set but
+        goal_status is still 'pending' and enough time has passed,
+        auto-set a reminder.
         """
-        if kind not in GOAL_PENDING_KINDS:
-            return
+        tid = profile.telegram_user_id
+        now = datetime.now(timezone.utc)
 
-        toggle_name = data.get("toggle_name")
-        if not toggle_name:
-            # For nutrition-specific kinds without toggle_name in data
-            if kind in ("awaiting_body_stats", "awaiting_weight_goal", "awaiting_nutrition_confirm"):
-                toggle_name = "nutrition"
-            else:
-                return
-
-        days = HOOK_CONFIG.get(toggle_name, {}).get(
-            "goal_reminder_days", DEFAULT_GOAL_REMINDER_DAYS,
-        )
-        remind_at = datetime.now(timezone.utc) + timedelta(days=days)
-        self._toggle_service.set_goal_status(tid, toggle_name, "remind", remind_at)
-        logger.info("Ghosting detected for %s/%d, reminder set for %s", toggle_name, tid, remind_at)
+        for name in ("nutrition", "sleep", "eating_window", "workouts"):
+            toggle = getattr(profile.toggles, name, None)
+            if not toggle or not toggle.goal_offered_at:
+                continue
+            if toggle.goal_status not in ("pending",):
+                continue
+            # Check if enough time has passed (use goal_reminder_days as threshold)
+            days = HOOK_CONFIG.get(name, {}).get(
+                "goal_reminder_days", DEFAULT_GOAL_REMINDER_DAYS,
+            )
+            elapsed = (now - toggle.goal_offered_at).total_seconds() / 86400
+            if elapsed >= days:
+                remind_at = now + timedelta(days=days)
+                self._toggle_service.set_goal_status(tid, name, "remind", remind_at)
+                logger.info("Ghosting detected for %s/%d, reminder set for %s", name, tid, remind_at)
 
     # ------------------------------------------------------------------
     # Message pool helpers
