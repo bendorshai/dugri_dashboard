@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}404 - הדף לא נמצא | דוגרי{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.5rem;
+        background: var(--bg);
+    }
+
+    .error-content {
+        text-align: center;
+        max-width: 720px;
+    }
+
+    .error-code {
+        font-size: clamp(6rem, 15vw, 10rem);
+        font-weight: 800;
+        color: var(--primary);
+        opacity: 0.18;
+        line-height: 1;
+        margin-bottom: -1rem;
+        letter-spacing: -0.04em;
+        user-select: none;
+    }
+
+    .error-title {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        color: var(--text);
+        margin-bottom: 0.25rem;
+    }
+
+    .error-subtitle {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        margin-bottom: 2.5rem;
+    }
+
+    .error-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.25rem;
+    }
+
+    .error-card {
+        background: var(--white);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 1.75rem 1.25rem;
+        text-decoration: none;
+        color: var(--text);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .error-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .error-card-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .error-card-icon--info {
+        background: rgba(166, 116, 72, 0.12);
+        color: var(--primary);
+    }
+
+    .error-card-icon--bot {
+        background: rgba(91, 168, 196, 0.12);
+        color: var(--accent);
+    }
+
+    .error-card-icon--dashboard {
+        background: rgba(143, 168, 118, 0.12);
+        color: var(--success);
+    }
+
+    .error-card-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .error-card-desc {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+    }
+
+    @media (max-width: 640px) {
+        .error-cards {
+            grid-template-columns: 1fr;
+            max-width: 340px;
+            margin: 0 auto;
+        }
+
+        .error-card {
+            flex-direction: row;
+            text-align: right;
+            padding: 1.25rem;
+        }
+
+        .error-card-icon {
+            flex-shrink: 0;
+        }
+
+        .error-card-text {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<main class="error-page">
+    <div class="error-content">
+        <div class="error-code">404</div>
+        <h1 class="error-title">הדף הזה לא נמצא</h1>
+        <p class="error-subtitle">אבל אנחנו כן פה. לאן רצית להגיע?</p>
+
+        <div class="error-cards">
+            <a href="/" class="error-card">
+                <div class="error-card-icon error-card-icon--info">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </div>
+                <div class="error-card-text">
+                    <div class="error-card-title">מה זה דוגרי?</div>
+                    <div class="error-card-desc">לדף הראשי עם כל הפרטים</div>
+                </div>
+            </a>
+
+            <a href="https://t.me/{{ bot_username }}" class="error-card" target="_blank" rel="noopener">
+                <div class="error-card-icon error-card-icon--bot">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="error-card-text">
+                    <div class="error-card-title">כבר רשום? פתח את הבוט</div>
+                    <div class="error-card-desc">ישר לשיחה בטלגרם</div>
+                </div>
+            </a>
+
+            <a href="/dashboard" class="error-card">
+                <div class="error-card-icon error-card-icon--dashboard">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </div>
+                <div class="error-card-text">
+                    <div class="error-card-title">לוח הבקרה</div>
+                    <div class="error-card-desc">הגדרות, יעדים וסיכומים</div>
+                </div>
+            </a>
+        </div>
+    </div>
+</main>
+{% endblock %}

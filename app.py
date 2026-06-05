@@ -162,6 +162,12 @@ def create_app(config: dict | None = None) -> Flask:
         import hebrew_strings as hs
         return render_template("about.html", hs=hs)
 
+    @app.errorhandler(404)
+    def page_not_found(e):
+        from flask import render_template
+        bot_username = config.get("dugri_bot_username", "skinny_slimmy_bot")
+        return render_template("404.html", bot_username=bot_username), 404
+
     return app
 
 
