@@ -303,6 +303,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from constants import HOOK_CONFIG, MAX_RECENT_MESSAGES
 from analyzer import FoodAnalyzer
+import messages as M
 
 # Load API key from config
 _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "config.json")
@@ -759,6 +760,28 @@ class TestNutritionWeightGoal:
         )
         assert result.type == "conversation_reply"
 
+    def test_weight_goal_all_ask_variants(self):
+        """User answers weight goal with ALL NUTRITION_WEIGHT_GOAL_ASK variants.
+
+        Regression: keyword matching failed on 3/5 variants because they use
+        verb forms ('לרדת') instead of noun forms ('ירידה').
+        """
+        analyzer = _make_analyzer()
+        for i, ask_variant in enumerate(M.NUTRITION_WEIGHT_GOAL_ASK):
+            result = _classify(
+                analyzer, "לרדת במשקל",
+                toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+                history=_build_history(
+                    ("bot", BODY_STATS_ASK),
+                    ("user", "174, 112, 36"),
+                    ("bot", ask_variant),
+                ),
+            )
+            assert result.type == "conversation_reply", (
+                f"NUTRITION_WEIGHT_GOAL_ASK variant {i+1}/{len(M.NUTRITION_WEIGHT_GOAL_ASK)} "
+                f"misclassified as {result.type}: {ask_variant!r}"
+            )
+
 
 class TestNutritionConfirm:
     """Tests for confirming/correcting the GPT suggestion."""
@@ -794,6 +817,71 @@ class TestNutritionConfirm:
             ),
         )
         assert result.type in ("conversation_reply", "correction")
+
+    def test_accept_suggestion_all_variants(self):
+        """User accepts suggestion with ALL NUTRITION_SUGGESTION variants.
+
+        Regression: keyword matching required 'ממליץ' in bot message, but only
+        1/5 variants contains that word. 80% failure rate.
+        """
+        analyzer = _make_analyzer()
+        for i, suggestion_template in enumerate(M.NUTRITION_SUGGESTION):
+            suggestion = suggestion_template.format(calories=1800, protein=160)
+            result = _classify(
+                analyzer, "אוקיי",
+                toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+                history=_build_history(
+                    ("bot", WEIGHT_GOAL_ASK),
+                    ("user", "לרדת"),
+                    ("bot", suggestion),
+                ),
+            )
+            assert result.type == "conversation_reply", (
+                f"NUTRITION_SUGGESTION variant {i+1}/{len(M.NUTRITION_SUGGESTION)} "
+                f"misclassified as {result.type}: {suggestion!r}"
+            )
+
+
+# ============================================================================
+# FEEDBACK REQUEST (cross-cutting)
+# ============================================================================
+
+class TestFeedbackRequest:
+    """Regression tests for feedback_request classification."""
+
+    def test_weekly_summary_request(self):
+        """'שלח סיכום שבועי' -> feedback_request, not toggle_activate.
+
+        Regression: bug from 2026-05-25 where this was misclassified as
+        toggle_activate with no toggle_name, causing 'לא הבנתי איזה מעקב להדליק'.
+        Fixed in v2.2.2 (60f3bfe).
+        """
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "שלח סיכום שבועי",
+            toggle_state=_build_toggle_state(nutrition="active_with_goal"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
+        )
+        assert result.type == "feedback_request", (
+            f"'שלח סיכום שבועי' misclassified as {result.type} "
+            f"(toggle_name={result.toggle_name})"
+        )
+
+    def test_weekly_summary_request_short(self):
+        """'שלח סיכום' -> feedback_request."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "שלח סיכום",
+            toggle_state=_build_toggle_state(nutrition="active_with_goal"),
+            history=_build_history(
+                ("user", "קפה בבוקר"),
+                ("bot", FOOD_RESPONSE_COFFEE),
+            ),
+        )
+        assert result.type == "feedback_request"
 
 
 # ============================================================================

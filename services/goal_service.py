@@ -196,6 +196,8 @@ class GoalService:
 
         text = random.choice(M.NUTRITION_BODY_STATS_ASK)
         self._toggle_service.set_goal_offered(tid, "nutrition")
+        # Clear goal_value for clean slate (used as step 3 signal by handler)
+        self._user_repo.update_fields(tid, {"toggles.nutrition.goal_value": None})
         return text
 
     def handle_body_stats(self, tid: int, text: str) -> str:

@@ -259,8 +259,29 @@ class HealthHandlers:
                 if msg.get("role") == "user":
                     break
 
+        # Safety net: no route matched - don't silently fail
+        logger.warning("conversation_reply matched no route for tid=%d, text=%r", tid, text)
+        fallback = "לא הבנתי על מה אתה עונה. אפשר לנסות שוב?"
+        await message.reply_text(fallback)
+        self._save_bot_message(tid, fallback)
+
     def _route_nutrition_goal_flow(self, tid: int, text: str, profile: UserProfile) -> str | None:
-        """Route within the nutrition multi-step goal flow using history context."""
+        """Route within the nutrition multi-step goal flow.
+
+        Uses structural signals instead of keyword matching:
+        - goal_value set by handle_weight_goal -> step 3 (confirm)
+        - last bot message in NUTRITION_WEIGHT_GOAL_ASK pool -> step 2
+        - default -> step 1 (body stats)
+        """
+        import messages as M
+
+        nt = profile.toggles.nutrition
+
+        # Step 3: suggestion was presented (goal_value stored by handle_weight_goal)
+        if nt.goal_value:
+            return self.goal_service.handle_nutrition_confirm(tid, text)
+
+        # Step 2: bot asked about weight goal direction
         recent = self.user_repo.get_recent_messages(tid, 5)
         last_bot_msg = ""
         for msg in reversed(recent):
@@ -268,22 +289,10 @@ class HealthHandlers:
                 last_bot_msg = msg.get("text", "")
                 break
 
-        import messages as M
-
-        # Determine which step by checking what the bot last asked
-        # Step 1: Bot asked for body stats (height/weight/age)
-        if any(kw in last_bot_msg for kw in ("גובה", "משקל", "גיל")):
-            return self.goal_service.handle_body_stats(tid, text)
-
-        # Step 2: Bot asked about weight goal (lose/keep/gain)
-        if any(kw in last_bot_msg for kw in ("ירידה", "שמירה", "עלייה", "כיוון", "מטרת")):
+        if last_bot_msg in M.NUTRITION_WEIGHT_GOAL_ASK:
             return self.goal_service.handle_weight_goal(tid, text, self._get_profile(tid))
 
-        # Step 3: Bot presented suggestion (contains calorie/protein numbers)
-        if "קלוריות" in last_bot_msg and "חלבון" in last_bot_msg and "ממליץ" in last_bot_msg:
-            return self.goal_service.handle_nutrition_confirm(tid, text)
-
-        # Fallback: treat as body stats (first step in the flow)
+        # Step 1 (default): collect body stats
         return self.goal_service.handle_body_stats(tid, text)
 
     # ------------------------------------------------------------------
