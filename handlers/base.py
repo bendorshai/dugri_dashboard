@@ -685,6 +685,7 @@ class HealthHandlers:
 
         import asyncio
         from scheduler import should_fire_inline
+        from user_clock import UserClock
         import messages as M
         import random
         from constants import (
@@ -696,9 +697,9 @@ class HealthHandlers:
         # This makes it feel like Dugri is thinking before changing topic.
         await asyncio.sleep(INLINE_HOOK_DELAY_SECONDS)
 
-        now = get_user_now(profile.timezone)
+        clock = UserClock(profile.timezone)
         day_number = self.toggle_service.get_day_number(profile)
-        weekday = now.weekday()
+        weekday = clock.weekday()
 
         # Goal reminders (due reminders fire first)
         if self.goal_service:
@@ -746,7 +747,7 @@ class HealthHandlers:
         for toggle_name, pool, anchor_day in inline_hooks:
             if anchor_day is not None and weekday != anchor_day:
                 continue
-            if should_fire_inline(profile, toggle_name, now):
+            if should_fire_inline(profile, toggle_name, clock):
                 text = random.choice(pool)
                 if self.toggle_service.should_show_exit_door(profile, toggle_name):
                     habit_names = {
@@ -763,7 +764,7 @@ class HealthHandlers:
                 return
 
         # Weekly summary inline hook (Sunday only)
-        if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_fire_inline(profile, "weekly_summary", now):
+        if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_fire_inline(profile, "weekly_summary", clock):
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
             await message.reply_text(M.WEEKLY_SUMMARY_OFFER)

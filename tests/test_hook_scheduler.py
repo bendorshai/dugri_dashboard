@@ -24,6 +24,7 @@ from scheduler import (
     should_fire_inline,
     get_hooks_to_schedule,
 )
+from user_clock import UserClock
 
 
 def _make_user(**kwargs):
@@ -36,38 +37,68 @@ def _make_user(**kwargs):
     return User(**defaults)
 
 
+def _clock(utc_time=None):
+    """Create a UserClock for Israel timezone, optionally pinned to a UTC time."""
+    if utc_time and utc_time.tzinfo is None:
+        utc_time = utc_time.replace(tzinfo=timezone.utc)
+    return UserClock("Asia/Jerusalem", _now_override=utc_time)
+
+
 class TestShouldPiggyback:
     def test_true_when_hook_not_fired_today(self):
         user = _make_user(toggles=Toggles(
             sleep=ToggleState(status="active", last_asked_at=None),
         ))
-        assert should_fire_inline(user, "sleep", datetime(2026, 5, 22, 9, 0)) is True
+        assert should_fire_inline(user, "sleep", _clock(datetime(2026, 5, 22, 9, 0))) is True
 
     def test_false_when_hook_already_fired_today(self):
         today_morning = datetime(2026, 5, 22, 8, 30, tzinfo=timezone.utc)
         user = _make_user(toggles=Toggles(
             sleep=ToggleState(status="active", last_asked_at=today_morning),
         ))
-        now = datetime(2026, 5, 22, 12, 0, tzinfo=timezone.utc)
-        assert should_fire_inline(user, "sleep", now) is False
+        clock = _clock(datetime(2026, 5, 22, 12, 0))
+        assert should_fire_inline(user, "sleep", clock) is False
 
     def test_true_when_last_asked_was_yesterday(self):
         yesterday = datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)
         user = _make_user(toggles=Toggles(
             sleep=ToggleState(status="active", last_asked_at=yesterday),
         ))
-        now = datetime(2026, 5, 22, 12, 0, tzinfo=timezone.utc)
-        assert should_fire_inline(user, "sleep", now) is True
+        clock = _clock(datetime(2026, 5, 22, 12, 0))
+        assert should_fire_inline(user, "sleep", clock) is True
 
     def test_false_when_toggle_dormant(self):
         user = _make_user()
-        assert should_fire_inline(user, "sleep", datetime(2026, 5, 22, 9, 0)) is False
+        assert should_fire_inline(user, "sleep", _clock(datetime(2026, 5, 22, 9, 0))) is False
 
     def test_false_when_toggle_cancelled(self):
         user = _make_user(toggles=Toggles(
             sleep=ToggleState(status="cancelled"),
         ))
-        assert should_fire_inline(user, "sleep", datetime(2026, 5, 22, 9, 0)) is False
+        assert should_fire_inline(user, "sleep", _clock(datetime(2026, 5, 22, 9, 0))) is False
+
+    def test_no_double_fire_across_midnight_utc(self):
+        """Critical bug fix: hook at 01:00 Israel (22:00 UTC prev day)
+        should not fire again at 02:00 Israel (23:00 UTC prev day)."""
+        # Hook fired at 01:00 Israel June 5 = 22:00 UTC June 4
+        last_asked = datetime(2026, 6, 4, 22, 0, tzinfo=timezone.utc)
+        user = _make_user(toggles=Toggles(
+            sleep=ToggleState(status="active", last_asked_at=last_asked),
+        ))
+        # Poller at 02:00 Israel June 5 = 23:00 UTC June 4
+        clock = _clock(datetime(2026, 6, 4, 23, 0))
+        assert should_fire_inline(user, "sleep", clock) is False
+
+    def test_fires_on_new_local_day_after_midnight(self):
+        """Hook fired yesterday at 23:00 Israel, should fire today."""
+        # Hook fired at 23:00 Israel June 4 = 20:00 UTC June 4
+        last_asked = datetime(2026, 6, 4, 20, 0, tzinfo=timezone.utc)
+        user = _make_user(toggles=Toggles(
+            sleep=ToggleState(status="active", last_asked_at=last_asked),
+        ))
+        # Now: 09:00 Israel June 5 = 06:00 UTC June 5
+        clock = _clock(datetime(2026, 6, 5, 6, 0))
+        assert should_fire_inline(user, "sleep", clock) is True
 
 
 class TestGetHooksToSchedule:

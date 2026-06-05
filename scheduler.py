@@ -16,8 +16,6 @@ import logging
 import random
 from datetime import datetime, timezone
 
-import pytz
-
 from constants import (
     POLL_INTERVAL_SECONDS,
     EATING_WINDOW_WARN_MINUTES,
@@ -32,6 +30,7 @@ from constants import (
 )
 from models.profile import User, ToggleState
 from parsing import parse_time_window
+from user_clock import UserClock
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +39,18 @@ logger = logging.getLogger(__name__)
 # Helpers (used by both poller and inline hook hooks in handlers)
 # ---------------------------------------------------------------------------
 
-def should_fire_inline(profile: User, toggle_name: str, now: datetime) -> bool:
-    """Should this hook fire now? True if active and hasn't fired today."""
+def should_fire_inline(profile: User, toggle_name: str, clock: UserClock) -> bool:
+    """Should this hook fire now? True if active and hasn't fired today.
+
+    Uses UserClock for timezone-safe date comparison: last_asked_at (stored
+    in UTC) is converted to the user's local date before comparing.
+    """
     toggle: ToggleState = getattr(profile.toggles, toggle_name)
     if toggle.status != "active":
         return False
     if toggle.last_asked_at is None:
         return True
-    last_date = toggle.last_asked_at.date() if hasattr(toggle.last_asked_at, 'date') else None
-    now_date = now.date() if hasattr(now, 'date') else None
-    if last_date is None or now_date is None:
-        return True
-    return last_date < now_date
+    return clock.is_before_today(toggle.last_asked_at)
 
 
 def get_hooks_to_schedule(profile: User) -> list[dict]:
@@ -174,9 +173,9 @@ async def _check_user_hooks(
     import messages as M
 
     tid = profile.telegram_user_id
-    tz = pytz.timezone(profile.timezone)
-    now = datetime.now(tz)
-    today_weekday = now.weekday()
+    clock = UserClock(profile.timezone)
+    now = clock.now()
+    today_weekday = clock.weekday()
 
     # --- Goal reminders (highest priority) ---
     if goal_service:
@@ -210,7 +209,7 @@ async def _check_user_hooks(
             if not (start_hour <= now.hour < end_hour):
                 continue
 
-        if not should_fire_inline(profile, toggle_name, now):
+        if not should_fire_inline(profile, toggle_name, clock):
             continue
 
         prompt_pools = {
@@ -242,7 +241,7 @@ async def _check_user_hooks(
         await _send_and_save(context, tid, text, user_repo)
 
     # --- Eating window: "closing soon" warning ---
-    await _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, now)
+    await _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, clock)
 
     # --- Proactive reveals (fallback for users who haven't logged food) ---
     if toggle_service:
@@ -288,7 +287,7 @@ async def _check_proactive_reveals(
         return  # One reveal per tick
 
 
-async def _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, now):
+async def _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, clock):
     """Check if eating window is closing soon or has closed. Send once per day."""
     import messages as M
 
@@ -299,25 +298,20 @@ async def _check_eating_window(context, profile, user_repo, toggle_service, eati
 
     tid = profile.telegram_user_id
     toggle = profile.toggles.eating_window
+    now = clock.now()
 
     end_h, end_m = parse_time_window(profile.eating_window.end)
     close_minutes = end_h * 60 + end_m
     now_minutes = now.hour * 60 + now.minute
     minutes_until_close = close_minutes - now_minutes
 
-    # Already sent today? Check via last_asked_at
-    already_warned = False
-    if toggle.last_asked_at:
-        last_date = toggle.last_asked_at.date() if hasattr(toggle.last_asked_at, 'date') else None
-        if last_date == now.date():
-            already_warned = True
-
-    if already_warned:
+    # Already sent today? Check via last_asked_at (timezone-safe)
+    if toggle.last_asked_at and clock.is_same_local_day(toggle.last_asked_at):
         return
 
     # Window closing soon (within EATING_WINDOW_WARN_MINUTES, but still open)
     if 0 < minutes_until_close <= EATING_WINDOW_WARN_MINUTES:
-        stats = _build_eating_stats(profile, eating_day_svc, now)
+        stats = _build_eating_stats(profile, eating_day_svc, clock)
         text = random.choice(M.EATING_WINDOW_CLOSING_SOON).format(stats=stats)
         toggle_service.record_asked(tid, "eating_window")
         await _send_and_save(context, tid, text, user_repo)
@@ -325,19 +319,18 @@ async def _check_eating_window(context, profile, user_repo, toggle_service, eati
 
     # Window just closed (within one poll interval after close)
     if -EATING_WINDOW_WARN_MINUTES <= minutes_until_close <= 0:
-        stats = _build_eating_close_summary(profile, eating_day_svc, now)
+        stats = _build_eating_close_summary(profile, eating_day_svc, clock)
         text = f"🌙 חלון האכילה נסגר! סיכום יומי:\n\n{stats}"
         toggle_service.record_asked(tid, "eating_window")
         await _send_and_save(context, tid, text, user_repo)
 
 
-def _build_eating_stats(profile, eating_day_svc, now) -> str:
+def _build_eating_stats(profile, eating_day_svc, clock) -> str:
     """Build stats string for eating window warning."""
     if not eating_day_svc:
         return ""
 
-    from parsing import get_user_now
-    today_str = get_user_now(profile.timezone).strftime("%d/%m/%Y")
+    today_str = clock.today().strftime("%d/%m/%Y")
     total_cal, total_prot = eating_day_svc.get_eating_day_totals(profile, today_str)
 
     # Read targets from nutrition goal_value or fallback
@@ -357,13 +350,12 @@ def _build_eating_stats(profile, eating_day_svc, now) -> str:
     )
 
 
-def _build_eating_close_summary(profile, eating_day_svc, now) -> str:
+def _build_eating_close_summary(profile, eating_day_svc, clock) -> str:
     """Build close summary string."""
     if not eating_day_svc:
         return ""
 
-    from parsing import get_user_now
-    today_str = get_user_now(profile.timezone).strftime("%d/%m/%Y")
+    today_str = clock.today().strftime("%d/%m/%Y")
     total_cal, total_prot = eating_day_svc.get_eating_day_totals(profile, today_str)
 
     nv = profile.toggles.nutrition.goal_value
