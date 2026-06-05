@@ -43,6 +43,21 @@ class TestHandleNameResponse:
         assert call_fields["name"] == "שי"
         assert call_fields["onboarding.name_collected"] is True
 
+    def test_direct_response_includes_invite(self):
+        """Direct name response (after greeting) includes 'מה אכלת?' invite."""
+        svc, _ = _make_service()
+        response = svc.handle_name_response(123, "שי", late=False)
+        assert "שי" in response
+        assert "מה אכלת" in response
+
+    def test_late_declaration_short_ack(self):
+        """Late name declaration gets a short acknowledgment, no 'מה אכלת?'."""
+        svc, _ = _make_service()
+        response = svc.handle_name_response(123, "דני", late=True)
+        assert "דני" in response
+        assert "מה אכלת" not in response
+        assert "נתחיל" not in response
+
 
 class TestBackwardCompatConstructor:
     """OnboardingService can be constructed with just user_repo."""

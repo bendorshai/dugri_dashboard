@@ -586,7 +586,11 @@ class HealthHandlers:
 
         if classification.type == "name_declaration" and self.onboarding_service:
             name = classification.declared_name or message.text.strip()
-            response = self.onboarding_service.handle_name_response(tid, name)
+            # Late = greeting is NOT the last bot message (user has been chatting)
+            recent = self.user_repo.get_recent_messages(tid, 5)
+            last_bot = next((m for m in reversed(recent) if m.get("role") == "bot"), None)
+            late = not (last_bot and "איך אתה רוצה שאקרא לך?" in last_bot.get("text", ""))
+            response = self.onboarding_service.handle_name_response(tid, name, late=late)
             if response:
                 await message.reply_text(response)
                 self._save_bot_message(tid, response)

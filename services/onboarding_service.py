@@ -26,10 +26,16 @@ class OnboardingService:
         """Begin onboarding after successful linking. Returns the greeting."""
         return M.ONBOARDING_GREETING
 
-    def handle_name_response(self, telegram_user_id: int, name: str) -> str:
-        """Process the user's name response."""
+    def handle_name_response(self, telegram_user_id: int, name: str, late: bool = False) -> str:
+        """Process the user's name response.
+
+        late=False: direct reply to greeting (full intro + 'מה אכלת?')
+        late=True: declared name later ('אחלה, {name}')
+        """
         self._user_repo.update_fields(telegram_user_id, {
             "name": name,
             "onboarding.name_collected": True,
         })
+        if late:
+            return M.ONBOARDING_NAME_LATE.format(name=name)
         return M.ONBOARDING_NAME_RESPONSE.format(name=name)
