@@ -109,7 +109,8 @@ class TestGetTrendData:
             "targets": targets or {},
         }
 
-    def _setup_collections(self, storage, food=None, workouts=None):
+    def _setup_collections(self, storage, food=None, workouts=None,
+                           sleep=None, self_care=None):
         collections = {}
 
         def get_collection(name):
@@ -123,6 +124,10 @@ class TestGetTrendData:
             get_collection("food_entries").find.return_value = food
         if workouts is not None:
             get_collection("workout_logs").find.return_value = workouts
+        if sleep is not None:
+            get_collection("sleep_logs").find.return_value = sleep
+        if self_care is not None:
+            get_collection("self_care_logs").find.return_value = self_care
 
     def test_returns_all_metrics_and_targets(self, storage):
         self._setup_user(storage, {"calories": 2000, "protein": 150, "workouts_per_week": 3})
@@ -158,6 +163,32 @@ class TestGetTrendData:
         result = storage.get_trend_data("a@b.com", days=1)
         assert result["days"][0]["workouts"] == 2
 
+    def test_tracks_sleep_logged_per_day(self, storage):
+        today_str = date.today().strftime("%d/%m/%Y")
+        self._setup_user(storage, {"sleep_time": "23:00"})
+        self._setup_collections(storage, sleep=[
+            {"date": today_str, "sleep_time": "23:30"},
+        ])
+
+        result = storage.get_trend_data("a@b.com", days=1)
+        assert result["days"][0]["sleep"] == 1
+
+    def test_counts_self_care_per_week(self, storage):
+        today = date.today()
+        iso_year, iso_week, _ = today.isocalendar()
+        week_id = f"{iso_year}-W{iso_week:02d}"
+        self._setup_user(storage)
+        self._setup_collections(storage, self_care=[
+            {"week_id": week_id, "description": "yoga"},
+            {"week_id": week_id, "description": "walk"},
+        ])
+
+        result = storage.get_trend_data("a@b.com", days=7)
+        # All days in same week should see the weekly count
+        days_with_sc = [d for d in result["days"] if d["self_care"] > 0]
+        assert len(days_with_sc) > 0
+        assert days_with_sc[0]["self_care"] == 2
+
     def test_fills_missing_days_with_zero(self, storage):
         self._setup_user(storage)
         self._setup_collections(storage)
@@ -168,6 +199,8 @@ class TestGetTrendData:
             assert d["calories"] == 0
             assert d["protein"] == 0
             assert d["workouts"] == 0
+            assert d["sleep"] == 0
+            assert d["self_care"] == 0
 
     def test_days_sorted_chronologically(self, storage):
         self._setup_user(storage)

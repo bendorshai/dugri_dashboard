@@ -109,7 +109,21 @@ function trendChart() {
             label: 'אימונים',
             color: '#C97A6B',
             fill: 'rgba(201, 122, 107, 0.1)',
-            targetKey: null,  // weekly target, not daily - shown differently
+            targetKey: null,
+            targetLabel: null,
+        },
+        sleep: {
+            label: 'שינה (דיווח)',
+            color: '#7B6BA5',
+            fill: 'rgba(123, 107, 165, 0.1)',
+            targetKey: null,
+            targetLabel: null,
+        },
+        self_care: {
+            label: 'משהו טוב (שבועי)',
+            color: '#D4A876',
+            fill: 'rgba(212, 168, 118, 0.1)',
+            targetKey: null,
             targetLabel: null,
         },
     };
@@ -124,6 +138,8 @@ function trendChart() {
             { key: 'calories', label: 'קלוריות' },
             { key: 'protein', label: 'חלבון' },
             { key: 'workouts', label: 'אימונים' },
+            { key: 'sleep', label: 'שינה' },
+            { key: 'self_care', label: 'משהו טוב' },
         ],
         rangeOptions: [
             { days: 7, label: 'שבוע' },
@@ -209,7 +225,6 @@ function trendChart() {
                     },
                     scales: {
                         x: {
-                            reverse: true,
                             ticks: {
                                 maxTicksLimit: data.days.length > 60 ? 8 : 10,
                                 font: { size: 11 },

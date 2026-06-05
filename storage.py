@@ -246,6 +246,20 @@ class DashboardStorage:
 
         food = list(self._db["food_entries"].find({**base_query, **date_filter}))
         workouts = list(self._db["workout_logs"].find({**base_query, **date_filter}))
+        sleep = list(self._db["sleep_logs"].find({**base_query, **date_filter}))
+
+        # Self-care uses week_id, not date - build week filter
+        if days > 0:
+            week_ids = set()
+            current = start
+            while current <= today:
+                iso_year, iso_week, _ = current.isocalendar()
+                week_ids.add(f"{iso_year}-W{iso_week:02d}")
+                current += timedelta(days=1)
+            sc_filter = {"telegram_user_id": tid, "week_id": {"$in": list(week_ids)}}
+        else:
+            sc_filter = {"telegram_user_id": tid}
+        self_care = list(self._db["self_care_logs"].find(sc_filter))
 
         # Aggregate food by date
         cal_by_date: dict[str, int] = {}
@@ -261,21 +275,42 @@ class DashboardStorage:
             d = entry["date"]
             wo_by_date[d] = wo_by_date.get(d, 0) + 1
 
+        # Sleep logged per date (1 if logged, 0 if not)
+        sleep_by_date: dict[str, int] = {}
+        for entry in sleep:
+            sleep_by_date[entry["date"]] = 1
+
+        # Self-care count per week_id
+        sc_by_week: dict[str, int] = {}
+        for entry in self_care:
+            wid = entry.get("week_id", "")
+            sc_by_week[wid] = sc_by_week.get(wid, 0) + 1
+
         if days > 0:
-            # Use the pre-built date list (fills missing days with 0)
             all_dates = date_strings
         else:
-            # All history: build date list from all entries found
-            all_date_set = set(cal_by_date) | set(prot_by_date) | set(wo_by_date)
+            all_date_set = (
+                set(cal_by_date) | set(prot_by_date)
+                | set(wo_by_date) | set(sleep_by_date)
+            )
             all_dates = sorted(all_date_set, key=lambda d: d.split("/")[::-1])
+
+        def _week_id_for_date_str(ds: str) -> str:
+            parts = ds.split("/")
+            d = date(int(parts[2]), int(parts[1]), int(parts[0]))
+            iso_year, iso_week, _ = d.isocalendar()
+            return f"{iso_year}-W{iso_week:02d}"
 
         result_days = []
         for ds in all_dates:
+            wid = _week_id_for_date_str(ds)
             result_days.append({
                 "date": ds,
                 "calories": cal_by_date.get(ds, 0),
                 "protein": prot_by_date.get(ds, 0),
                 "workouts": wo_by_date.get(ds, 0),
+                "sleep": sleep_by_date.get(ds, 0),
+                "self_care": sc_by_week.get(wid, 0),
             })
 
         return {"days": result_days, "targets": targets}
