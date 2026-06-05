@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Stub openai before importing
-mock_openai_module = MagicMock()
-sys.modules.setdefault("openai", mock_openai_module)
 
 from analyzer import (
     FoodAnalyzer, FoodItem, FoodAnalysisResult, FoodPhotoResult,

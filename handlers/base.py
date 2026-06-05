@@ -980,7 +980,6 @@ class HealthHandlers:
             await message.reply_text("ערך לא תקין. נסה שוב.")
         except Exception:
             logger.exception("Failed to update profile field %s", field)
-            await message.reply_text("❌ שגיאה בעדכון.")
 
         return True
 
@@ -1292,7 +1291,6 @@ class HealthHandlers:
             await query.edit_message_text("🗑 הרשומה נמחקה.", reply_markup=make_daily_summary_keyboard())
         except Exception:
             logger.exception("Failed to delete food entry %s", entry_id)
-            await query.edit_message_text("❌ שגיאה במחיקה.", reply_markup=make_daily_summary_keyboard())
 
     async def handle_food_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -1331,7 +1329,6 @@ class HealthHandlers:
             )
         except Exception:
             logger.exception("Failed to read entry for edit, id %s", entry_id)
-            await query.edit_message_text("❌ שגיאה בקריאת הרשומה.", reply_markup=make_daily_summary_keyboard())
 
     async def handle_food_again_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -1382,11 +1379,6 @@ class HealthHandlers:
             )
         except Exception:
             logger.exception("Failed to duplicate food entry %s", entry_id)
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="❌ שגיאה בשכפול הרשומה.",
-                reply_markup=make_daily_summary_keyboard(),
-            )
 
     async def handle_bulk_fix_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -1560,8 +1552,3 @@ class HealthHandlers:
                 )
         except Exception:
             logger.exception("Failed to generate feedback")
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="❌ שגיאה ביצירת משוב.",
-                reply_markup=make_main_menu_keyboard(),
-            )
