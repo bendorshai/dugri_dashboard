@@ -323,6 +323,25 @@ Skip in CI: pytest -m "not integration"
 #
 # This fires on goal set, nutrition confirm, and the shortcut path.
 #
+# NAME COLLECTION (name_declaration route)
+# -------------------------------------------
+# After linking, Dugri sends ONBOARDING_GREETING which asks the user's
+# name ("איך אתה רוצה שאקרא לך?"). Name is collected via a dedicated
+# classifier route "name_declaration" - NOT via conversation_reply.
+#
+# Two valid triggers:
+#   1. DIRECT RESPONSE: greeting is in recent history, user sends a name
+#      (e.g., "שי", "דני"). Classifier sees the name question and routes
+#      as name_declaration with declared_name extracted.
+#   2. EXPLICIT DECLARATION: user says "קוראים לי שי" / "השם שלי דני"
+#      at any point, even without the greeting in history. Classifier
+#      recognizes the declaration pattern.
+#
+# What is NOT a name declaration:
+#   - "כן" / "יאללה" / "סבבה" when a toggle is offered -> conversation_reply
+#   - Food descriptions when greeting is in history -> meal
+#   - The classifier never guesses: if it's ambiguous, it's NOT a name.
+#
 # MIXED-TYPE & RETROACTIVE MULTI-ENTRY LOGGING
 # ----------------------------------------------
 # A single message can contain entries across MULTIPLE habit types AND
@@ -1478,3 +1497,71 @@ class TestMultiEntryHabits:
         )
         assert result.type == "meal"
         assert not result.habit_entries
+
+
+# ============================================================================
+# NAME COLLECTION (name_declaration route)
+# ============================================================================
+
+ONBOARDING_GREETING = M.ONBOARDING_GREETING
+
+
+class TestNameDeclaration:
+    """Tests for the name_declaration classifier route."""
+
+    def test_direct_name_response_after_greeting(self):
+        """User replies with a name right after the greeting -> name_declaration."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "שי",
+            toggle_state=_build_toggle_state(),
+            history=_build_history(
+                ("bot", ONBOARDING_GREETING),
+            ),
+        )
+        assert result.type == "name_declaration"
+        assert result.declared_name is not None
+        assert "שי" in result.declared_name
+
+    def test_name_ghosting_food_instead(self):
+        """User ignores name question and sends food -> meal, not name."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אכלתי סלט",
+            toggle_state=_build_toggle_state(),
+            history=_build_history(
+                ("bot", ONBOARDING_GREETING),
+            ),
+        )
+        assert result.type == "meal"
+
+    def test_post_entries_explicit_name_declaration(self):
+        """User declares name later with 'קוראים לי' -> name_declaration."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אגב קוראים לי דני",
+            toggle_state=_build_toggle_state(nutrition="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
+            ),
+        )
+        assert result.type == "name_declaration"
+        assert result.declared_name is not None
+        assert "דני" in result.declared_name
+
+    def test_yes_to_nutrition_offer_not_name(self):
+        """'כן' with nutrition offered must be conversation_reply, NOT name."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "כן",
+            toggle_state=_build_toggle_state(nutrition="offered"),
+            history=_build_history(
+                ("bot", ONBOARDING_GREETING),
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", NUTRITION_OFFER),
+            ),
+        )
+        assert result.type == "conversation_reply"

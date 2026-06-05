@@ -95,7 +95,7 @@ class MessageClassification(BaseModel):
         "meal", "correction", "sleep", "workout", "self_care",
         "help", "answer_question", "feedback_request",
         "toggle_cancel", "toggle_activate",
-        "conversation_reply",
+        "conversation_reply", "name_declaration",
         "none",
     ]
     meal: TimedFoodAnalysisResult | None = None
@@ -106,6 +106,7 @@ class MessageClassification(BaseModel):
     habit_entries: list[HabitEntry] | None = None
     question_text: str | None = None
     toggle_name: str | None = None
+    declared_name: str | None = None
     freeform_response: str | None = None
 
 
@@ -125,7 +126,7 @@ from prompts import (
     PARSE_MESSAGE_SYSTEM_PROMPT,
     QA_SYSTEM_PROMPT,
     TARGET_SUGGESTION_SYSTEM_PROMPT,
-    WEEKLY_FEEDBACK_SYSTEM_PROMPT,
+    ENHANCED_WEEKLY_SUMMARY_PROMPT,
 )
 
 _EXTRACTION_PROMPTS = {
@@ -349,27 +350,49 @@ class FoodAnalyzer:
 
     def generate_weekly_feedback(
         self,
-        week_csv: str,
-        targets: dict,
+        week_stats: dict,
         past_feedbacks: list[str],
     ) -> dict | None:
         feedbacks_block = "\n".join(f"- {f}" for f in past_feedbacks) if past_feedbacks else "(אין משובים קודמים)"
 
+        # Build daily breakdown from pre-computed summaries
+        daily_lines = []
+        for day in week_stats.get("daily_summaries", []):
+            daily_lines.append(
+                f"- יום {day['day_name']} ({day['date']}): "
+                f"{day['total_calories']} קק\"ל, {day['total_protein']}g חלבון "
+                f"({day['meal_count']} ארוחות)"
+            )
+        daily_block = "\n".join(daily_lines) if daily_lines else "(אין נתונים)"
+
+        # Build percentage line
+        pct_parts = []
+        if week_stats.get("cal_vs_target_pct") is not None:
+            pct_parts.append(f"{week_stats['cal_vs_target_pct']}% מיעד הקלוריות")
+        if week_stats.get("prot_vs_target_pct") is not None:
+            pct_parts.append(f"{week_stats['prot_vs_target_pct']}% מיעד החלבון")
+        pct_line = ", ".join(pct_parts) if pct_parts else "אין יעדים מוגדרים"
+
         user_msg = (
-            f"היסטוריית אכילה של 7 ימים:\n{week_csv}\n\n"
-            f"יעדים: {targets.get('calories', 0)} קלוריות, {targets.get('protein', 0)}g חלבון\n\n"
+            f"סיכום שבועי מחושב:\n\n"
+            f"ממוצע יומי: {week_stats.get('avg_calories', 0)} קלוריות, "
+            f"{week_stats.get('avg_protein', 0)}g חלבון ({pct_line})\n"
+            f"ימים עם תיעוד: {week_stats.get('days_tracked', 0)} מתוך {week_stats.get('days_total', 7)}\n"
+            f"יעדים: {week_stats.get('target_calories', 0)} קלוריות, "
+            f"{week_stats.get('target_protein', 0)}g חלבון\n\n"
+            f"פירוט יומי:\n{daily_block}\n\n"
             f"המשובים האחרונים שלך:\n{feedbacks_block}"
         )
 
         try:
             response = self.client.beta.chat.completions.parse(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": WEEKLY_FEEDBACK_SYSTEM_PROMPT},
+                    {"role": "system", "content": ENHANCED_WEEKLY_SUMMARY_PROMPT},
                     {"role": "user", "content": user_msg},
                 ],
                 response_format=WeeklyFeedbackResult,
-                temperature=0.7,
+                temperature=0.3,
             )
             result = response.choices[0].message.parsed
             if result is None:

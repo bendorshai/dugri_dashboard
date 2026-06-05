@@ -248,14 +248,6 @@ class HealthHandlers:
         text = message.text.strip()
         response = None
 
-        # Name collection: onboarding not complete
-        if self.onboarding_service and not profile.onboarding.name_collected:
-            response = self.onboarding_service.handle_name_response(tid, text)
-            if response:
-                await message.reply_text(response)
-                self._save_bot_message(tid, response)
-                return
-
         # Check which toggle is in an active flow
         # Priority: active_goal_pending flows first, then offered toggles
 
@@ -590,6 +582,14 @@ class HealthHandlers:
                     await message.reply_text(response)
             else:
                 await message.reply_text("לא הבנתי איזה מעקב להדליק. נסה שוב?")
+            return
+
+        if classification.type == "name_declaration" and self.onboarding_service:
+            name = classification.declared_name or message.text.strip()
+            response = self.onboarding_service.handle_name_response(tid, name)
+            if response:
+                await message.reply_text(response)
+                self._save_bot_message(tid, response)
             return
 
         if classification.type == "feedback_request":

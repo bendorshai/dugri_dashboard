@@ -23,14 +23,43 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 
 MONGO_URI = "mongodb://mongo:CeIVOLCoGytTovcrdPkcKLVdgjeoFchP@junction.proxy.rlwy.net:10627"
 
+ONBOARDING_GREETING = (
+    "היי, אני דוגרי 👋\n\n"
+    "הלב של מה שאני עושה הוא מודעות תזונתית — "
+    "שלח לי את הארוחה הבאה שלך בכמה מילים ואני אעשה את החישוב.\n\n"
+    "לפני שמתחילים, איך אתה רוצה שאקרא לך?"
+)
+
 
 def get_mongo_uri() -> str:
     return MONGO_URI
+
+
+def get_bot_token() -> str:
+    config_path = Path(__file__).resolve().parent.parent / "config" / "config.json"
+    with open(config_path, encoding="utf-8") as f:
+        config = json.load(f)
+    return config["telegram"]["bot_token"]
+
+
+def send_greeting(bot_token: str, telegram_user_id: int) -> None:
+    """Send the onboarding greeting via Telegram Bot API."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    resp = requests.post(url, json={
+        "chat_id": telegram_user_id,
+        "text": ONBOARDING_GREETING,
+    })
+    if resp.ok:
+        print(f"  Greeting sent to Telegram user {telegram_user_id}")
+    else:
+        print(f"  WARNING: Failed to send greeting: {resp.text}")
 
 
 def reset_user(email: str) -> None:
@@ -120,6 +149,25 @@ def reset_user(email: str) -> None:
         print(f"  body stats: cleared (height, weight, birth_year, gender)")
         print(f"  feedback state: cleared")
         print(f"  Food entries: preserved")
+
+        # Send greeting via Telegram and save to recent_messages
+        tid = user.get("telegram_user_id")
+        if tid:
+            try:
+                bot_token = get_bot_token()
+                send_greeting(bot_token, tid)
+                # Save greeting to recent_messages so classifier sees it in history
+                greeting_msg = {
+                    "role": "bot",
+                    "text": ONBOARDING_GREETING[:500],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+                db.users.update_one(
+                    {"_id": email},
+                    {"$push": {"recent_messages": greeting_msg}},
+                )
+            except Exception as e:
+                print(f"  WARNING: Could not send greeting: {e}")
     else:
         print("WARNING: No changes made (user may already be in default state)")
 
