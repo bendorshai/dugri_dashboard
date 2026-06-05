@@ -43,6 +43,14 @@ def is_within_eating_window(
         return current >= start or current < end
 
 
+_HEBREW_DAYS = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+
+
+def hebrew_day_name(dt: datetime | date) -> str:
+    """Return Hebrew day name. Monday=0 in Python's weekday()."""
+    return _HEBREW_DAYS[dt.weekday()]
+
+
 def minutes_until_window_close(now: datetime, window_end: str) -> int:
     """Calculate minutes until eating window closes."""
     end_h, end_m = parse_time_window(window_end)

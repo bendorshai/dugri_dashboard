@@ -13,7 +13,7 @@ from analyzer import (
     FoodAnalyzer, FoodItem, FoodAnalysisResult, FoodPhotoResult,
     MessageParseResult, CorrectionFoodItem,
     CorrectionResult, BulkCorrectionItem, BulkCorrectionResult,
-    WeeklyFeedbackResult,
+    WeeklyFeedbackResult, TimedFoodAnalysisResult,
 )
 
 
@@ -82,7 +82,7 @@ class TestAnalyzeFoodText:
         fa.analyze_food_text("test", "05/05/2026")
 
         call_args = mock_client.beta.chat.completions.parse.call_args
-        assert call_args[1]["response_format"] == FoodAnalysisResult
+        assert call_args[1]["response_format"] == TimedFoodAnalysisResult
 
     def test_handles_gpt_failure(self, analyzer):
         fa, mock_client = analyzer

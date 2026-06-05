@@ -20,7 +20,7 @@ from telegram.ext import ContextTypes
 from analyzer import FoodAnalyzer
 from models.food import FoodEntry
 from models.profile import UserProfile
-from parsing import get_user_now, is_within_eating_window
+from parsing import get_user_now, hebrew_day_name, is_within_eating_window
 from repositories.food_repository import FoodRepository
 from repositories.user_repository import UserRepository
 from repositories.feedback_repository import WeeklyFeedbackRepository
@@ -157,6 +157,34 @@ class HealthHandlers:
             lines.append(f"  ~{item.estimated_grams} גרם | {item.calories} קל׳ | {item.protein} גרם חלבון")
         text = "\n".join(lines)
         if len(items) > 1:
+            text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot} גרם חלבון"
+        return text
+
+    @staticmethod
+    def _format_grouped_items_text(groups, today_str: str) -> str:
+        """Format food items grouped by temporal label.
+
+        Shows a 📅 header for each group when there are multiple groups or
+        when a single group is not for today (retroactive).
+        """
+        show_labels = len(groups) > 1 or (len(groups) == 1 and groups[0].date != today_str)
+        sections = []
+        for group in groups:
+            lines = []
+            if show_labels:
+                lines.append(f"📅 {group.temporal_label}:")
+            for item in group.items:
+                lines.append(f"• {item.description}")
+                lines.append(f"  ~{item.estimated_grams} גרם | {item.calories} קל׳ | {item.protein} גרם חלבון")
+            if len(groups) > 1 and len(group.items) > 1:
+                lines.append(f"  סה\"כ: {group.total_calories} קל׳ | {group.total_protein} גרם חלבון")
+            sections.append("\n".join(lines))
+        text = "\n\n".join(sections)
+        # Grand total across all groups (like _format_items_text for multi-item)
+        all_items = [item for g in groups for item in g.items]
+        if len(all_items) > 1 and len(groups) == 1:
+            total_cal = groups[0].total_calories
+            total_prot = groups[0].total_protein
             text += f"\n\nסה\"כ: {total_cal} קל׳ | {total_prot} גרם חלבון"
         return text
 
@@ -376,6 +404,7 @@ class HealthHandlers:
         today_str = self._get_today_str(profile)
         time_str = self._get_time_str(profile)
         within_window = self._is_within_window(profile)
+        day_name = hebrew_day_name(get_user_now(profile.timezone))
 
         last_entry = context.chat_data.get("last_entry")
 
@@ -430,6 +459,7 @@ class HealthHandlers:
             recent_messages=recent_messages[:-1],
             toggle_state=toggle_state,
             reply_context=reply_context,
+            day_name=day_name,
         )
 
         # conversation_reply: user is responding to something the bot asked
@@ -538,52 +568,68 @@ class HealthHandlers:
             return
 
         # Default: treat as food (meal type or fallback)
-        if classification.type == "meal" and classification.meal and classification.meal.items:
+        from analyzer import TimedFoodAnalysisResult, TimedFoodGroup
+
+        if classification.type == "meal" and classification.meal and classification.meal.groups:
             food_result = classification.meal
         else:
-            food_result = self.analyzer.analyze_food_text(message.text, today_str)
+            food_result = self.analyzer.analyze_food_text(message.text, today_str, day_name)
 
-        if food_result is None or not food_result.items:
+        if food_result is None or not food_result.groups:
             await message.reply_text("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?")
             return
 
-        combined_desc = ", ".join(item.description for item in food_result.items)
-        total_cal = food_result.total_calories
-        total_prot = food_result.total_protein
+        # Create one FoodEntry per temporal group
+        saved_entries: list[tuple[TimedFoodGroup, FoodEntry]] = []
+        for group in food_result.groups:
+            combined_desc = ", ".join(item.description for item in group.items)
+            entry = FoodEntry(
+                telegram_user_id=tid,
+                date=group.date,
+                time=group.time,
+                description=combined_desc,
+                calories=group.total_calories,
+                protein=group.total_protein,
+                within_window=within_window if group.date == today_str else True,
+            )
+            saved = self.food_repo.add(entry)
+            saved_entries.append((group, saved))
+            logger.info("Recorded: %s [%s %s] (%d cal, %dg protein) -> id %s",
+                        combined_desc, group.date, group.time,
+                        group.total_calories, group.total_protein, saved.id)
 
-        entry = FoodEntry(
-            telegram_user_id=tid,
-            date=today_str,
-            time=time_str,
-            description=combined_desc,
-            calories=total_cal,
-            protein=total_prot,
-            within_window=within_window,
-        )
-        saved = self.food_repo.add(entry)
-
-        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
-        new_daily_cal, new_daily_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
-        prev_cal = new_daily_cal - total_cal
-        prev_protein = new_daily_prot - total_prot
-        logger.info("Recorded: %s (%d cal, %dg protein) -> id %s",
-                    combined_desc, total_cal, total_prot, saved.id)
-
+        # last_entry = chronologically latest (last group)
+        last_group, last_saved = saved_entries[-1]
+        last_desc = ", ".join(item.description for item in last_group.items)
         context.chat_data["last_entry"] = {
-            "description": combined_desc,
-            "calories": total_cal,
-            "protein": total_prot,
-            "entry_id": saved.id,
+            "description": last_desc,
+            "calories": last_group.total_calories,
+            "protein": last_group.total_protein,
+            "entry_id": last_saved.id,
         }
 
-        items_text = self._format_items_text(food_result.items, total_cal, total_prot)
-        alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
+        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
+        items_text = self._format_grouped_items_text(food_result.groups, stats_date)
 
-        response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
-        if alerts:
-            response = f"{alerts}\n\n{response}"
+        # Check if any group lands on today
+        today_groups = [g for g in food_result.groups if g.date == stats_date]
+        if today_groups:
+            today_cal = sum(g.total_calories for g in today_groups)
+            today_prot = sum(g.total_protein for g in today_groups)
+            new_daily_cal, new_daily_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
+            prev_cal = new_daily_cal - today_cal
+            prev_protein = new_daily_prot - today_prot
+            alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
+            response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
+            if alerts:
+                response = f"{alerts}\n\n{response}"
+        else:
+            # All entries are retroactive - no daily summary
+            retro_labels = [g.temporal_label for g in food_result.groups]
+            response = f"{items_text}\n\n✅ נרשם ({', '.join(retro_labels)})"
 
-        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
+        last_entry_id = last_saved.id
+        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(last_entry_id))
         await safe_react(message, OK_HAND)
         self._save_bot_message(tid, response)
 

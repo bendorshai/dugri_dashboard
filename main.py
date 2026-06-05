@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "4.2.0"
-VERSION_NOTES = "ניתוב תזונה: החלפת keyword matching במבנה, בטיחות conversation_reply, טסטים"
+VERSION = "4.3.0"
+VERSION_NOTES = "רישום אוכל רטרואקטיבי: זיהוי סמני זמן, קיבוץ לפי תאריך, סיכום יומי להיום בלבד"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

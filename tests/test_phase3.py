@@ -21,7 +21,7 @@ from services.message_router_service import MessageRouterService
 from repositories.sleep_repository import SleepRepository
 from repositories.workout_repository import WorkoutRepository
 from repositories.self_care_repository import SelfCareRepository
-from analyzer import MessageClassification, FoodAnalysisResult, FoodItem
+from analyzer import MessageClassification, FoodAnalysisResult, FoodItem, TimedFoodGroup, TimedFoodAnalysisResult
 
 
 # ---------------------------------------------------------------------------
@@ -131,14 +131,19 @@ class TestMessageClassification:
     def test_meal_classification(self):
         mc = MessageClassification(
             type="meal",
-            meal=FoodAnalysisResult(
-                items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
-                total_calories=400,
-                total_protein=30,
-            ),
+            meal=TimedFoodAnalysisResult(groups=[
+                TimedFoodGroup(
+                    temporal_label="עכשיו",
+                    date="05/06/2026",
+                    time="13:00",
+                    items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
+                    total_calories=400,
+                    total_protein=30,
+                ),
+            ]),
         )
         assert mc.type == "meal"
-        assert mc.meal.total_calories == 400
+        assert mc.meal.groups[0].total_calories == 400
 
     def test_sleep_classification(self):
         mc = MessageClassification(type="sleep", sleep_time="23:30")

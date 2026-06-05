@@ -23,6 +23,19 @@ class FoodAnalysisResult(BaseModel):
     total_protein: int
 
 
+class TimedFoodGroup(BaseModel):
+    temporal_label: str
+    date: str
+    time: str
+    items: list[FoodItem]
+    total_calories: int
+    total_protein: int
+
+
+class TimedFoodAnalysisResult(BaseModel):
+    groups: list[TimedFoodGroup]
+
+
 class FoodPhotoResult(BaseModel):
     items: list[FoodItem]
     total_calories: int
@@ -71,7 +84,7 @@ class MessageClassification(BaseModel):
         "conversation_reply",
         "none",
     ]
-    meal: FoodAnalysisResult | None = None
+    meal: TimedFoodAnalysisResult | None = None
     correction: CorrectionResult | None = None
     sleep_time: str | None = None
     workout_note: str | None = None
@@ -113,8 +126,12 @@ class FoodAnalyzer:
     def __init__(self, api_key: str):
         self.client = OpenAI(api_key=api_key)
 
-    def analyze_food_text(self, text: str, today_str: str) -> FoodAnalysisResult | None:
-        system = FOOD_TEXT_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
+    def analyze_food_text(self, text: str, today_str: str, day_name: str = "") -> TimedFoodAnalysisResult | None:
+        date_line = f"\nהתאריך של היום: {today_str}"
+        if day_name:
+            date_line += f" (יום {day_name})"
+        date_line += "\n"
+        system = FOOD_TEXT_SYSTEM_PROMPT + date_line
         try:
             response = self.client.beta.chat.completions.parse(
                 model="gpt-4o-mini",
@@ -122,7 +139,7 @@ class FoodAnalyzer:
                     {"role": "system", "content": system},
                     {"role": "user", "content": text},
                 ],
-                response_format=FoodAnalysisResult,
+                response_format=TimedFoodAnalysisResult,
                 temperature=0,
             )
             result = response.choices[0].message.parsed
@@ -173,6 +190,7 @@ class FoodAnalyzer:
         recent_messages: list[dict] | None = None,
         toggle_state: str | None = None,
         reply_context: str | None = None,
+        day_name: str = "",
     ) -> MessageClassification:
         """Classify a message using GPT. This is the ONLY entry point for all user messages."""
         system = ""
@@ -186,7 +204,10 @@ class FoodAnalyzer:
             system += f"מצב ההרגלים של המשתמש:\n{toggle_state}\n\n"
 
         system += CLASSIFIER_SYSTEM_PROMPT
-        system += f"\nהתאריך של היום: {today_str}\n"
+        date_line = f"\nהתאריך של היום: {today_str}"
+        if day_name:
+            date_line += f" (יום {day_name})"
+        system += date_line + "\n"
 
         if last_entry:
             system += (
