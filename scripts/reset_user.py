@@ -5,11 +5,13 @@ Usage:
     python scripts/reset_user.py <email>
 
 Resets: toggles, targets, eating_window, trial_started_at,
-        recent_messages, dashboard flags.
-Does NOT delete: food_entries, sleep_logs, workout_logs, self_care_logs.
+        recent_messages, dashboard flags, body stats, name/onboarding,
+        feedback steering state.
+Does NOT delete: food_entries, sleep_logs, workout_logs, self_care_logs,
+        consents, email, telegram_user_id.
 
-The user keeps their name, body stats, and food history. Only the lazy
-opt-in state machine is rewound so the full onboarding flow restarts.
+Full clean-slate reset: the user goes through the complete onboarding
+flow (name collection, lazy opt-in, goal setting) from scratch.
 """
 
 from __future__ import annotations
@@ -86,11 +88,22 @@ def reset_user(email: str) -> None:
             "workouts_per_week": None,
         },
         "eating_window": None,
+        "subscription_status": "trial_active",
         "trial_started_at": now,
         "recent_messages": [],
         "dashboard_intro_shown": False,
         "target_retry_done": False,
         "eating_window_retry_done": False,
+        # Personal details (collected during nutrition goal flow)
+        "name": None,
+        "onboarding": {"name_collected": False},
+        "birth_year": None,
+        "height_cm": None,
+        "weight_kg": None,
+        "gender": None,
+        # Weekly feedback state
+        "feedback_steering_prompt": None,
+        "last_feedback_offered_at": None,
         "updated_at": now,
     }
 
@@ -99,9 +112,13 @@ def reset_user(email: str) -> None:
     if result.modified_count:
         print(f"\nReset complete.")
         print(f"  trial_started_at: {now}")
+        print(f"  subscription_status: trial_active")
         print(f"  toggles: all dormant (weekly_summary active)")
         print(f"  targets: cleared")
         print(f"  eating_window: cleared")
+        print(f"  name/onboarding: cleared (will ask name again)")
+        print(f"  body stats: cleared (height, weight, birth_year, gender)")
+        print(f"  feedback state: cleared")
         print(f"  Food entries: preserved")
     else:
         print("WARNING: No changes made (user may already be in default state)")

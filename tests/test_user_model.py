@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import pytest
 
 from models.profile import (
-    User, EatingWindow, Targets, Onboarding, OnboardingHabits, HabitState,
+    User, EatingWindow, Targets, Onboarding, OnboardingHabits,
 )
 
 
@@ -33,9 +33,7 @@ class TestUserModelBasics:
         assert user.targets.calories is None
         assert user.eating_window is None
         assert user.timezone == "Asia/Jerusalem"
-        assert user.active_habits == []
         assert user.consents == {}
-        assert user.goals == {}
         assert user.birth_year is None
         assert user.height_cm is None
         assert user.weight_kg is None
@@ -68,9 +66,7 @@ class TestUserMongoSerialization:
             name="שי",
             targets=Targets(calories=2000, protein=120),
             eating_window=EatingWindow(start="10:00", end="18:00"),
-            active_habits=["nutrition", "sleep"],
             consents={"terms_accepted_at": "2026-05-20"},
-            goals={"calories": {"enabled": True, "target": 2000}},
             birth_year=1990,
         )
         doc = original.to_mongo_dict()
@@ -80,9 +76,7 @@ class TestUserMongoSerialization:
         assert restored.name == original.name
         assert restored.targets.calories == 2000
         assert restored.eating_window.start == "10:00"
-        assert restored.active_habits == ["nutrition", "sleep"]
         assert restored.consents == {"terms_accepted_at": "2026-05-20"}
-        assert restored.goals == {"calories": {"enabled": True, "target": 2000}}
         assert restored.birth_year == 1990
 
     def test_from_mongo_dict_without_telegram_id(self):

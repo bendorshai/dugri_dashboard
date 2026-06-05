@@ -122,7 +122,6 @@ class User(BaseModel):
     timezone: str = "Asia/Jerusalem"
 
     onboarding: Onboarding = Field(default_factory=Onboarding)
-    active_habits: list[str] = Field(default_factory=list)
     toggles: Toggles = Field(default_factory=Toggles)
 
     recent_messages: list[dict] = Field(default_factory=list)
@@ -142,7 +141,6 @@ class User(BaseModel):
 
     # Dashboard fields
     consents: dict = Field(default_factory=dict)
-    goals: dict = Field(default_factory=dict)
     birth_year: int | None = None
     height_cm: float | None = None
     weight_kg: float | None = None
@@ -183,7 +181,7 @@ class User(BaseModel):
                 doc["eating_window"] = {"start": start, "end": end}
 
         # Remove any unknown legacy fields that would fail validation
-        for legacy_key in ["chat_id", "onboarding_complete", "terms_accepted", "bot_key", "pending_state"]:
+        for legacy_key in ["chat_id", "onboarding_complete", "terms_accepted", "bot_key", "pending_state", "active_habits", "goals"]:
             doc.pop(legacy_key, None)
 
         # Migrate old onboarding.habits to toggles (only if toggles not already set)
