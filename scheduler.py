@@ -94,7 +94,7 @@ def get_hooks_to_schedule(profile: User) -> list[dict]:
 def schedule_global_poller(
     job_queue, user_repo, toggle_service,
     goal_service=None, eating_day_service=None,
-    state_service=None,
+    hook_schedule_store=None,
 ):
     """Schedule the single unified polling loop.
 
@@ -118,7 +118,7 @@ def schedule_global_poller(
             "toggle_service": toggle_service,
             "goal_service": goal_service,
             "eating_day_service": eating_day_service,
-            "state_service": state_service,
+            "hook_schedule_store": hook_schedule_store,
         },
     )
     logger.info(
@@ -134,6 +134,7 @@ async def _global_tick(context):
     toggle_service = data["toggle_service"]
     goal_service = data.get("goal_service")
     eating_day_svc = data.get("eating_day_service")
+    hook_schedule_store = data.get("hook_schedule_store")
 
     all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
     logger.info("Poller tick: checking %d users", len(all_users))
@@ -144,7 +145,7 @@ async def _global_tick(context):
         try:
             await _check_user_hooks(
                 context, profile, user_repo, toggle_service,
-                goal_service, eating_day_svc,
+                goal_service, eating_day_svc, hook_schedule_store,
             )
         except Exception:
             logger.exception("Poller tick failed for user %d", profile.telegram_user_id)
@@ -156,7 +157,7 @@ async def _global_tick(context):
 
 async def _check_user_hooks(
     context, profile, user_repo, toggle_service,
-    goal_service=None, eating_day_svc=None,
+    goal_service=None, eating_day_svc=None, hook_schedule_store=None,
 ):
     """Check and fire all due messages for a single user."""
     import messages as M
@@ -180,13 +181,23 @@ async def _check_user_hooks(
     for hook in hooks:
         toggle_name = hook["toggle_name"]
         schedule_type = hook["schedule_type"]
-        start_hour, end_hour = hook["window"]
-
-        if not (start_hour <= now.hour < end_hour):
-            continue
+        window = hook["window"]
 
         if schedule_type == "weekly" and today_weekday != hook["anchor_day"]:
             continue
+
+        # Randomized timing: fire after the random time, not on window entry.
+        # Falls back to window check if no hook_schedule_store is configured.
+        if hook_schedule_store:
+            fire_h, fire_m = hook_schedule_store.get_or_generate(
+                toggle_name, window, schedule_type, now,
+            )
+            if (now.hour, now.minute) < (fire_h, fire_m):
+                continue
+        else:
+            start_hour, end_hour = window
+            if not (start_hour <= now.hour < end_hour):
+                continue
 
         if not should_fire_inline(profile, toggle_name, now):
             continue
@@ -211,7 +222,9 @@ async def _check_user_hooks(
                 "workouts": "אימונים", "self_care": "משהו לעצמי",
                 "weekly_summary": "סיכום שבועי",
             }
-            text += "\n\n" + M.EXIT_DOOR.format(habit=habit_names.get(toggle_name, ""))
+            text += "\n\n" + random.choice(M.EXIT_DOOR_PROMPTS).format(
+                habit=habit_names.get(toggle_name, "")
+            )
 
         toggle_service.record_asked(tid, toggle_name)
         toggle_service.increment_unanswered(tid, profile, toggle_name)
@@ -221,15 +234,19 @@ async def _check_user_hooks(
     await _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, now)
 
     # --- Proactive reveals (fallback for users who haven't logged food) ---
-    state_service = context.job.data.get("state_service")
-    if toggle_service and state_service:
+    if toggle_service:
         await _check_proactive_reveals(
-            context, profile, user_repo, toggle_service, state_service, now, today_weekday,
+            context, profile, user_repo, toggle_service, now, today_weekday,
         )
+
+    # --- Ghosting detection (goal flows that went unanswered) ---
+    goal_service = context.job.data.get("goal_service")
+    if goal_service:
+        goal_service.check_ghosting(profile)
 
 
 async def _check_proactive_reveals(
-    context, profile, user_repo, toggle_service, state_service, now, weekday,
+    context, profile, user_repo, toggle_service, now, weekday,
 ):
     """Proactive reveals: offer dormant habits via poller if not yet offered.
 
@@ -254,9 +271,8 @@ async def _check_proactive_reveals(
         # Check time window if the habit has one
         if window and not (window[0] <= now.hour < window[1]):
             continue
-        # Reveal and offer
+        # Reveal and offer (toggle state tells classifier what to do)
         toggle_service.reveal_toggle(tid, name)
-        state_service.set_pending(tid, "awaiting_toggle_consent", data={"toggle_name": name})
         await _send_and_save(context, tid, reveal_msg, user_repo)
         return  # One reveal per tick
 

@@ -21,7 +21,8 @@ Skip in CI: pytest -m "not integration"
 # OVERVIEW
 # --------
 # Dugri introduces habit tracking gradually, one habit at a time, via
-# "inline hooks" - messages that piggyback on food entries. Each habit has:
+# "inline conversation hooks" - messages sent after food entries. Each
+# habit has:
 #   - A gate (minimum days since trial start before revealing)
 #   - An optional anchor day (weekday restriction)
 #   - An optional goal (quantitative target the user can set)
@@ -31,11 +32,34 @@ Skip in CI: pytest -m "not integration"
 # them by name, not by value, so changing a number in config doesn't
 # invalidate the spec.
 #
+# ROUTING MODEL (no pending_state)
+# ---------------------------------
+# The classifier routes messages using ONLY:
+#   1. Toggle state summary (all habits with their status)
+#   2. Conversation history (last MAX_RECENT_MESSAGES messages)
+#   3. Reply-to-message context (if Telegram swipe-reply)
+#   4. Last food entry (for corrections)
+#   5. Israeli Hebrew cultural context
+#
+#
+# TOGGLE STATES (per habit)
+# --------------------------
+#   - dormant: not offered yet
+#   - offered: bot proposed tracking, awaiting user response
+#   - active_goal_pending: user accepted, bot is collecting goal info
+#   - active: tracking without a goal
+#   - active_with_goal: tracking with a goal set
+#   - remind_pending: user declined/ghosted, asking about reminders
+#   - cancelled: permanently declined
+#
+# The classifier sees the toggle state and the last bot message in history.
+# Together these provide full context for routing - no state machine needed.
+#
 # HABIT SEQUENCE (order of introduction)
 # ----------------------------------------
 # 1. NUTRITION
 #    - Gate: HOOK_CONFIG["nutrition"]["gate_days"] (0 = after first meal)
-#    - Trigger: inline hook after first food entry (5s delay)
+#    - Trigger: inline conversation hook after first food entry (5s delay)
 #    - Goal: calorie + protein daily targets
 #    - Flow: offer tracking -> collect body stats (height, weight, age in
 #      one message, any format) -> ask weight goal (lose/keep/gain) ->
@@ -44,13 +68,15 @@ Skip in CI: pytest -m "not integration"
 #
 # 2. SLEEP
 #    - Gate: HOOK_CONFIG["sleep"]["gate_days"] (1 = after first night)
-#    - Trigger: inline hook after food entry, any day
+#    - Trigger: inline conversation hook after food entry, any day
 #    - Goal: target sleep time (HH:MM)
 #    - Flow: offer tracking -> accept -> ask "what time do you aim to sleep?"
 #      -> user sends time in any format -> GPT extracts -> goal set
-#    - IMPORTANT: while awaiting a sleep GOAL, the first time the user
-#      sends is treated as the GOAL, not as a sleep log. The bot confirms
-#      "goal set to 23:00" (not "logged sleep at 23:00").
+#    - IMPORTANT: while in goal flow for sleep (active_goal_pending),
+#      the first time the user sends is treated as the GOAL, not as a
+#      sleep log. The bot confirms "goal set to 23:00" (not "logged sleep
+#      at 23:00"). The classifier knows this because toggle_state shows
+#      sleep=active_goal_pending and history shows the bot asked for a time.
 #    - Only if the user explicitly declines setting a goal does Dugri
 #      switch to tracking sleep times WITHOUT a goal (just logging).
 #    - User can update sleep goal later via natural language at any time
@@ -58,7 +84,7 @@ Skip in CI: pytest -m "not integration"
 #
 # 3. EATING WINDOW
 #    - Gate: HOOK_CONFIG["eating_window"]["gate_days"] (4)
-#    - Trigger: inline hook after food entry
+#    - Trigger: inline conversation hook after food entry
 #    - Goal: the window itself (start-end times). Dugri measures daily
 #      compliance (did user eat within the window?).
 #      Weekly summary reports how many days window was kept.
@@ -69,14 +95,14 @@ Skip in CI: pytest -m "not integration"
 #
 # 4. WORKOUTS
 #    - Gate: HOOK_CONFIG["workouts"]["gate_days"] (4) + anchor day (Thursday)
-#    - Trigger: inline hook after food entry, only on Thursday
+#    - Trigger: inline conversation hook after food entry, only on Thursday
 #    - Goal: weekly workout count
 #    - Flow: offer tracking -> accept -> ask "how many times per week?"
 #      -> user sends number in any format -> GPT extracts -> goal set
 #
 # 5. SELF-CARE
 #    - Gate: HOOK_CONFIG["self_care"]["gate_days"] (4) + anchor day (Friday)
-#    - Trigger: inline hook after food entry, only on Friday
+#    - Trigger: inline conversation hook after food entry, only on Friday
 #    - Goal: NONE. No goal question. Just activate tracking.
 #    - Flow: offer tracking -> accept -> "great, I'll remind you weekly"
 #    - Dugri reminds weekly to log something good the user did for themselves
@@ -89,71 +115,75 @@ Skip in CI: pytest -m "not integration"
 # PER-STEP CASES (applies to every habit unless noted)
 # ----------------------------------------------------
 #
-# OFFER STEP (Dugri proposes tracking):
+# OFFER STEP (toggle_state = offered, bot's offer visible in history):
 #   - ACCEPT: user cooperates ("יאללה", "אשמח", "בוא", "כן", or any
 #     affirmative in natural Israeli Hebrew)
 #     -> classifier: conversation_reply
-#     -> activate toggle, proceed to goal (or done for self-care)
+#     -> handler: activate toggle, proceed to goal (or done for self-care)
 #
 #   - DECLINE: user refuses ("לא", "עזוב", "לא מעניין")
 #     -> classifier: toggle_cancel
-#     -> Dugri asks "want me to remind you later?"
-#     -> pending_state = awaiting_goal_remind
+#     -> handler: Dugri asks "want me to remind you later?"
+#     -> toggle moves to remind_pending
 #
 #   - GHOST: user doesn't reply, sends food or nothing
-#     -> if food: classifier: meal, food logged, pending stays
-#     -> after PENDING_TTL_SECONDS (1 hour): ghosting handler fires
-#     -> sets goal_remind_at = now + goal_reminder_days
+#     -> if food: classifier: meal, food logged normally
+#     -> ghosting = bot's offer scrolls out of history window
+#     -> poller detects: offered + no reply in history -> sets reminder
 #     -> Dugri does NOT re-offer inline. Waits for scheduled reminder.
 #
-#   - LATE REPLY (in history): user replies after TTL expired but the
-#     bot's offer is still visible in the MAX_RECENT_MESSAGES (12) message history window.
+#   - LATE REPLY (in history): user replies later but the bot's offer is
+#     still visible in the MAX_RECENT_MESSAGES (12) message history window.
 #     -> classifier uses conversation history + toggle_state to identify
 #        as conversation_reply
-#     -> late reply recovery: activate toggle, proceed
+#     -> handler: activate toggle, proceed
 #
 #   - LATE LATE REPLY (out of history): user replies days later, the
-#     bot's offer has scrolled out of the MAX_RECENT_MESSAGES (12) message history. Only
-#     toggle_state shows "offered but not activated".
-#     -> [CLOSED] Classifier routing rule added: if toggle_state shows
-#        a single offered habit + short affirm = conversation_reply.
-#        If multiple offered, ask clarification via freeform_response.
+#     bot's offer has scrolled out of the MAX_RECENT_MESSAGES (12) message
+#     history. Only toggle_state shows "offered".
 #     -> If only ONE habit is offered: classifier infers the reply
 #        is about that habit and classifies as conversation_reply
-#     -> If MULTIPLE habits are offered: Dugri asks for clarification
+#     -> If MULTIPLE habits are offered and the message is ambiguous:
+#        classifier asks for clarification via freeform_response
+#        (type=none with "did you mean X or Y?")
+#     -> If MULTIPLE habits are offered but the intent is clear (e.g.,
+#        "I work out 3 times a week" when workouts + sleep are offered):
+#        classifier routes directly to the relevant habit without
+#        clarification.
 #
-# GOAL STEP (Dugri asks about setting a goal):
+# GOAL STEP (toggle_state = active_goal_pending, bot's goal question in history):
 #   - ACCEPT: user cooperates -> collect goal value
-#   - DECLINE: user refuses -> ask remind -> accept/decline reminder
-#   - GHOST: same as offer ghost -> reminder after N days
+#   - DECLINE: user refuses -> toggle moves to remind_pending
+#   - GHOST: offer scrolls out of history -> poller sets reminder
 #
-# GOAL VALUE STEP (user provides the actual value):
+# GOAL VALUE STEP (toggle_state = active_goal_pending, bot asked for value):
 #   - VALID: GPT extracts structured data from natural text (no format
 #     requirements). Sleep: "23 בלילה" -> 23:00. Workouts: "3 פעמים" -> 3.
 #   - INVALID: GPT can't extract -> Dugri asks again naturally (no format
 #     instructions like "send HH:MM")
 #
-# REMIND STEP ("want me to remind you later?"):
+# REMIND STEP (toggle_state = remind_pending, "want me to remind you?" in history):
 #   - ACCEPT REMINDER: conversation_reply -> set reminder, done
-#   - DECLINE REMINDER: toggle_cancel -> goal_status = declined, never ask
-#   - GHOST: same as above -> auto-reminder
+#   - DECLINE REMINDER: toggle_cancel -> cancelled, never ask again
+#   - GHOST: offer scrolls out -> auto-reminder
 #
 # GHOSTING RULES (cross-cutting)
 # --------------------------------
-# - Ghost during ANY step -> auto-set reminder after goal_reminder_days
+# Ghosting is defined as "out of history context" - the bot's question has
+# scrolled out of the MAX_RECENT_MESSAGES window. No TTL-based expiry.
+# - Ghost during ANY step -> poller detects and sets reminder
 # - Dugri does NOT re-offer inline on next food entry. Not pushy.
 # - Reminder fires via 28-min poller when goal_remind_at is reached
 # - If ghosted again after reminder -> same cycle (remind, wait, remind)
 # - User can always explicitly activate via natural language at any time
 #   ("אני רוצה לעקוב אחרי שינה") -> toggle_activate
 #
-# FOOD DURING PENDING (cross-cutting)
-# ------------------------------------
+# FOOD DURING OFFER (cross-cutting)
+# -----------------------------------
 # - User sends food while Dugri is waiting for an opt-in answer
-# - classifier: meal (food ALWAYS wins, even with pending state)
+# - classifier: meal (food ALWAYS wins regardless of toggle state)
 # - Food is logged normally
-# - pending_state stays untouched
-# - User can answer the opt-in question later
+# - Toggle state stays unchanged; user can answer later
 #
 # TELEGRAM REPLY-TO-MESSAGE (cross-cutting)
 # ------------------------------------------
@@ -175,8 +205,20 @@ Skip in CI: pytest -m "not integration"
 # RECURRING HOOKS (scheduled prompts for active toggles)
 # ------------------------------------------------------
 # Once a toggle is ACTIVE, Dugri proactively sends prompts to collect
-# data. These fire via the 28-min poller, within configured time windows,
-# at whatever tick falls in the window (slightly irregular = natural).
+# data. Timing is randomized to feel human, not robotic:
+#
+# RANDOMIZED HOOK TIMING
+# A random send time is picked within each hook's time window (once per
+# day for daily hooks like sleep, once per week for weekly hooks like
+# workouts/self_care). These random times are stored in a shared MongoDB
+# document (hook_schedule collection, one doc for all users).
+# The 28-min poller generates new random times when they're missing or
+# expired. The hook fires on the first poller tick AFTER the chosen
+# random time - even if that tick lands outside the window (e.g., random
+# time 9:59 for sleep, poller picks it up at 10:20 - still fires). The
+# window only constrains where the random time is drawn, not when the
+# message can actually send. Tests for the randomization mechanism live
+# in test_hook_schedule.py.
 #
 # - SLEEP: daily, within HOOK_CONFIG["sleep"]["window"] (08:00-10:00).
 #   Dugri asks what time the user went to sleep yesterday.
@@ -201,54 +243,50 @@ Skip in CI: pytest -m "not integration"
 #   After window closes, send daily compliance summary.
 #   Both fire once per day (deduped by last_asked_at).
 #
-# These hooks also fire as INLINE HOOKS after food entries (piggybacking)
+# These hooks also fire as inline conversation hooks after food entries
 # if the user happens to log food during the window and the hook hasn't
-# fired yet today. Inline hooks are preferred (natural moment), poller
-# is the fallback.
+# fired yet today. Inline conversation hooks are preferred (natural
+# moment), poller is the fallback.
 #
 # EXIT DOOR: after EXIT_DOOR_UNANSWERED_THRESHOLD (2) consecutive
-# unanswered hooks, Dugri adds a soft opt-out message ("if this isn't
-# for you, I can stop asking").
+# unanswered hooks, Dugri adds a soft opt-out message from 5 rotating
+# phrasings (EXIT_DOOR_PROMPTS). Each phrasing includes the {habit}
+# name so the user knows which tracking is being offered for removal.
 #
-# PROACTIVE REVEALS (via poller, not just inline hooks)
-# -----------------------------------------------------
-# [CLOSED] Implemented in _check_proactive_reveals in scheduler.py
-# - Previously, reveals ONLY fired as inline hooks after food entries
-# - Now the 28-min poller also checks for reveals within time windows
-# - Inline hooks (after food) remain the preferred trigger
-# - Poller is the fallback for inactive users
+# PROACTIVE REVEALS
+# -----------------
+# The 28-min poller checks for reveals within time windows, serving as
+# a fallback for users who haven't logged food. Inline conversation
+# hooks (after food) remain the preferred trigger for reveals.
 #
 # CLASSIFIER CONTEXT (always present on every call)
 # --------------------------------------------------
-# 1. Pending state description (from PENDING_DESCRIPTIONS in prompts.py)
-# 2. Toggle state summary (all habits: active/offered/dormant/cancelled)
-# 3. Conversation history (last MAX_RECENT_MESSAGES messages)
-# 4. Reply-to-message context (if Telegram reply)
-# 5. Last food entry (for corrections)
-# 6. Israeli Hebrew cultural context (informal slang = cooperation)
+# 1. Toggle state summary (all habits with status - see TOGGLE STATES)
+# 2. Conversation history (last MAX_RECENT_MESSAGES messages)
+# 3. Reply-to-message context (if Telegram reply)
+# 4. Last food entry (for corrections)
+# 5. Israeli Hebrew cultural context (informal slang = cooperation)
 #
-# CLASSIFIER PROMPT - CLOSED GAPS
-# ---------------------------------
-# [CLOSED] Calorie/protein numbers are rarely food: added to classifier
-# routing rules. "1800 קלוריות ו-180 חלבון" is almost always a goal, not food.
+# The LLM infers the conversation step from toggle_state + history.
+# No explicit pending_state is injected. Examples:
+#   - toggle=offered + history shows offer message -> awaiting consent
+#   - toggle=active_goal_pending + history shows "what time?" -> awaiting value
+#   - toggle=active_goal_pending + history shows suggestion -> awaiting confirm
+#   - toggle=remind_pending + history shows "remind later?" -> awaiting remind answer
 #
-# [CLOSED] Pending state is strongest pull: added to classifier routing
-# rules. When pending exists, it overrides meal, correction, sleep, etc.
-# PENDING_DESCRIPTIONS for awaiting_goal_value and awaiting_nutrition_confirm
-# now explicitly state that values in context are goals, not logs/corrections.
+# CLASSIFIER ROUTING RULES
+# --------------------------
+# - Calorie/protein numbers during goal flow are goal values, not food.
+#   "1800 קלוריות ו-180 חלבון" when toggle is active_goal_pending = goal.
+# - Toggle state is the primary routing signal: when toggle shows
+#   active_goal_pending and the user sends a value, it's a goal - not a
+#   food entry, correction, or sleep log.
 #
-# TEST INFRASTRUCTURE GAPS
-# -------------------------
-# [GAP] History stubs: the _build_history helper currently uses manually
-# written bot messages. These should be replaced with ACTUAL LLM responses
-# captured from real classifier/handler runs. When closing gaps, run the
-# prompts first to capture accurate bot responses, then inject them as
-# stubs in test cases. This ensures tests reflect real conversation flow,
-# not idealized messages.
-#
-# [CLOSED] Late reply distinction: tests now split into:
-#   1. test_late_reply_in_history (offer visible in window)
-#   2. test_late_late_reply_out_of_history (offer scrolled out)
+# TEST INFRASTRUCTURE
+# --------------------
+# History stubs: offer stubs (NUTRITION_OFFER, SLEEP_OFFER, etc.) use
+# exact production messages from messages.py. Food response stubs are
+# realistic approximations of GPT output (varies by nature).
 #
 # ============================================================================
 """
@@ -396,9 +434,11 @@ def _build_toggle_state(**overrides) -> str:
 
     state_map = {
         "dormant": "לא הוצע עדיין",
-        "offered": "הוצע אבל לא הופעל",
+        "offered": "הוצע, ממתין לתשובה",
+        "active_goal_pending": "פעיל, בתהליך הגדרת יעד",
         "active": "פעיל, בלי יעד",
         "active_with_goal": "פעיל, עם יעד",
+        "remind_pending": "סירב, שאלנו אם להזכיר",
         "cancelled": "בוטל",
     }
 
@@ -427,15 +467,18 @@ def _build_history(*messages) -> list[dict]:
     return result
 
 
-def _classify(analyzer, text, pending=None, toggle_state=None,
+def _classify(analyzer, text, toggle_state=None,
               history=None, reply_context=None):
-    """Convenience wrapper for classify_message with all context."""
+    """Convenience wrapper for classify_message with all context.
+
+    No pending_state is passed. The classifier infers the conversation step
+    from toggle_state + history alone.
+    """
     return analyzer.classify_message(
         text=text,
         today_str=datetime.now().strftime("%d/%m/%Y"),
         last_entry=None,
         recent_messages=history or [],
-        pending_state=pending,
         toggle_state=toggle_state or _build_toggle_state(),
         reply_context=reply_context,
     )
@@ -453,7 +496,6 @@ class TestNutritionOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "יאללה",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -468,7 +510,6 @@ class TestNutritionOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אשמח",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -483,7 +524,6 @@ class TestNutritionOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אוקיי",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -498,7 +538,6 @@ class TestNutritionOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "לא מעניין אותי",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -508,12 +547,11 @@ class TestNutritionOffer:
         )
         assert result.type == "toggle_cancel"
 
-    def test_food_during_pending(self):
-        """User sends food while nutrition offer is pending -> meal."""
+    def test_food_during_offer(self):
+        """User sends food while nutrition is in offered state -> meal."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "שניצל עם אורז וסלט",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "קפה עם חלב"),
@@ -528,7 +566,6 @@ class TestNutritionOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אשמח",
-            pending=None,  # expired
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -547,7 +584,6 @@ class TestNutritionOffer:
         # Simulate a full history of food entries that pushed the offer out
         result = _classify(
             analyzer, "אשמח",
-            pending=None,
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "קפה בבוקר"),
@@ -564,12 +600,29 @@ class TestNutritionOffer:
         )
         assert result.type in ("conversation_reply", "toggle_activate")
 
+    def test_late_late_reply_multiple_offered_clear_intent(self):
+        """Two habits offered, user's message clearly refers to one.
+        Should route to the correct habit without asking for clarification."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אני מתאמן 3 פעמים בשבוע",
+            toggle_state=_build_toggle_state(
+                sleep="offered", workouts="offered",
+            ),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+            ),
+        )
+        assert result.type in ("conversation_reply", "toggle_activate")
+        if result.type == "toggle_activate":
+            assert result.toggle_name == "workouts"
+
     def test_late_reply_swipe_reply(self):
         """User swipe-replies 'אשמח' to the original offer -> conversation_reply."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אשמח",
-            pending=None,
             toggle_state=_build_toggle_state(nutrition="offered"),
             reply_context=NUTRITION_OFFER,
             history=_build_history(
@@ -586,7 +639,6 @@ class TestNutritionOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אשמח לעקוב אחרי הרגלי תזונה",
-            pending=None,
             toggle_state=_build_toggle_state(nutrition="dormant"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -601,7 +653,6 @@ class TestNutritionOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "למה חלבון? מה זה נותן?",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -613,15 +664,19 @@ class TestNutritionOffer:
 
 
 class TestNutritionBodyStats:
-    """Tests for body stats collection step."""
+    """Tests for body stats collection step.
+
+    toggle_state = active_goal_pending (user accepted, in goal flow).
+    The classifier knows we're in body stats step because history shows
+    the bot asked for height/weight/age.
+    """
 
     def test_comma_separated(self):
         """Body stats in comma format -> conversation_reply."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "174, 112, 36",
-            pending={"kind": "awaiting_body_stats", "data": {}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
                 ("user", "יאללה"),
@@ -634,9 +689,8 @@ class TestNutritionBodyStats:
         """Body stats in natural Hebrew -> conversation_reply."""
         analyzer = _make_analyzer()
         result = _classify(
-            analyzer, "גובה 174, משקל 112, גיל 36",
-            pending={"kind": "awaiting_body_stats", "data": {}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            analyzer, "��ובה 174, משקל 112, ��יל 36",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
                 ("user", "אשמח"),
@@ -650,8 +704,7 @@ class TestNutritionBodyStats:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "174\n112 קג\n36 שנים",
-            pending={"kind": "awaiting_body_stats", "data": {}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
                 ("user", "בוא"),
@@ -669,8 +722,7 @@ class TestNutritionWeightGoal:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "ירידה! רוצה להגיע ל 98 קג",
-            pending={"kind": "awaiting_weight_goal", "data": {}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", BODY_STATS_ASK),
                 ("user", "174, 112, 36"),
@@ -684,8 +736,7 @@ class TestNutritionWeightGoal:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "לשמור על המשקל",
-            pending={"kind": "awaiting_weight_goal", "data": {}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", BODY_STATS_ASK),
                 ("user", "גובה 174, משקל 80, גיל 30"),
@@ -699,8 +750,7 @@ class TestNutritionWeightGoal:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "רוצה לעלות קצת, להגיע ל-80",
-            pending={"kind": "awaiting_weight_goal", "data": {}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", BODY_STATS_ASK),
                 ("user", "175, 65, 25"),
@@ -718,8 +768,7 @@ class TestNutritionConfirm:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "נשמע מעולה",
-            pending={"kind": "awaiting_nutrition_confirm", "data": {"calories": 1800, "protein": 160}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", WEIGHT_GOAL_ASK),
                 ("user", "לרדת"),
@@ -729,19 +778,22 @@ class TestNutritionConfirm:
         assert result.type == "conversation_reply"
 
     def test_correct_numbers(self):
-        """User corrects with specific numbers -> conversation_reply."""
+        """User corrects with specific numbers -> conversation_reply or correction.
+
+        The handler treats both the same in active_goal_pending context:
+        extract the numbers as the user's desired targets.
+        """
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "1800 קלוריות אבל 180 חלבון",
-            pending={"kind": "awaiting_nutrition_confirm", "data": {"calories": 1800, "protein": 160}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
                 ("bot", WEIGHT_GOAL_ASK),
                 ("user", "ירידה"),
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type in ("conversation_reply", "correction")
 
 
 # ============================================================================
@@ -756,7 +808,6 @@ class TestSleepOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "כן, בטח",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "sleep"}},
             toggle_state=_build_toggle_state(nutrition="active_with_goal", sleep="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -771,7 +822,6 @@ class TestSleepOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אני רוצה לעקוב אחרי השינה שלי",
-            pending=None,
             toggle_state=_build_toggle_state(nutrition="active_with_goal", sleep="dormant"),
             history=_build_history(
                 ("user", "קפה עם חלב"),
@@ -785,9 +835,9 @@ class TestSleepOffer:
 class TestSleepGoalValue:
     """Tests for sleep goal value extraction.
 
-    IMPORTANT: when pending_state is awaiting_goal_value for sleep,
-    a time is the GOAL, not a sleep log. The classifier should return
-    conversation_reply, not sleep.
+    IMPORTANT: when toggle_state shows sleep=active_goal_pending and history
+    shows the bot asked "what time do you aim to sleep?", a time is the GOAL,
+    not a sleep log. The classifier should return conversation_reply, not sleep.
     """
 
     def test_sleep_time_natural(self):
@@ -795,8 +845,7 @@ class TestSleepGoalValue:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "23 בלילה",
-            pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "sleep"}},
-            toggle_state=_build_toggle_state(sleep="active"),
+            toggle_state=_build_toggle_state(sleep="active_goal_pending"),
             history=_build_history(
                 ("bot", SLEEP_OFFER),
                 ("user", "כן"),
@@ -810,8 +859,7 @@ class TestSleepGoalValue:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "23:00",
-            pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "sleep"}},
-            toggle_state=_build_toggle_state(sleep="active"),
+            toggle_state=_build_toggle_state(sleep="active_goal_pending"),
             history=_build_history(
                 ("bot", SLEEP_OFFER),
                 ("user", "בטח"),
@@ -833,7 +881,6 @@ class TestEatingWindowOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "בוא ננסה",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "eating_window"}},
             toggle_state=_build_toggle_state(eating_window="offered"),
             history=_build_history(
                 ("user", "2 ביצים וסלט"),
@@ -848,8 +895,7 @@ class TestEatingWindowOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "מ-8 בבוקר עד 8 בערב",
-            pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "eating_window"}},
-            toggle_state=_build_toggle_state(eating_window="active"),
+            toggle_state=_build_toggle_state(eating_window="active_goal_pending"),
             history=_build_history(
                 ("bot", EATING_WINDOW_OFFER),
                 ("user", "כן"),
@@ -863,7 +909,6 @@ class TestEatingWindowOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "שומע, אני רוצה לעדכן את חלון האכילה",
-            pending=None,
             toggle_state=_build_toggle_state(eating_window="active_with_goal"),
             history=_build_history(
                 ("user", "סלט טונה"),
@@ -885,7 +930,6 @@ class TestWorkoutsOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "קדימה",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "workouts"}},
             toggle_state=_build_toggle_state(workouts="offered"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -900,8 +944,7 @@ class TestWorkoutsOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "3 פעמים בשבוע",
-            pending={"kind": "awaiting_goal_value", "data": {"toggle_name": "workouts"}},
-            toggle_state=_build_toggle_state(workouts="active"),
+            toggle_state=_build_toggle_state(workouts="active_goal_pending"),
             history=_build_history(
                 ("bot", WORKOUTS_OFFER),
                 ("user", "יאללה"),
@@ -923,7 +966,6 @@ class TestSelfCareOffer:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "כן",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "self_care"}},
             toggle_state=_build_toggle_state(self_care="offered"),
             history=_build_history(
                 ("user", "סלט טונה"),
@@ -939,30 +981,36 @@ class TestSelfCareOffer:
 # ============================================================================
 
 class TestGoalRemind:
-    """Tests for the 'want me to remind you later?' step."""
+    """Tests for the 'want me to remind you later?' step.
+
+    toggle_state = remind_pending. The classifier knows we're in remind step
+    because history shows the bot asked "want me to remind you later?".
+    """
 
     def test_accept_reminder(self):
-        """User accepts reminder -> conversation_reply."""
+        """User accepts reminder -> conversation_reply or toggle_activate.
+
+        Both are valid: the handler sees remind_pending + affirmative
+        and sets the reminder either way.
+        """
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "כן, תזכיר לי",
-            pending={"kind": "awaiting_goal_remind", "data": {"toggle_name": "nutrition"}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="remind_pending"),
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
                 ("user", "לא עכשיו"),
                 ("bot", GOAL_REMIND_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type in ("conversation_reply", "toggle_activate")
 
     def test_decline_reminder_forever(self):
         """User declines reminder -> toggle_cancel."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "לא, תעזוב",
-            pending={"kind": "awaiting_goal_remind", "data": {"toggle_name": "nutrition"}},
-            toggle_state=_build_toggle_state(nutrition="active"),
+            toggle_state=_build_toggle_state(nutrition="remind_pending"),
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
                 ("user", "לא מעניין"),
@@ -980,7 +1028,6 @@ class TestToggleCancel:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "לא רוצה",
-            pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "sleep"}},
             toggle_state=_build_toggle_state(sleep="offered"),
             history=_build_history(
                 ("user", "קפה עם חלב"),
@@ -995,7 +1042,6 @@ class TestToggleCancel:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "תפסיק לשאול אותי על שינה",
-            pending=None,
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
             history=_build_history(
                 ("user", "שניצל עם אורז"),
@@ -1010,7 +1056,6 @@ class TestToggleCancel:
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "אני לא רוצה מעקב תזונה",
-            pending=None,
             toggle_state=_build_toggle_state(nutrition="active_with_goal"),
             history=_build_history(
                 ("user", "קפה בבוקר"),
@@ -1024,14 +1069,13 @@ class TestToggleCancel:
 class TestNoneIsRare:
     """Tests that none classification is extremely rare."""
 
-    def test_none_with_pending_should_not_happen(self):
-        """Short informal messages with pending -> never none."""
+    def test_none_with_offer_should_not_happen(self):
+        """Short informal messages with offered toggle + offer in history -> never none."""
         analyzer = _make_analyzer()
         short_messages = ["יאללה", "סבבה", "אוקיי", "בוא", "כן", "טוב"]
         for msg in short_messages:
             result = _classify(
                 analyzer, msg,
-                pending={"kind": "awaiting_toggle_consent", "data": {"toggle_name": "nutrition"}},
                 toggle_state=_build_toggle_state(nutrition="offered"),
                 history=_build_history(
                     ("user", "שניצל עם אורז"),
@@ -1039,14 +1083,13 @@ class TestNoneIsRare:
                     ("bot", NUTRITION_OFFER),
                 ),
             )
-            assert result.type != "none", f"'{msg}' classified as none with pending state"
+            assert result.type != "none", f"'{msg}' classified as none with offer in context"
 
     def test_genuine_chitchat_is_none(self):
-        """Genuine chitchat with no pending, no context -> none (with freeform response)."""
+        """Genuine chitchat with no active flow -> none (with freeform response)."""
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, "מה שלומך?",
-            pending=None,
             toggle_state=_build_toggle_state(),
             history=_build_history(
                 ("user", "שניצל עם אורז"),

@@ -27,7 +27,6 @@ from repositories.feedback_repository import WeeklyFeedbackRepository
 from repositories.error_repository import ErrorRepository
 from services.eating_day_service import EatingDayService
 from services.linking_service import LinkingService
-from services.conversation_state_service import ConversationStateService
 from services.onboarding_service import OnboardingService
 from services.habit_service import HabitService
 from services.help_service import HelpService
@@ -93,18 +92,15 @@ def create_bot(
     sleep_repo=None,
     workout_repo=None,
     self_care_repo=None,
+    hook_schedule_store=None,
     landing_page_url: str = "https://www.dugri.life",
 ) -> Application:
     app = Application.builder().token(token).build()
 
     # Services
-    state_service = ConversationStateService(user_repo)
     toggle_service = ToggleService(user_repo)
-    goal_service = GoalService(user_repo, state_service, toggle_service, analyzer)
-    onboarding_service = OnboardingService(user_repo, state_service)
-
-    # Wire ghosting callback: expired goal-related pending → auto-remind
-    state_service.on_expired = goal_service.handle_expired_goal_pending
+    goal_service = GoalService(user_repo, toggle_service, analyzer)
+    onboarding_service = OnboardingService(user_repo)
 
     # Message router (if habit repos are provided)
     message_router = None
@@ -116,7 +112,7 @@ def create_bot(
 
     trial_service = TrialService(user_repo, landing_page_url)
     feedback_service = FeedbackService(
-        analyzer, food_repo, user_repo, feedback_repo, state_service,
+        analyzer, food_repo, user_repo, feedback_repo,
     )
 
     h = HealthHandlers(
@@ -125,7 +121,6 @@ def create_bot(
         food_repo=food_repo,
         feedback_repo=feedback_repo,
         eating_day_service=eating_day_service,
-        state_service=state_service,
         onboarding_service=onboarding_service,
         message_router=message_router,
         trial_service=trial_service,
@@ -170,7 +165,7 @@ def create_bot(
         app.job_queue, user_repo, toggle_service,
         goal_service=goal_service,
         eating_day_service=eating_day_service,
-        state_service=state_service,
+        hook_schedule_store=hook_schedule_store,
     )
 
     return app

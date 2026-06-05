@@ -20,6 +20,7 @@ from repositories.error_repository import ErrorRepository
 from repositories.sleep_repository import SleepRepository
 from repositories.workout_repository import WorkoutRepository
 from repositories.self_care_repository import SelfCareRepository
+from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
@@ -88,6 +89,7 @@ def main():
     sleep_repo = SleepRepository(db["sleep_logs"])
     workout_repo = WorkoutRepository(db["workout_logs"])
     self_care_repo = SelfCareRepository(db["self_care_logs"])
+    hook_schedule_store = HookScheduleStore(db["hook_schedule"])
 
     # Services
     eating_day_service = EatingDayService(food_repo)
@@ -111,6 +113,7 @@ def main():
         sleep_repo=sleep_repo,
         workout_repo=workout_repo,
         self_care_repo=self_care_repo,
+        hook_schedule_store=hook_schedule_store,
         landing_page_url=landing_page_url,
     )
 

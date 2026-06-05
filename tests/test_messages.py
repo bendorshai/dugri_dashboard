@@ -95,10 +95,14 @@ class TestTargetMessages:
 
 
 class TestExitDoorMessages:
-    def test_exit_door_template(self):
-        """Exit door message should accept a {habit} placeholder."""
-        text = M.EXIT_DOOR.format(habit="שינה")
-        assert "שינה" in text
+    def test_exit_door_prompts_is_list_of_five(self):
+        assert isinstance(M.EXIT_DOOR_PROMPTS, list)
+        assert len(M.EXIT_DOOR_PROMPTS) == 5
+
+    def test_all_exit_door_prompts_accept_habit_placeholder(self):
+        for i, prompt in enumerate(M.EXIT_DOOR_PROMPTS):
+            text = prompt.format(habit="שינה")
+            assert "שינה" in text, f"EXIT_DOOR_PROMPTS[{i}] missing {{habit}}"
 
     def test_exit_door_cancelled(self):
         assert isinstance(M.EXIT_DOOR_CANCELLED, str)
