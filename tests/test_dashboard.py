@@ -59,12 +59,6 @@ class TestDashboardPreferences:
 
 
 class TestDashboardLegacyRedirects:
-    def test_goals_redirects_to_preferences(self, client):
-        _login(client)
-        resp = client.get("/dashboard/goals")
-        assert resp.status_code == 302
-        assert "preferences" in resp.location
-
     def test_toggles_redirects_to_preferences(self, client):
         _login(client)
         resp = client.get("/dashboard/toggles")

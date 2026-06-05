@@ -253,14 +253,3 @@ def subscription():
     storage = _get_storage()
     user = storage.get_user(session["user_email"])
     return render_template("dashboard/subscription.html", user=user, active_tab="subscription")
-
-
-# ------------------------------------------------------------------
-# Legacy goals redirect
-# ------------------------------------------------------------------
-
-@dashboard_bp.route("/goals", methods=["GET", "POST"])
-@login_required
-def goals():
-    """Redirect legacy goals URL to preferences page."""
-    return redirect(url_for("dashboard_views.preferences"))

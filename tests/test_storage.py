@@ -43,10 +43,8 @@ class TestCreateUser:
         assert doc["_id"] == "a@b.com"
         assert doc["name"] == "Test User"
         assert "created_at" in doc
-        assert "goals" in doc
         # Bot fields initialized as defaults
         assert doc["targets"]["calories"] is None
-        assert doc["active_habits"] == []
         assert doc["timezone"] == "Asia/Jerusalem"
 
     def test_inserts_with_photo_url(self, storage):
@@ -91,15 +89,6 @@ class TestUpdateUserProfile:
         set_data = call_args[0][1]["$set"]
         assert set_data["birth_year"] == 1990
         assert "updated_at" in set_data
-
-
-class TestUpdateUserGoals:
-    def test_updates_goals(self, storage):
-        goals = {"calories": {"enabled": True, "target": 2000}}
-        storage.update_user_goals("a@b.com", goals)
-        storage._users.update_one.assert_called_once()
-        set_data = storage._users.update_one.call_args[0][1]["$set"]
-        assert set_data["goals"] == goals
 
 
 class TestCompleteOnboarding:

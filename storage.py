@@ -47,15 +47,12 @@ class DashboardStorage:
             "birth_year": None,
             "height_cm": None,
             "weight_kg": None,
-            "goals": {},
             # Bot fields — defaults until bot onboarding populates them
             "gender": None,
             "targets": {"calories": None, "protein": None, "sleep_time": None, "workouts_per_week": None},
             "eating_window": None,
             "timezone": "Asia/Jerusalem",
             "onboarding": {"name_collected": False, "habits": {}},
-            "active_habits": [],
-            "pending_state": None,
             "feedback_steering_prompt": None,
             "last_feedback_offered_at": None,
             # Toggle system (opt-in toggles dormant, weekly_summary active by default)
@@ -79,15 +76,6 @@ class DashboardStorage:
     def update_user_profile(self, email: str, data: dict) -> None:
         data["updated_at"] = self._now()
         self._users.update_one({"_id": email}, {"$set": data})
-
-    def update_user_goals(self, email: str, goals: dict) -> None:
-        self._users.update_one(
-            {"_id": email},
-            {"$set": {
-                "goals": goals,
-                "updated_at": self._now(),
-            }},
-        )
 
     def complete_onboarding(self, email: str) -> None:
         self._users.update_one(
