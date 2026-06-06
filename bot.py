@@ -95,6 +95,7 @@ def create_bot(
     hook_schedule_store=None,
     landing_page_url: str = "https://www.dugri.life",
     feature_request_repo=None,
+    admin_chat_id: int = 0,
 ) -> Application:
     app = Application.builder().token(token).build()
 
@@ -134,6 +135,7 @@ def create_bot(
         toggle_service=toggle_service,
         goal_service=goal_service,
         landing_page_url=landing_page_url,
+        admin_chat_id=admin_chat_id,
     )
 
     # Start handler with linking
@@ -173,6 +175,7 @@ def create_bot(
         eating_day_service=eating_day_service,
         hook_schedule_store=hook_schedule_store,
         food_repo=food_repo,
+        admin_chat_id=admin_chat_id,
     )
 
     return app

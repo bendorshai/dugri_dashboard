@@ -229,6 +229,7 @@ class TestHandleMessageRetroactive:
         h.goal_service = None
         h.feedback_service = None
         h.landing_page_url = "https://test.com"
+        h.admin_chat_id = 0
         return h
 
     @pytest.mark.asyncio
@@ -359,7 +360,7 @@ class TestHandleMessageRetroactive:
         await h.handle_message(update, context)
 
         # Daily totals should show 300 (today only), not 300+800=1100
-        response_text = mock_send.call_args[0][1]
+        response_text = mock_send.call_args_list[0][0][1]
         assert "300/2000" in response_text
         # Should NOT include yesterday's 800 cal in daily summary
         assert "1100" not in response_text
@@ -409,7 +410,7 @@ class TestHandleMessageRetroactive:
 
         await h.handle_message(update, context)
 
-        response_text = mock_send.call_args[0][1]
+        response_text = mock_send.call_args_list[0][0][1]
         # Should show confirmation
         assert "נרשם" in response_text
         # Should NOT show daily summary header (since no today entries)
@@ -468,7 +469,7 @@ class TestHandleMessageRetroactive:
         assert entry.date == "05/06/2026"
 
         # Response should include daily summary (backward compat)
-        response_text = mock_send.call_args[0][1]
+        response_text = mock_send.call_args_list[0][0][1]
         assert "סיכום יומי" in response_text
         assert "400/2000" in response_text
         # No temporal labels for single today group

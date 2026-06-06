@@ -104,6 +104,9 @@ def main():
     # Landing page URL
     landing_page_url = cfg.get("landing_page_url", "https://www.dugri.life")
 
+    # Admin chat ID (used for startup notification and debug metadata)
+    admin_chat_id = tg.get("admin_chat_id", 2145100468)
+
     # Create bot
     app = create_bot(
         token=tg["bot_token"],
@@ -119,10 +122,10 @@ def main():
         hook_schedule_store=hook_schedule_store,
         landing_page_url=landing_page_url,
         feature_request_repo=feature_request_repo,
+        admin_chat_id=admin_chat_id,
     )
 
     # Startup notification to admin
-    admin_chat_id = tg.get("admin_chat_id", 2145100468)
 
     async def post_init(application):
         if admin_chat_id:

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from models.profile import User
+    from services.toggle_service import ToggleService
 
 logger = logging.getLogger(__name__)
 
@@ -37,4 +42,69 @@ async def send_long_text(message, text: str, reply_markup=None) -> None:
         if split_at <= 0:
             split_at = MAX_TG_LENGTH
         await message.reply_text(text[:split_at])
+        text = text[split_at:].lstrip("\n")
+
+
+def format_debug_metadata(
+    classification_type: str | None,
+    profile: User,
+    toggle_service: ToggleService,
+    source: str = "handler",
+) -> str:
+    """Format debug metadata block for super debug mode."""
+    lines = ["--- SUPER DEBUG ---"]
+    lines.append(f"[Source] {source}")
+    lines.append(f"[Classification] {classification_type or 'N/A (scheduled)'}")
+
+    day_number = toggle_service.get_day_number(profile)
+    lines.append(f"[Day] {day_number}")
+
+    lines.append("[Toggles]")
+    toggle_names = ["nutrition", "sleep", "eating_window", "workouts", "self_care", "weekly_summary"]
+    for name in toggle_names:
+        toggle = getattr(profile.toggles, name, None)
+        if not toggle:
+            continue
+        parts = [f"  {name}: {toggle.status}"]
+        if toggle.status == "active":
+            if toggle.goal_status == "set" and toggle.goal_value:
+                parts.append(f"goal=set {toggle.goal_value}")
+            elif toggle.goal_status == "pending" and toggle.goal_offered_at:
+                parts.append("goal=pending (offered, awaiting value)")
+            elif toggle.goal_status == "pending":
+                parts.append("goal=pending (not yet offered)")
+            elif toggle.goal_status == "declined":
+                parts.append("goal=declined")
+            elif toggle.goal_status == "remind":
+                remind = toggle.goal_remind_at.strftime("%Y-%m-%d") if toggle.goal_remind_at else "?"
+                parts.append(f"goal=remind ({remind})")
+            elif toggle.goal_status == "remind_pending":
+                parts.append("goal=remind_pending")
+        elif toggle.status == "dormant":
+            if toggle.revealed_at:
+                parts.append("revealed, waiting for accept")
+            else:
+                gate = dict(nutrition=0, sleep=1, eating_window=4, workouts=4, self_care=4).get(name, "?")
+                parts.append(f"not revealed (gate: day {gate}, current: day {day_number})")
+        lines.append(", ".join(parts))
+
+    next_step = toggle_service.predict_next_step(profile)
+    lines.append(f"[Next] {next_step}")
+
+    return "\n".join(lines)
+
+
+async def send_long_bot(bot, tid: int, text: str, reply_markup=None) -> None:
+    """Send text via bot.send_message, splitting if it exceeds Telegram's 4096-char limit."""
+    if len(text) <= MAX_TG_LENGTH:
+        await bot.send_message(chat_id=tid, text=text, reply_markup=reply_markup)
+        return
+    while text:
+        if len(text) <= MAX_TG_LENGTH:
+            await bot.send_message(chat_id=tid, text=text, reply_markup=reply_markup)
+            break
+        split_at = text.rfind("\n", 0, MAX_TG_LENGTH)
+        if split_at <= 0:
+            split_at = MAX_TG_LENGTH
+        await bot.send_message(chat_id=tid, text=text[:split_at])
         text = text[split_at:].lstrip("\n")

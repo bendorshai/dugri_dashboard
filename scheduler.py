@@ -96,6 +96,7 @@ def schedule_global_poller(
     goal_service=None, eating_day_service=None,
     hook_schedule_store=None,
     food_repo=None,
+    admin_chat_id: int = 0,
 ):
     """Schedule the single unified polling loop.
 
@@ -121,6 +122,7 @@ def schedule_global_poller(
             "eating_day_service": eating_day_service,
             "hook_schedule_store": hook_schedule_store,
             "food_repo": food_repo,
+            "admin_chat_id": admin_chat_id,
         },
     )
     logger.info(
@@ -139,6 +141,7 @@ async def _global_tick(context):
     hook_schedule_store = data.get("hook_schedule_store")
 
     food_repo = data.get("food_repo")
+    admin_chat_id = data.get("admin_chat_id", 0)
     if food_repo:
         try:
             cleaned = food_repo.cleanup_expired_edits()
@@ -157,6 +160,7 @@ async def _global_tick(context):
             await _check_user_hooks(
                 context, profile, user_repo, toggle_service,
                 goal_service, eating_day_svc, hook_schedule_store,
+                admin_chat_id=admin_chat_id,
             )
         except Exception:
             logger.exception("Poller tick failed for user %d", profile.telegram_user_id)
@@ -169,6 +173,7 @@ async def _global_tick(context):
 async def _check_user_hooks(
     context, profile, user_repo, toggle_service,
     goal_service=None, eating_day_svc=None, hook_schedule_store=None,
+    admin_chat_id: int = 0,
 ):
     """Check and fire all due messages for a single user."""
     import messages as M
@@ -183,7 +188,7 @@ async def _check_user_hooks(
         due = goal_service.check_goal_reminders(profile)
         if due:
             text = goal_service.fire_goal_reminder(tid, due[0])
-            await _send_and_save(context, tid, text, user_repo)
+            await _send_and_save(context, tid, text, user_repo, profile, toggle_service, admin_chat_id)
             return
 
     # --- Habit hooks (sleep, workouts, self_care, weekly_summary) ---
@@ -239,15 +244,16 @@ async def _check_user_hooks(
 
         toggle_service.record_asked(tid, toggle_name)
         toggle_service.increment_unanswered(tid, profile, toggle_name)
-        await _send_and_save(context, tid, text, user_repo)
+        await _send_and_save(context, tid, text, user_repo, profile, toggle_service, admin_chat_id)
 
     # --- Eating window: "closing soon" warning ---
-    await _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, clock)
+    await _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, clock, admin_chat_id)
 
     # --- Proactive reveals (fallback for users who haven't logged food) ---
     if toggle_service:
         await _check_proactive_reveals(
             context, profile, user_repo, toggle_service, now, today_weekday,
+            admin_chat_id=admin_chat_id,
         )
 
     # --- Ghosting detection (goal flows that went unanswered) ---
@@ -258,6 +264,7 @@ async def _check_user_hooks(
 
 async def _check_proactive_reveals(
     context, profile, user_repo, toggle_service, now, weekday,
+    admin_chat_id: int = 0,
 ):
     """Proactive reveals: offer dormant habits via poller if not yet offered.
 
@@ -284,11 +291,11 @@ async def _check_proactive_reveals(
             continue
         # Reveal and offer (toggle state tells classifier what to do)
         toggle_service.reveal_toggle(tid, name)
-        await _send_and_save(context, tid, reveal_msg, user_repo)
+        await _send_and_save(context, tid, reveal_msg, user_repo, profile, toggle_service, admin_chat_id)
         return  # One reveal per tick
 
 
-async def _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, clock):
+async def _check_eating_window(context, profile, user_repo, toggle_service, eating_day_svc, clock, admin_chat_id=0):
     """Check if eating window is closing soon or has closed. Send once per day."""
     import messages as M
 
@@ -315,7 +322,7 @@ async def _check_eating_window(context, profile, user_repo, toggle_service, eati
         stats = _build_eating_stats(profile, eating_day_svc, clock)
         text = random.choice(M.EATING_WINDOW_CLOSING_SOON).format(stats=stats)
         toggle_service.record_asked(tid, "eating_window")
-        await _send_and_save(context, tid, text, user_repo)
+        await _send_and_save(context, tid, text, user_repo, profile, toggle_service, admin_chat_id)
         return
 
     # Window just closed (within one poll interval after close)
@@ -323,7 +330,7 @@ async def _check_eating_window(context, profile, user_repo, toggle_service, eati
         stats = _build_eating_close_summary(profile, eating_day_svc, clock)
         text = f"🌙 חלון האכילה נסגר! סיכום יומי:\n\n{stats}"
         toggle_service.record_asked(tid, "eating_window")
-        await _send_and_save(context, tid, text, user_repo)
+        await _send_and_save(context, tid, text, user_repo, profile, toggle_service, admin_chat_id)
 
 
 def _build_eating_stats(profile, eating_day_svc, clock) -> str:
@@ -382,15 +389,26 @@ def _build_eating_close_summary(profile, eating_day_svc, clock) -> str:
 # Send helper (shared by all scheduled messages)
 # ---------------------------------------------------------------------------
 
-async def _send_and_save(context, tid: int, text: str, user_repo) -> None:
+async def _send_and_save(context, tid: int, text: str, user_repo,
+                         profile=None, toggle_service=None, admin_chat_id: int = 0) -> None:
     """Send a message and save to conversation history."""
     try:
-        await context.bot.send_message(chat_id=tid, text=text)
+        # Save original text to history (before debug append)
         msg = {
             "role": "bot",
             "text": text[:500],
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
+
+        # Append debug metadata for admin
+        send_text = text
+        from constants import SUPER_DEBUG
+        if SUPER_DEBUG and tid == admin_chat_id and profile and toggle_service:
+            from handlers.utils import format_debug_metadata
+            debug = format_debug_metadata(None, profile, toggle_service, source="scheduler")
+            send_text = text + "\n\n" + debug
+
+        await context.bot.send_message(chat_id=tid, text=send_text)
     except Exception:
         logger.exception("Failed to send scheduled message to user %d", tid)

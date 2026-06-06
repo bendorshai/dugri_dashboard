@@ -117,3 +117,6 @@ MAX_RECENT_MESSAGES = 12
 INLINE_HOOK_DELAY_SECONDS = 5
 """Seconds to wait before sending an inline hook after a meal response.
 Makes the bot feel less robotic - like it's thinking before bringing up a new topic."""
+
+SUPER_DEBUG = True
+"""When True, admin sees classification + toggle state + next-step prediction on every message."""

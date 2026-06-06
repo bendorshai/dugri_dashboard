@@ -39,7 +39,7 @@ from keyboards import (
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
     CB_FEEDBACK,
 )
-from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, safe_answer
+from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, send_long_bot, safe_answer
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ class HealthHandlers:
         toggle_service: ToggleService | None = None,
         goal_service=None,
         landing_page_url: str = "https://www.dugri.life",
+        admin_chat_id: int = 0,
     ):
         self.landing_page_url = landing_page_url
         self.analyzer = analyzer
@@ -81,6 +82,8 @@ class HealthHandlers:
         self.feedback_service = feedback_service
         self.toggle_service = toggle_service
         self.goal_service = goal_service
+        self.admin_chat_id = admin_chat_id
+        self._debug_classification = None
 
     # ------------------------------------------------------------------
     # Conversation history helpers
@@ -96,6 +99,44 @@ class HealthHandlers:
             "timestamp": datetime.now(tz.utc).isoformat(),
         }
         self.user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
+
+    async def _send(self, text: str, *, tid: int, message=None, context=None,
+                    reply_markup=None, save=True):
+        """Single gateway for all outgoing Dugri messages.
+
+        Args:
+            text: Message text to send.
+            tid: Telegram user ID.
+            message: Telegram Message object (uses reply_text).
+            context: Telegram context (uses bot.send_message). Use when
+                     no Message object is available (callbacks, scheduler).
+            reply_markup: Optional inline keyboard.
+            save: Whether to save to conversation history (default True).
+        """
+        if save:
+            self._save_bot_message(tid, text)
+
+        send_text = self._append_debug(tid, text)
+
+        if message:
+            await send_long_text(message, send_text, reply_markup=reply_markup)
+        elif context:
+            await send_long_bot(context.bot, tid, send_text, reply_markup=reply_markup)
+
+    def _append_debug(self, tid: int, text: str) -> str:
+        """Append debug metadata for admin. Returns text unchanged for non-admin."""
+        from constants import SUPER_DEBUG
+        admin_id = getattr(self, "admin_chat_id", 0)
+        if not SUPER_DEBUG or tid != admin_id or not getattr(self, "toggle_service", None):
+            return text
+        profile = self._get_profile(tid)
+        if not profile:
+            return text
+        from handlers.utils import format_debug_metadata
+        debug = format_debug_metadata(
+            getattr(self, "_debug_classification", None), profile, self.toggle_service,
+        )
+        return text + "\n\n" + debug
 
     # ------------------------------------------------------------------
     # Profile helpers
@@ -256,8 +297,7 @@ class HealthHandlers:
         if nt.status == "active" and nt.goal_status == "pending" and nt.goal_offered_at and self.goal_service:
             response = self._route_nutrition_goal_flow(tid, text, profile)
             if response:
-                await message.reply_text(response)
-                self._save_bot_message(tid, response)
+                await self._send(response, tid=tid, message=message)
                 return
 
         # Other habit goal flows (sleep, workouts, eating_window)
@@ -267,8 +307,7 @@ class HealthHandlers:
                 if self.goal_service:
                     response = self.goal_service.handle_goal_value(tid, name, text)
                     if response:
-                        await message.reply_text(response)
-                        self._save_bot_message(tid, response)
+                        await self._send(response, tid=tid, message=message)
                         return
 
         # Remind pending: user is answering "want me to remind you?"
@@ -278,8 +317,7 @@ class HealthHandlers:
                 if self.goal_service:
                     response = self.goal_service.handle_remind_accept(tid, name)
                     if response:
-                        await message.reply_text(response)
-                        self._save_bot_message(tid, response)
+                        await self._send(response, tid=tid, message=message)
                         return
 
         # Offered but not activated: user is accepting the offer
@@ -293,15 +331,13 @@ class HealthHandlers:
                     import messages as M
                     loop_close = M.LOOP_CLOSE_ACTIVATION.get(name, "")
                     response = "יפה, נרשמתי." + loop_close
-                await message.reply_text(response)
-                self._save_bot_message(tid, response)
+                await self._send(response, tid=tid, message=message)
                 return
 
         # Safety net: no route matched - don't silently fail
         logger.warning("conversation_reply matched no route for tid=%d, text=%r", tid, text)
         fallback = "לא הבנתי על מה אתה עונה. אפשר לנסות שוב?"
-        await message.reply_text(fallback)
-        self._save_bot_message(tid, fallback)
+        await self._send(fallback, tid=tid, message=message)
 
     def _route_nutrition_goal_flow(self, tid: int, text: str, profile: UserProfile) -> str | None:
         """Route within the nutrition multi-step goal flow.
@@ -381,8 +417,7 @@ class HealthHandlers:
         if toggle and toggle.goal_status == "remind_pending":
             self.toggle_service.cancel_toggle(tid, toggle_name)
             response = random.choice(M.GOAL_DECLINED_FOREVER)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
+            await self._send(response, tid=tid, message=message)
             return
 
         # Case 2: Decline during goal-setting (active + goal pending)
@@ -405,8 +440,7 @@ class HealthHandlers:
                 else:
                     response = self.goal_service.ask_remind(tid, toggle_name)
 
-                await message.reply_text(response)
-                self._save_bot_message(tid, response)
+                await self._send(response, tid=tid, message=message)
             return
 
         # Case 3: Decline during offer (dormant + revealed, not yet activated)
@@ -418,14 +452,12 @@ class HealthHandlers:
             # Set remind_pending so the handler catches the user's next answer
             if self.goal_service:
                 self.goal_service.ask_remind(tid, toggle_name)
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
+            await self._send(response, tid=tid, message=message)
             return
 
         # Case 4: Cancel an active habit (no pending flow) -> full cancel
         self.toggle_service.cancel_toggle(tid, toggle_name)
-        await message.reply_text(M.EXIT_DOOR_CANCELLED)
-        self._save_bot_message(tid, M.EXIT_DOOR_CANCELLED)
+        await self._send(M.EXIT_DOOR_CANCELLED, tid=tid, message=message)
 
     # ------------------------------------------------------------------
     # Command handlers
@@ -454,7 +486,7 @@ class HealthHandlers:
             f"  חלון אכילה: {profile.eating_window.start if profile.eating_window else '08:00'}-{profile.eating_window.end if profile.eating_window else '20:00'}\n\n"
             "אפשר לשנות הגדרות דרך התפריט למטה."
         )
-        await message.reply_text(text, reply_markup=make_main_menu_keyboard())
+        await self._send(text, tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
 
     async def handle_menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = update.effective_message
@@ -464,6 +496,7 @@ class HealthHandlers:
         tid = update.effective_user.id
         profile = self._get_profile(tid)
         if profile is None:
+            # No profile - raw send, no gateway (no debug possible)
             await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
             return
 
@@ -473,9 +506,9 @@ class HealthHandlers:
         status = format_daily_status(
             total_cal, total_protein, self._target_cal(profile), self._target_prot(profile),
         )
-        await message.reply_text(
+        await self._send(
             f"📋 תפריט ראשי{status}",
-            reply_markup=make_main_menu_keyboard(),
+            tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False,
         )
 
     # ------------------------------------------------------------------
@@ -499,10 +532,10 @@ class HealthHandlers:
                 profile, get_user_now(profile.timezone),
             )
             if just_expired:
-                await message.reply_text(self.trial_service.get_expiry_message())
+                await self._send(self.trial_service.get_expiry_message(), tid=tid, message=message, save=False)
                 return
             if self.trial_service.is_blocked(profile):
-                await message.reply_text(self.trial_service.get_blocked_message())
+                await self._send(self.trial_service.get_blocked_message(), tid=tid, message=message, save=False)
                 return
 
         today_str = self._get_today_str(profile)
@@ -558,6 +591,7 @@ class HealthHandlers:
         toggle_state = "\n".join(toggle_lines) if toggle_lines else None
 
         # Classifier is the SINGLE entry point for ALL messages.
+        self._debug_classification = None
         classification = self.analyzer.classify_message(
             message.text, today_str, last_entry,
             recent_messages=recent_messages[:-1],
@@ -565,6 +599,7 @@ class HealthHandlers:
             reply_context=reply_context,
             day_name=day_name,
         )
+        self._debug_classification = classification.type
 
         # conversation_reply: user is responding to something the bot asked
         if classification.type == "conversation_reply":
@@ -586,8 +621,7 @@ class HealthHandlers:
                 text = result.response_text
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
-            await message.reply_text(text)
-            self._save_bot_message(tid, text)
+            await self._send(text, tid=tid, message=message)
             return
 
         if classification.type == "workout" and self.message_router:
@@ -598,8 +632,7 @@ class HealthHandlers:
                 text = result.response_text
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
-            await message.reply_text(text)
-            self._save_bot_message(tid, text)
+            await self._send(text, tid=tid, message=message)
             return
 
         if classification.type == "self_care" and self.message_router:
@@ -612,8 +645,7 @@ class HealthHandlers:
                 text = result.response_text
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{text}\n\n{edu}" if edu else text
-            await message.reply_text(text)
-            self._save_bot_message(tid, text)
+            await self._send(text, tid=tid, message=message)
             return
 
         if classification.type == "help" and self.message_router:
@@ -622,8 +654,7 @@ class HealthHandlers:
                 recent_messages=recent_messages,
                 telegram_user_id=tid,
             )
-            await send_long_text(message, result.response_text, reply_markup=make_daily_summary_keyboard())
-            self._save_bot_message(tid, result.response_text)
+            await self._send(result.response_text, tid=tid, message=message, reply_markup=make_daily_summary_keyboard())
             return
 
         if classification.type == "answer_question" and self.message_router:
@@ -631,7 +662,7 @@ class HealthHandlers:
                 tid, classification.question_text or message.text,
                 today_str, self._target_cal(profile), self._target_prot(profile),
             )
-            await send_long_text(message, result.response_text, reply_markup=make_daily_summary_keyboard())
+            await self._send(result.response_text, tid=tid, message=message, reply_markup=make_daily_summary_keyboard())
             return
 
         if classification.type == "toggle_cancel":
@@ -644,15 +675,14 @@ class HealthHandlers:
                 self.toggle_service.activate_toggle(tid, toggle_name)
                 if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
                     response = self.goal_service.offer_goal_with_shortcut(tid, toggle_name, text)
-                    await message.reply_text(response)
-                    self._save_bot_message(tid, response)
+                    await self._send(response, tid=tid, message=message)
                 else:
                     import messages as M
                     loop_close = M.LOOP_CLOSE_ACTIVATION.get(toggle_name, "")
                     response = "יפה, נרשמתי. מעכשיו אני עוקב." + loop_close
-                    await message.reply_text(response)
+                    await self._send(response, tid=tid, message=message)
             else:
-                await message.reply_text("לא הבנתי איזה מעקב להדליק. נסה שוב?")
+                await self._send("לא הבנתי איזה מעקב להדליק. נסה שוב?", tid=tid, message=message, save=False)
             return
 
         if classification.type == "name_declaration" and self.onboarding_service:
@@ -663,8 +693,7 @@ class HealthHandlers:
             late = not (last_bot and "איך אתה רוצה שאקרא לך?" in last_bot.get("text", ""))
             response = self.onboarding_service.handle_name_response(tid, name, late=late)
             if response:
-                await message.reply_text(response)
-                self._save_bot_message(tid, response)
+                await self._send(response, tid=tid, message=message)
             return
 
         if classification.type == "feedback_request":
@@ -673,10 +702,10 @@ class HealthHandlers:
                 feedback_text = self.feedback_service.give_feedback(
                     tid, today_str, profile, is_first,
                 )
-                await send_long_text(message, feedback_text, reply_markup=make_main_menu_keyboard())
+                await self._send(feedback_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard())
             elif self.message_router:
                 result = self.message_router.route_feedback_request()
-                await message.reply_text(result.response_text, reply_markup=make_main_menu_keyboard())
+                await self._send(result.response_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard())
             return
 
         if classification.type == "feedback_reaction":
@@ -684,14 +713,12 @@ class HealthHandlers:
                 steering = profile.feedback_steering_prompt if profile else None
                 response = self.feedback_service.process_reaction(tid, text, steering)
                 if response:
-                    await message.reply_text(response)
-                    self._save_bot_message(tid, response)
+                    await self._send(response, tid=tid, message=message)
             return
 
         if classification.type == "none":
             response = classification.freeform_response or "מה נשמע?"
-            await message.reply_text(response)
-            self._save_bot_message(tid, response)
+            await self._send(response, tid=tid, message=message)
             return
 
         # Default: treat as food (meal type or fallback)
@@ -703,7 +730,7 @@ class HealthHandlers:
             food_result = self.analyzer.analyze_food_text(message.text, today_str, day_name)
 
         if food_result is None or not food_result.groups:
-            await message.reply_text("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?")
+            await self._send("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?", tid=tid, message=message, save=False)
             return
 
         # Create one FoodEntry per temporal group
@@ -756,23 +783,21 @@ class HealthHandlers:
             response = f"{items_text}\n\n✅ נרשם ({', '.join(retro_labels)})"
 
         last_entry_id = last_saved.id
-        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(last_entry_id))
+        await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))
         await safe_react(message, OK_HAND)
-        self._save_bot_message(tid, response)
 
         # Mixed-type: process habit entries that came alongside the meal
         if classification.habit_entries:
             habit_text = self._process_habit_entries(tid, classification.habit_entries, today_str)
             if habit_text:
-                await message.reply_text(habit_text)
-                self._save_bot_message(tid, habit_text)
+                await self._send(habit_text, tid=tid, message=message)
 
         # Protein education on first meal ever
         if len(self.food_repo.get_all_for_user(tid)) == 1:
             from dugri_messages import EDU_INTRO_FIRST_LOG
             edu = EDU_INTRO_FIRST_LOG.get("protein")
             if edu:
-                await message.reply_text(edu)
+                await self._send(edu, tid=tid, message=message, save=False)
 
         # Recompute eating window from actual meal history
         await self._recompute_eating_window(context, tid, profile)
@@ -842,21 +867,19 @@ class HealthHandlers:
             due = self.goal_service.check_goal_reminders(profile)
             if due:
                 text = self.goal_service.fire_goal_reminder(tid, due[0])
-                await message.reply_text(text)
-                self._save_bot_message(tid, text)
+                await self._send(text, tid=tid, message=message)
                 return
 
         # Nutrition reveal (after first meal, gate_days=0)
         if self.toggle_service.should_reveal_nutrition(profile):
             self.toggle_service.reveal_toggle(tid, "nutrition")
-            await message.reply_text(M.REVEAL_NUTRITION)
-            self._save_bot_message(tid, M.REVEAL_NUTRITION)
+            await self._send(M.REVEAL_NUTRITION, tid=tid, message=message)
             return
 
         # Day 16 dashboard intro
         if self.toggle_service.should_show_dashboard_intro(profile, day_number):
             self.user_repo.update_fields(tid, {"dashboard_intro_shown": True})
-            await message.reply_text(M.DASHBOARD_INTRO)
+            await self._send(M.DASHBOARD_INTRO, tid=tid, message=message, save=False)
 
         # Toggle reveals (one-time offers)
         reveals = [
@@ -869,8 +892,7 @@ class HealthHandlers:
         for toggle_name, should_reveal, reveal_msg in reveals:
             if should_reveal:
                 self.toggle_service.reveal_toggle(tid, toggle_name)
-                await message.reply_text(reveal_msg)
-                self._save_bot_message(tid, reveal_msg)
+                await self._send(reveal_msg, tid=tid, message=message)
                 return
 
         # Recurring hooks inline hook (with anchor day + time window checks)
@@ -898,8 +920,7 @@ class HealthHandlers:
                     )
                 self.toggle_service.record_asked(tid, toggle_name)
                 self.toggle_service.increment_unanswered(tid, profile, toggle_name)
-                await message.reply_text(text)
-                self._save_bot_message(tid, text)
+                await self._send(text, tid=tid, message=message)
                 return
 
         # Weekly summary inline hook (Sunday, within window only)
@@ -908,8 +929,7 @@ class HealthHandlers:
                 and should_fire_inline(profile, "weekly_summary", clock)):
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
-            await message.reply_text(M.WEEKLY_SUMMARY_OFFER)
-            self._save_bot_message(tid, M.WEEKLY_SUMMARY_OFFER)
+            await self._send(M.WEEKLY_SUMMARY_OFFER, tid=tid, message=message)
 
     async def _handle_correction(
         self, message, context, correction, last_entry: dict,
@@ -968,7 +988,7 @@ class HealthHandlers:
         )
         response += status
 
-        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(entry_id))
+        await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(entry_id), save=False)
         await safe_react(message, OK_HAND)
 
     @staticmethod
@@ -1038,7 +1058,7 @@ class HealthHandlers:
 
         result = self.analyzer.analyze_food_photo(b64, today_str, caption=caption)
         if result is None or not result.items:
-            await message.reply_text("לא הצלחתי לזהות מאכל בתמונה. נסה לתאר מה אכלת בטקסט.")
+            await self._send("לא הצלחתי לזהות מאכל בתמונה. נסה לתאר מה אכלת בטקסט.", tid=tid, message=message, save=False)
             return
 
         combined_desc = ", ".join(item.description for item in result.items)
@@ -1083,7 +1103,7 @@ class HealthHandlers:
         if result.unidentified_items:
             response += "\n\n❓ " + ", ".join(result.unidentified_items) + "\nמה זה? שלח תיאור או תקן דרך הכפתור ✏️"
 
-        await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
+        await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
 
     # ------------------------------------------------------------------
@@ -1115,14 +1135,14 @@ class HealthHandlers:
             elif field == "timezone":
                 self.user_repo.update_fields(tid, {"timezone": text})
             else:
-                await message.reply_text("שדה לא מוכר.")
+                await self._send("שדה לא מוכר.", tid=tid, message=message, save=False)
                 return True
 
             await safe_react(message, OK_HAND)
-            await message.reply_text(f"✅ {FIELD_LABELS.get(field, field)} עודכן!")
+            await self._send(f"✅ {FIELD_LABELS.get(field, field)} עודכן!", tid=tid, message=message, save=False)
 
         except ValueError:
-            await message.reply_text("ערך לא תקין. נסה שוב.")
+            await self._send("ערך לא תקין. נסה שוב.", tid=tid, message=message, save=False)
         except Exception:
             logger.exception("Failed to update profile field %s", field)
 
@@ -1158,9 +1178,9 @@ class HealthHandlers:
 
         answer = self.analyzer.answer_question(question, week_csv, targets)
         if answer:
-            await send_long_text(message, answer, reply_markup=make_daily_summary_keyboard())
+            await self._send(answer, tid=tid, message=message, reply_markup=make_daily_summary_keyboard(), save=False)
         else:
-            await message.reply_text("לא הצלחתי לענות. נסה שוב.")
+            await self._send("לא הצלחתי לענות. נסה שוב.", tid=tid, message=message, save=False)
 
         return True
 
@@ -1206,7 +1226,7 @@ class HealthHandlers:
             updated_history = correction_history + [message.text]
             context.chat_data.setdefault("correction_histories", {})[entry_id] = updated_history
         else:
-            await message.reply_text("לא הצלחתי להבין את התיקון. נסה שוב.")
+            await self._send("לא הצלחתי להבין את התיקון. נסה שוב.", tid=tid, message=message, save=False)
 
         return True
 
@@ -1225,7 +1245,7 @@ class HealthHandlers:
 
         all_entries = self.food_repo.get_all_for_user(tid)
         if not all_entries:
-            await message.reply_text("אין רשומות לתיקון.")
+            await self._send("אין רשומות לתיקון.", tid=tid, message=message, save=False)
             return True
 
         csv_lines = ["row_index,תאריך,שעה,תיאור,קלוריות,חלבון"]
@@ -1233,12 +1253,12 @@ class HealthHandlers:
             csv_lines.append(f"{i},{e.date},{e.time},{e.description},{e.calories},{e.protein}")
         entries_csv = "\n".join(csv_lines)
 
-        await message.reply_text("🔍 מחפש רשומות לתיקון...")
+        await self._send("🔍 מחפש רשומות לתיקון...", tid=tid, message=message, save=False)
 
         corrections = self.analyzer.analyze_bulk_correction(correction_text, entries_csv)
 
         if not corrections:
-            await message.reply_text("לא מצאתי רשומות שמתאימות לתיקון.", reply_markup=make_main_menu_keyboard())
+            await self._send("לא מצאתי רשומות שמתאימות לתיקון.", tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
             return True
 
         report_lines = []
@@ -1275,7 +1295,7 @@ class HealthHandlers:
             f"{'+' if total_prot_diff >= 0 else ''}{total_prot_diff} גרם חלבון"
         )
 
-        await send_long_text(message, report, reply_markup=make_main_menu_keyboard())
+        await self._send(report, tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
         await safe_react(message, OK_HAND)
         return True
 
@@ -1486,11 +1506,7 @@ class HealthHandlers:
         try:
             food_entry = self.food_repo.get(entry_id)
             if food_entry is None:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text="❌ הרשומה לא נמצאה.",
-                    reply_markup=make_daily_summary_keyboard(),
-                )
+                await self._send("❌ הרשומה לא נמצאה.", tid=tid, context=context, reply_markup=make_daily_summary_keyboard(), save=False)
                 return
 
             profile = self._get_profile(tid)
@@ -1517,11 +1533,7 @@ class HealthHandlers:
             items_text = f"🔁 {food_entry.description}: {food_entry.calories} קל׳ | {food_entry.protein} גרם חלבון"
             response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
 
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=response,
-                reply_markup=make_food_entry_keyboard(saved.id),
-            )
+            await self._send(response, tid=tid, context=context, reply_markup=make_food_entry_keyboard(saved.id))
         except Exception:
             logger.exception("Failed to duplicate food entry %s", entry_id)
 
@@ -1575,7 +1587,7 @@ class HealthHandlers:
         status = format_daily_status(total_cal, total_prot, self._target_cal(profile), self._target_prot(profile))
         text = "\n".join(lines) + status
 
-        await send_long_text(query.message, text, reply_markup=make_daily_summary_keyboard())
+        await self._send(text, tid=tid, message=query.message, reply_markup=make_daily_summary_keyboard(), save=False)
 
     async def handle_weekly_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -1648,11 +1660,7 @@ class HealthHandlers:
         status = format_daily_status(
             total_cal, total_protein, self._target_cal(profile), self._target_prot(profile),
         )
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=f"📋 תפריט ראשי{status}",
-            reply_markup=make_main_menu_keyboard(),
-        )
+        await self._send(f"📋 תפריט ראשי{status}", tid=tid, context=context, reply_markup=make_main_menu_keyboard(), save=False)
 
     async def handle_feedback_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -1662,10 +1670,7 @@ class HealthHandlers:
 
         tid = update.effective_user.id
 
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text="🤔 מכין משוב...",
-        )
+        await self._send("🤔 מכין משוב...", tid=tid, context=context, save=False)
 
         try:
             profile = self._get_profile(tid)
@@ -1683,17 +1688,8 @@ class HealthHandlers:
                     profile.feedback_steering_prompt,
                     is_first,
                 )
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=feedback_text,
-                    reply_markup=make_main_menu_keyboard(),
-                )
+                await self._send(feedback_text, tid=tid, context=context, reply_markup=make_main_menu_keyboard())
             else:
-                # Fallback without feedback service
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text="לא הצלחתי לייצר משוב כרגע.",
-                    reply_markup=make_main_menu_keyboard(),
-                )
+                await self._send("לא הצלחתי לייצר משוב כרגע.", tid=tid, context=context, reply_markup=make_main_menu_keyboard(), save=False)
         except Exception:
             logger.exception("Failed to generate feedback")
