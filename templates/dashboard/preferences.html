@@ -88,13 +88,13 @@
                     </select>
                 </div>
                 <div class="field-row">
-                    <label>יעד קלוריות</label>
+                    <label>יעד קלוריות יומי</label>
                     <input type="number" name="calories" value="{{ targets.get('calories', '') or '' }}"
                            min="800" max="6000" step="50" placeholder="לא הוגדר" class="form-input"
                            @input="fieldChanged()">
                 </div>
                 <div class="field-row">
-                    <label>יעד חלבון (גרם)</label>
+                    <label>יעד חלבון יומי (גרם)</label>
                     <input type="number" name="protein" value="{{ targets.get('protein', '') or '' }}"
                            min="30" max="400" step="5" placeholder="לא הוגדר" class="form-input"
                            @input="fieldChanged()">
