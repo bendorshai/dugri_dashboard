@@ -997,6 +997,9 @@ class HealthHandlers:
         if result.photo_tips:
             response += f"\n\n💡 {result.photo_tips[0]}"
 
+        if result.unidentified_items:
+            response += "\n\n❓ " + ", ".join(result.unidentified_items) + "\nמה זה? שלח תיאור או תקן דרך הכפתור ✏️"
+
         await send_long_text(message, response, reply_markup=make_food_entry_keyboard(saved.id))
         await safe_react(message, OK_HAND)
 

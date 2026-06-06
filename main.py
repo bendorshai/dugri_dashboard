@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "4.7.0"
-VERSION_NOTES = "name_declaration route: fix name collection intercepting opt-in flow"
+VERSION = "4.8.0"
+VERSION_NOTES = "photo analysis: flag unidentified food items + ask for clarification"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

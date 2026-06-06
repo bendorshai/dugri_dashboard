@@ -5,7 +5,7 @@ import logging
 from typing import Literal
 
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ class FoodPhotoResult(BaseModel):
     total_calories: int
     total_protein: int
     photo_tips: list[str]
+    unidentified_items: list[str] = Field(default_factory=list)
 
 
 class CorrectionFoodItem(FoodItem):
