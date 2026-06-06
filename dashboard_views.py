@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import requests
 from flask import (
@@ -53,31 +54,43 @@ def preferences():
 @dashboard_bp.route("/preferences", methods=["POST"])
 @login_required
 def preferences_post():
+    # ---------------------------------------------------------------
+    # IMPORTANT: Toggle state invariants
+    #
+    # The bot's ToggleService (health_tracker/services/toggle_service.py)
+    # enforces these invariants when changing toggle status:
+    #
+    #   activate_toggle() sets: status="active", activated_at=now,
+    #                           consecutive_unanswered=0
+    #   reveal_toggle()   sets: revealed_at=now
+    #   cancel_toggle()   sets: status="cancelled"
+    #
+    # The dashboard writes directly to MongoDB (no shared service layer
+    # with the bot), so it MUST maintain these invariants manually.
+    # Failing to do so creates impossible states that break the bot's
+    # lazy opt-in flow (e.g. status="active" with activated_at=None
+    # makes the bot think a goal flow is pending that was never started).
+    #
+    # When changing toggle status here, always use _apply_toggle_status()
+    # to ensure the right timestamp fields are set.
+    # ---------------------------------------------------------------
     storage = _get_storage()
     email = session["user_email"]
 
     user = storage.get_user(email)
     existing_toggles = user.get("toggles", {}) if user else {}
 
-    # Build toggles from hidden status fields (dormant/active/cancelled)
     toggle_names = ["sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"]
     toggles = {}
     for name in toggle_names:
         existing = existing_toggles.get(name, {})
-        # Hidden field carries the exact status chosen by the UI
         status = request.form.get(f"{name}_status")
         if status in ("dormant", "active", "cancelled"):
-            toggles[name] = {**existing, "status": status}
-            # Education flag: reset on re-suggest (dormant), skip on dashboard activation
-            if status == "dormant":
-                toggles[name]["edu_intro_shown"] = False
-            elif status == "active":
-                toggles[name]["edu_intro_shown"] = True
+            toggles[name] = _apply_toggle_status(existing, status)
         else:
-            # Fallback: infer from checkbox
             enabled = request.form.get(f"{name}_enabled")
             if enabled:
-                toggles[name] = {**existing, "status": "active", "edu_intro_shown": True}
+                toggles[name] = _apply_toggle_status(existing, "active")
             else:
                 toggles[name] = existing or {"status": "dormant"}
 
@@ -134,6 +147,37 @@ def toggles():
 @login_required
 def targets():
     return redirect(url_for("dashboard_views.preferences"))
+
+
+def _apply_toggle_status(existing: dict, new_status: str) -> dict:
+    """Build a toggle dict with the correct timestamp fields for a status change.
+
+    Mirrors the invariants from the bot's ToggleService:
+    - dormant:   clear revealed_at, activated_at; reset edu_intro_shown
+    - active:    set activated_at (and revealed_at if missing); set edu_intro_shown
+    - cancelled: keep timestamps as-is (for historical record)
+
+    Always preserves goal_value, goal_status, and other fields from existing.
+    """
+    toggle = {**existing, "status": new_status}
+    now = datetime.now(timezone.utc).isoformat()
+
+    if new_status == "dormant":
+        toggle["revealed_at"] = None
+        toggle["activated_at"] = None
+        toggle["edu_intro_shown"] = False
+        toggle["consecutive_unanswered"] = 0
+    elif new_status == "active":
+        # Only set timestamps if transitioning TO active (not already active)
+        if existing.get("status") != "active":
+            toggle["activated_at"] = now
+            if not toggle.get("revealed_at"):
+                toggle["revealed_at"] = now
+            toggle["consecutive_unanswered"] = 0
+        toggle["edu_intro_shown"] = True
+    # cancelled: preserve existing timestamps, no special fields needed
+
+    return toggle
 
 
 def _notify_bot_target_change(email: str, old_targets: dict, new_targets: dict):

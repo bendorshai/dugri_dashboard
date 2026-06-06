@@ -58,6 +58,77 @@ class TestDashboardPreferences:
         mock_storage.update_user_targets.assert_called_once()
 
 
+    @patch("dashboard_views.DashboardStorage")
+    def test_activating_toggle_sets_timestamps(self, mock_storage_cls, client):
+        """Dashboard must set activated_at/revealed_at when activating a toggle.
+
+        Without these, the bot sees an impossible state (active but no activation
+        timestamp) and tries to run goal flows that were never started.
+        """
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = MOCK_USER
+        mock_storage.update_user_targets.return_value = {"calories": 2000, "protein": 150}
+        mock_storage_cls.return_value = mock_storage
+        _login(client)
+        resp = client.post("/dashboard/preferences", data={
+            "nutrition_status": "active",
+            "calories": "2000",
+            "protein": "150",
+        })
+        assert resp.status_code == 302
+        toggles = mock_storage.update_user_toggles.call_args[0][1]
+        nutrition = toggles["nutrition"]
+        assert nutrition["status"] == "active"
+        assert nutrition["activated_at"] is not None
+        assert nutrition["revealed_at"] is not None
+        assert nutrition["edu_intro_shown"] is True
+
+    @patch("dashboard_views.DashboardStorage")
+    def test_dormant_toggle_clears_timestamps(self, mock_storage_cls, client):
+        """Setting a toggle to dormant should clear activation timestamps."""
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = MOCK_USER
+        mock_storage.update_user_targets.return_value = {"calories": 2000, "protein": 150}
+        mock_storage_cls.return_value = mock_storage
+        _login(client)
+        resp = client.post("/dashboard/preferences", data={
+            "sleep_status": "dormant",
+            "calories": "2000",
+            "protein": "150",
+        })
+        assert resp.status_code == 302
+        toggles = mock_storage.update_user_toggles.call_args[0][1]
+        sleep = toggles["sleep"]
+        assert sleep["status"] == "dormant"
+        assert sleep["revealed_at"] is None
+        assert sleep["activated_at"] is None
+        assert sleep["edu_intro_shown"] is False
+
+
+    @patch("dashboard_views.DashboardStorage")
+    def test_reactivating_already_active_keeps_existing_timestamps(self, mock_storage_cls, client):
+        """Re-saving an already-active toggle should not overwrite timestamps."""
+        user_with_active = {**MOCK_USER, "toggles": {
+            **MOCK_USER["toggles"],
+            "sleep": {"status": "active", "activated_at": "2026-06-01T00:00:00", "revealed_at": "2026-05-31T00:00:00"},
+        }}
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = user_with_active
+        mock_storage.update_user_targets.return_value = {"calories": 2000, "protein": 150}
+        mock_storage_cls.return_value = mock_storage
+        _login(client)
+        resp = client.post("/dashboard/preferences", data={
+            "sleep_status": "active",
+            "calories": "2000",
+            "protein": "150",
+        })
+        assert resp.status_code == 302
+        toggles = mock_storage.update_user_toggles.call_args[0][1]
+        sleep = toggles["sleep"]
+        assert sleep["activated_at"] == "2026-06-01T00:00:00"
+        assert sleep["revealed_at"] == "2026-05-31T00:00:00"
+
+
 class TestDashboardLegacyRedirects:
     def test_toggles_redirects_to_preferences(self, client):
         _login(client)
