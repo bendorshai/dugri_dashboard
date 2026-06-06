@@ -115,6 +115,7 @@ def reset_user(email: str) -> None:
             "protein": None,
             "sleep_time": None,
             "workouts_per_week": None,
+            "weight_goal": None,
         },
         "eating_window": None,
         "subscription_status": "trial_active",
@@ -133,6 +134,8 @@ def reset_user(email: str) -> None:
         # Weekly feedback state
         "feedback_steering_prompt": None,
         "last_feedback_offered_at": None,
+        "discovered_patterns": [],
+        "strikes": [],
         "updated_at": now,
     }
 
