@@ -37,6 +37,7 @@ class Targets(BaseModel):
     protein: int | None = None
     sleep_time: str | None = None
     workouts_per_week: int | None = None
+    weight_goal: Literal["lose", "maintain", "gain"] | None = None
 
     @field_validator("sleep_time")
     @classmethod

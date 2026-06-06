@@ -175,6 +175,28 @@ class TestDiscoveredPatterns:
         assert restored.discovered_patterns[0].discovered_at is not None
 
 
+class TestWeightGoal:
+    def test_weight_goal_default_none(self):
+        user = User(email="a@b.com")
+        assert user.targets.weight_goal is None
+
+    def test_weight_goal_lose(self):
+        user = User(email="a@b.com", targets=Targets(weight_goal="lose"))
+        assert user.targets.weight_goal == "lose"
+
+    def test_weight_goal_round_trip(self):
+        user = User(email="a@b.com", targets=Targets(calories=2000, weight_goal="gain"))
+        doc = user.to_mongo_dict()
+        restored = User.from_mongo_dict(doc)
+        assert restored.targets.weight_goal == "gain"
+        assert restored.targets.calories == 2000
+
+    def test_weight_goal_invalid_value_rejected(self):
+        import pydantic
+        with pytest.raises(pydantic.ValidationError):
+            Targets(weight_goal="bulk")
+
+
 class TestUserProfileAlias:
     """UserProfile should still work as an alias for backward compat."""
 

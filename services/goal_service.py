@@ -299,9 +299,12 @@ class GoalService:
         prot = suggestion.get("target_protein", 150)
 
         # Store suggestion temporarily so confirm handler can access it
-        self._user_repo.update_fields(tid, {
+        weight_goal = suggestion.get("weight_goal", "maintain")
+        update_fields = {
             "toggles.nutrition.goal_value": {"calories": cal, "protein": prot},
-        })
+            "targets.weight_goal": weight_goal,
+        }
+        self._user_repo.update_fields(tid, update_fields)
 
         return random.choice(M.NUTRITION_SUGGESTION).format(calories=cal, protein=prot)
 

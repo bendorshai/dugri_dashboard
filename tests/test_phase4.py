@@ -330,3 +330,45 @@ class TestFeedbackPreComputation:
         profile = _make_profile(eating_window=EatingWindow(start="08:00", end="20:00"))
         raw = svc._build_raw_entries(entries, [], [], [], profile)
         assert raw["eating_window_compliance"][0]["kept"] is False
+
+
+class TestGoalServiceWeightGoal:
+    """Test that weight_goal is saved during nutrition goal flow."""
+
+    def _make_goal_service(self):
+        from services.goal_service import GoalService
+        from services.toggle_service import ToggleService
+
+        user_repo = MagicMock(spec=UserRepository)
+        toggle_service = MagicMock(spec=ToggleService)
+        analyzer = MagicMock()
+        analyzer.suggest_targets.return_value = {
+            "target_calories": 1800,
+            "target_protein": 130,
+            "weight_goal": "lose",
+        }
+
+        svc = GoalService(user_repo, toggle_service, analyzer)
+        return svc, user_repo, analyzer
+
+    def test_handle_weight_goal_saves_weight_goal(self):
+        svc, user_repo, _ = self._make_goal_service()
+        profile = _make_profile(height_cm=175, weight_kg=80, birth_year=1990)
+        svc.handle_weight_goal(123, "לרדת במשקל", profile)
+
+        user_repo.update_fields.assert_called_once()
+        fields = user_repo.update_fields.call_args[0][1]
+        assert fields["targets.weight_goal"] == "lose"
+        assert fields["toggles.nutrition.goal_value"]["calories"] == 1800
+
+    def test_handle_weight_goal_defaults_to_maintain(self):
+        svc, user_repo, analyzer = self._make_goal_service()
+        analyzer.suggest_targets.return_value = {
+            "target_calories": 2200,
+            "target_protein": 150,
+        }
+        profile = _make_profile(height_cm=175, weight_kg=80, birth_year=1990)
+        svc.handle_weight_goal(123, "לשמור", profile)
+
+        fields = user_repo.update_fields.call_args[0][1]
+        assert fields["targets.weight_goal"] == "maintain"

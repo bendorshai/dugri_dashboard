@@ -95,6 +95,7 @@ class FeedbackService:
             "protein": profile.targets.protein,
             "sleep_time": profile.targets.sleep_time,
             "workouts_per_week": profile.targets.workouts_per_week,
+            "weight_goal": profile.targets.weight_goal,
         }
 
         active_toggles = []
