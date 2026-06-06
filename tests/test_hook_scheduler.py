@@ -175,3 +175,74 @@ class TestGetHooksToSchedule:
         # sleep + workouts + self_care + weekly_summary (default active)
         # eating_window is auto-computed, not a proactive hook
         assert len(hooks) == 4
+
+
+class TestInlineHookWindowGuard:
+    """Inline hooks must respect time windows.
+
+    Bug: inline path in _check_inline_hooks had no window guard, so logging
+    food at 00:30 on Sunday triggered a weekly summary offer. The poller's
+    randomized timing never got a chance because inline 'stole' the slot.
+    """
+
+    def test_weekly_summary_blocked_outside_window(self):
+        """Weekly summary should NOT fire at 00:30 on Sunday."""
+        # 00:30 Israel Sunday = 21:30 UTC Saturday
+        clock = _clock(datetime(2026, 6, 6, 21, 30))
+        assert clock.weekday() == 6  # Sunday in Israel
+        start, end = WEEKLY_SUMMARY_HOOK_WINDOW
+        assert not (start <= clock.now().hour < end)
+
+    def test_weekly_summary_allowed_inside_window(self):
+        """Weekly summary should fire at 09:30 on Sunday."""
+        # 09:30 Israel Sunday = 06:30 UTC Sunday
+        clock = _clock(datetime(2026, 6, 7, 6, 30))
+        assert clock.weekday() == 6  # Sunday in Israel
+        start, end = WEEKLY_SUMMARY_HOOK_WINDOW
+        assert start <= clock.now().hour < end
+
+    def test_sleep_blocked_outside_window(self):
+        """Sleep hook should NOT fire at 23:00."""
+        # 23:00 Israel = 20:00 UTC
+        clock = _clock(datetime(2026, 6, 7, 20, 0))
+        start, end = SLEEP_HOOK_WINDOW
+        assert not (start <= clock.now().hour < end)
+
+    def test_sleep_allowed_inside_window(self):
+        """Sleep hook should fire at 09:00."""
+        # 09:00 Israel = 06:00 UTC
+        clock = _clock(datetime(2026, 6, 7, 6, 0))
+        start, end = SLEEP_HOOK_WINDOW
+        assert start <= clock.now().hour < end
+
+    def test_workouts_blocked_outside_window(self):
+        """Workouts hook should NOT fire at 08:00."""
+        # 08:00 Israel = 05:00 UTC
+        clock = _clock(datetime(2026, 6, 4, 5, 0))  # Thursday
+        assert clock.weekday() == WORKOUTS_ANCHOR_DAY
+        start, end = WORKOUTS_HOOK_WINDOW
+        assert not (start <= clock.now().hour < end)
+
+    def test_workouts_allowed_inside_window(self):
+        """Workouts hook should fire at 17:00 on Thursday."""
+        # 17:00 Israel Thursday = 14:00 UTC
+        clock = _clock(datetime(2026, 6, 4, 14, 0))
+        assert clock.weekday() == WORKOUTS_ANCHOR_DAY
+        start, end = WORKOUTS_HOOK_WINDOW
+        assert start <= clock.now().hour < end
+
+    def test_self_care_blocked_outside_window(self):
+        """Self-care hook should NOT fire at 08:00."""
+        # 08:00 Israel Friday = 05:00 UTC
+        clock = _clock(datetime(2026, 6, 5, 5, 0))  # Friday
+        assert clock.weekday() == SELF_CARE_ANCHOR_DAY
+        start, end = SELF_CARE_HOOK_WINDOW
+        assert not (start <= clock.now().hour < end)
+
+    def test_self_care_allowed_inside_window(self):
+        """Self-care hook should fire at 11:00 on Friday."""
+        # 11:00 Israel Friday = 08:00 UTC
+        clock = _clock(datetime(2026, 6, 5, 8, 0))
+        assert clock.weekday() == SELF_CARE_ANCHOR_DAY
+        start, end = SELF_CARE_HOOK_WINDOW
+        assert start <= clock.now().hour < end

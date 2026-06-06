@@ -825,6 +825,8 @@ class HealthHandlers:
         from constants import (
             WORKOUTS_ANCHOR_DAY, SELF_CARE_ANCHOR_DAY, WEEKLY_SUMMARY_ANCHOR_DAY,
             INLINE_HOOK_DELAY_SECONDS,
+            SLEEP_HOOK_WINDOW, WORKOUTS_HOOK_WINDOW, SELF_CARE_HOOK_WINDOW,
+            WEEKLY_SUMMARY_HOOK_WINDOW,
         )
 
         # Single delay: pause between the food response and whatever comes next.
@@ -871,15 +873,18 @@ class HealthHandlers:
                 self._save_bot_message(tid, reveal_msg)
                 return
 
-        # Recurring hooks inline hook (with anchor day check for weekly hooks)
+        # Recurring hooks inline hook (with anchor day + time window checks)
+        now = clock.now()
         inline_hooks = [
-            ("sleep", M.HOOK_SLEEP_PROMPTS, None),
-            ("workouts", M.HOOK_WORKOUTS_PROMPTS, WORKOUTS_ANCHOR_DAY),
-            ("self_care", M.HOOK_SELF_CARE_PROMPTS, SELF_CARE_ANCHOR_DAY),
+            ("sleep", M.HOOK_SLEEP_PROMPTS, None, SLEEP_HOOK_WINDOW),
+            ("workouts", M.HOOK_WORKOUTS_PROMPTS, WORKOUTS_ANCHOR_DAY, WORKOUTS_HOOK_WINDOW),
+            ("self_care", M.HOOK_SELF_CARE_PROMPTS, SELF_CARE_ANCHOR_DAY, SELF_CARE_HOOK_WINDOW),
         ]
 
-        for toggle_name, pool, anchor_day in inline_hooks:
+        for toggle_name, pool, anchor_day, window in inline_hooks:
             if anchor_day is not None and weekday != anchor_day:
+                continue
+            if not (window[0] <= now.hour < window[1]):
                 continue
             if should_fire_inline(profile, toggle_name, clock):
                 text = random.choice(pool)
@@ -897,8 +902,10 @@ class HealthHandlers:
                 self._save_bot_message(tid, text)
                 return
 
-        # Weekly summary inline hook (Sunday only)
-        if weekday == WEEKLY_SUMMARY_ANCHOR_DAY and should_fire_inline(profile, "weekly_summary", clock):
+        # Weekly summary inline hook (Sunday, within window only)
+        if (weekday == WEEKLY_SUMMARY_ANCHOR_DAY
+                and WEEKLY_SUMMARY_HOOK_WINDOW[0] <= now.hour < WEEKLY_SUMMARY_HOOK_WINDOW[1]
+                and should_fire_inline(profile, "weekly_summary", clock)):
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
             await message.reply_text(M.WEEKLY_SUMMARY_OFFER)
