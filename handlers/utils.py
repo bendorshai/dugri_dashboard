@@ -48,6 +48,9 @@ async def send_long_text(message, text: str, reply_markup=None) -> None:
 TOGGLE_GATE_DAYS_MAP = {
     "nutrition": 0, "sleep": 1, "eating_window": 4, "workouts": 4, "self_care": 4,
 }
+TOGGLE_ANCHOR_DAY_MAP = {
+    "workouts": "Thu", "self_care": "Fri", "weekly_summary": "Sun",
+}
 
 
 def format_debug_metadata(
@@ -70,8 +73,14 @@ def format_debug_metadata(
         if not toggle:
             continue
         gate = TOGGLE_GATE_DAYS_MAP.get(name, "")
-        gate_str = f" (day {gate})" if gate != "" else ""
-        parts = [f"{name}{gate_str}: {toggle.status}"]
+        anchor = TOGGLE_ANCHOR_DAY_MAP.get(name, "")
+        if gate != "" and anchor:
+            label = f"{name} (day {gate}, {anchor})"
+        elif gate != "":
+            label = f"{name} (day {gate})"
+        else:
+            label = name
+        parts = [f"{label}: {toggle.status}"]
         if toggle.status == "active":
             if toggle.goal_status == "set" and toggle.goal_value:
                 parts.append(f"goal=set {toggle.goal_value}")

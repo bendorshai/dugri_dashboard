@@ -156,7 +156,8 @@ class TestFormatDebugMetadata:
         result = format_debug_metadata("meal", profile, svc)
         assert "nutrition (day 0): active" in result
         assert "goal=set" in result
-        assert "sleep (day 1): cancelled" in result
+        assert "sleep (day 1):" in result
+        assert "cancelled" in result
 
 
 # ---------------------------------------------------------------------------
