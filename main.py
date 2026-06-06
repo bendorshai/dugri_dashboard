@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "5.0.0"
-VERSION_NOTES = "self-knowledge: help answers use dugri-self-knowledge.md + conversation history, knowledge gaps logged to feature_requests"
+VERSION = "5.1.0"
+VERSION_NOTES = "classifier prompt hardening: fix bare 'laredet' misroute, tighten none during active flows, clarify sharp vs soft refusal"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

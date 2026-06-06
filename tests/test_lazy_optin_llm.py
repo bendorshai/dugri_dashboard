@@ -867,6 +867,21 @@ class TestNutritionWeightGoal:
         )
         assert result.type == "conversation_reply"
 
+    def test_bare_laredet(self):
+        """User says just 'לרדת' (to lose) - the exact word from the bot's
+        options. Regression: gpt-4o-mini misclassified this as toggle_cancel."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לרדת",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", BODY_STATS_ASK),
+                ("user", "גובה 174 משקל 113 גיל 36"),
+                ("bot", "לפני שאחשב - אתה רוצה לרדת, לשמור על המשקל, או לעלות?"),
+            ),
+        )
+        assert result.type == "conversation_reply"
+
     def test_weight_goal_all_ask_variants(self):
         """User answers weight goal with ALL NUTRITION_WEIGHT_GOAL_ASK variants.
 
