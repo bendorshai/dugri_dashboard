@@ -45,6 +45,11 @@ async def send_long_text(message, text: str, reply_markup=None) -> None:
         text = text[split_at:].lstrip("\n")
 
 
+TOGGLE_GATE_DAYS_MAP = {
+    "nutrition": 0, "sleep": 1, "eating_window": 4, "workouts": 4, "self_care": 4,
+}
+
+
 def format_debug_metadata(
     classification_type: str | None,
     profile: User,
@@ -52,12 +57,11 @@ def format_debug_metadata(
     source: str = "handler",
 ) -> str:
     """Format debug metadata block for super debug mode."""
-    lines = ["--- SUPER DEBUG ---"]
+    day_number = toggle_service.get_day_number(profile)
+
+    lines = [f"--- SUPER DEBUG (day {day_number}) ---"]
     lines.append(f"[Source] {source}")
     lines.append(f"[Classification] {classification_type or 'N/A (scheduled)'}")
-
-    day_number = toggle_service.get_day_number(profile)
-    lines.append(f"[Day] {day_number}")
 
     lines.append("[Toggles]")
     toggle_names = ["nutrition", "sleep", "eating_window", "workouts", "self_care", "weekly_summary"]
@@ -65,27 +69,28 @@ def format_debug_metadata(
         toggle = getattr(profile.toggles, name, None)
         if not toggle:
             continue
-        parts = [f"  {name}: {toggle.status}"]
+        gate = TOGGLE_GATE_DAYS_MAP.get(name, "")
+        gate_str = f" (day {gate})" if gate != "" else ""
+        parts = [f"{name}{gate_str}: {toggle.status}"]
         if toggle.status == "active":
             if toggle.goal_status == "set" and toggle.goal_value:
                 parts.append(f"goal=set {toggle.goal_value}")
             elif toggle.goal_status == "pending" and toggle.goal_offered_at:
-                parts.append("goal=pending (offered, awaiting value)")
+                parts.append("goal pending (offered, awaiting value)")
             elif toggle.goal_status == "pending":
-                parts.append("goal=pending (not yet offered)")
+                parts.append("goal pending (not yet offered)")
             elif toggle.goal_status == "declined":
-                parts.append("goal=declined")
+                parts.append("goal declined")
             elif toggle.goal_status == "remind":
                 remind = toggle.goal_remind_at.strftime("%Y-%m-%d") if toggle.goal_remind_at else "?"
-                parts.append(f"goal=remind ({remind})")
+                parts.append(f"goal remind ({remind})")
             elif toggle.goal_status == "remind_pending":
-                parts.append("goal=remind_pending")
+                parts.append("goal remind_pending")
         elif toggle.status == "dormant":
             if toggle.revealed_at:
                 parts.append("revealed, waiting for accept")
             else:
-                gate = dict(nutrition=0, sleep=1, eating_window=4, workouts=4, self_care=4).get(name, "?")
-                parts.append(f"not revealed (gate: day {gate}, current: day {day_number})")
+                parts.append("not revealed")
         lines.append(", ".join(parts))
 
     next_step = toggle_service.predict_next_step(profile)

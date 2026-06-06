@@ -208,7 +208,6 @@ class ToggleService:
         day_number = self.get_day_number(profile)
         anchor_day_names = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri", 5: "Sat", 6: "Sun"}
 
-        # Check toggles in reveal order
         reveal_order = [
             ("nutrition", 0, None),
             ("sleep", 1, None),
@@ -222,30 +221,31 @@ class ToggleService:
             if toggle.status == "cancelled":
                 continue
 
-            # Dormant, not yet revealed - predict when reveal will happen
             if toggle.status == "dormant" and toggle.revealed_at is None:
                 days_until = max(0, gate_days - day_number)
-                anchor_str = f", {anchor_day_names.get(anchor_day, '?')} only" if anchor_day is not None else ""
                 if days_until > 0:
-                    return f"in {days_until}d: reveal {toggle_name} (gate={gate_days}{anchor_str})"
+                    if anchor_day is not None:
+                        return f"reveal {toggle_name} - in {days_until}d, {anchor_day_names[anchor_day]} only"
+                    return f"reveal {toggle_name} - in {days_until}d"
                 if anchor_day is not None:
-                    return f"next {anchor_day_names[anchor_day]}: reveal {toggle_name}"
-                return f"now: reveal {toggle_name}"
+                    return f"reveal {toggle_name} - next {anchor_day_names[anchor_day]}"
+                # gate=0 means after next meal (nutrition)
+                if gate_days == 0:
+                    return f"reveal {toggle_name} - after next meal"
+                return f"reveal {toggle_name} - ready now"
 
-            # Dormant but revealed - waiting for user to accept
             if toggle.status == "dormant" and toggle.revealed_at is not None:
-                return f"waiting: user to accept {toggle_name}"
+                return f"waiting for user to accept {toggle_name}"
 
-            # Active with goal flow in progress
             if toggle.status == "active":
                 if toggle.goal_status == "pending" and toggle.goal_offered_at:
-                    return f"waiting: user to set {toggle_name} goal"
+                    return f"waiting for user to set {toggle_name} goal"
                 if toggle.goal_status == "pending" and not toggle.goal_offered_at:
-                    return f"next hook: offer {toggle_name} goal"
+                    return f"offer {toggle_name} goal - next hook"
                 if toggle.goal_status == "remind_pending":
-                    return f"waiting: user to decide on {toggle_name} goal reminder"
+                    return f"waiting for user to decide on {toggle_name} goal reminder"
                 if toggle.goal_status == "remind" and toggle.goal_remind_at:
                     remind_date = toggle.goal_remind_at.strftime("%Y-%m-%d")
-                    return f"on {remind_date}: remind {toggle_name} goal"
+                    return f"remind {toggle_name} goal - on {remind_date}"
 
         return "all toggles resolved"

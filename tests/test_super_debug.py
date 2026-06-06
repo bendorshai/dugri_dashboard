@@ -35,12 +35,12 @@ def _make_toggle_service() -> ToggleService:
 # ---------------------------------------------------------------------------
 
 class TestPredictNextStep:
-    def test_day_0_predicts_nutrition_reveal(self):
+    def test_day_0_predicts_nutrition_after_next_meal(self):
         profile = _make_profile(trial_started_at=datetime.now(timezone.utc))
         svc = _make_toggle_service()
         result = svc.predict_next_step(profile)
-        assert "nutrition" in result
-        assert "reveal" in result
+        assert "reveal nutrition" in result
+        assert "after next meal" in result
 
     def test_day_2_predicts_eating_window(self):
         """Day 2: nutrition + sleep past gate, eating_window is next (gate=4)."""
@@ -54,8 +54,8 @@ class TestPredictNextStep:
         profile.toggles.sleep.goal_status = "set"
         svc = _make_toggle_service()
         result = svc.predict_next_step(profile)
-        assert "eating_window" in result
-        assert "2d" in result  # 4 - 2 = 2 days
+        assert "reveal eating_window" in result
+        assert "in 2d" in result
 
     def test_all_active_goals_set(self):
         profile = _make_profile(
@@ -87,8 +87,7 @@ class TestPredictNextStep:
         profile.toggles.nutrition.goal_offered_at = datetime.now(timezone.utc)
         svc = _make_toggle_service()
         result = svc.predict_next_step(profile)
-        assert "waiting" in result
-        assert "nutrition goal" in result
+        assert "waiting for user to set nutrition goal" in result
 
     def test_goal_remind_shows_date(self):
         remind_date = datetime(2026, 6, 15, tzinfo=timezone.utc)
@@ -134,10 +133,9 @@ class TestFormatDebugMetadata:
         profile = _make_profile()
         svc = _make_toggle_service()
         result = format_debug_metadata("meal", profile, svc)
-        assert "--- SUPER DEBUG ---" in result
+        assert "--- SUPER DEBUG (day" in result
         assert "[Source] handler" in result
         assert "[Classification] meal" in result
-        assert "[Day]" in result
         assert "[Toggles]" in result
         assert "[Next]" in result
 
@@ -156,9 +154,9 @@ class TestFormatDebugMetadata:
         profile.toggles.sleep.status = "cancelled"
         svc = _make_toggle_service()
         result = format_debug_metadata("meal", profile, svc)
-        assert "nutrition: active" in result
+        assert "nutrition (day 0): active" in result
         assert "goal=set" in result
-        assert "sleep: cancelled" in result
+        assert "sleep (day 1): cancelled" in result
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +184,7 @@ class TestAppendDebugGating:
         profile = _make_profile(telegram_user_id=999)
         h.user_repo.get.return_value = profile
         result = h._append_debug(999, "hello")
-        assert "--- SUPER DEBUG ---" in result
+        assert "--- SUPER DEBUG (day" in result
         assert result.startswith("hello\n\n")
 
     @patch("constants.SUPER_DEBUG", True)
