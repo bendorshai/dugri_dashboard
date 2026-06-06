@@ -99,10 +99,11 @@ class TestMessageRouterService:
         assert "משהו לעצמי" in result.response_text
 
     def test_route_help(self):
+        from services.help_service import HelpResponse
         router, _, _, help_svc = self._make_router()
-        help_svc.answer.return_value = "דוגרי מחשב קלוריות..."
+        help_svc.answer.return_value = HelpResponse(response_text="דוגרי מחשב קלוריות...")
         result = router.route_help("איך אתה עובד?")
-        help_svc.answer.assert_called_once_with("איך אתה עובד?")
+        help_svc.answer.assert_called_once_with("איך אתה עובד?", recent_messages=None)
         assert result.response_text == "דוגרי מחשב קלוריות..."
 
     def test_route_answer_question(self):

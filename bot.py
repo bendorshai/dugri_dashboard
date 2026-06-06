@@ -94,6 +94,7 @@ def create_bot(
     self_care_repo=None,
     hook_schedule_store=None,
     landing_page_url: str = "https://www.dugri.life",
+    feature_request_repo=None,
 ) -> Application:
     app = Application.builder().token(token).build()
 
@@ -105,10 +106,14 @@ def create_bot(
     # Message router (if habit repos are provided)
     message_router = None
     if sleep_repo and workout_repo and self_care_repo:
+        from pathlib import Path
+        knowledge_path = Path(__file__).parent / "knowledge" / "dugri-self-knowledge.md"
         habit_service = HabitService(sleep_repo, workout_repo, self_care_repo)
         qa_service = QaService(analyzer, food_repo)
-        help_service = HelpService(analyzer)
-        message_router = MessageRouterService(habit_service, qa_service, help_service)
+        help_service = HelpService(analyzer, knowledge_path=knowledge_path)
+        message_router = MessageRouterService(
+            habit_service, qa_service, help_service, feature_request_repo,
+        )
 
     trial_service = TrialService(user_repo, landing_page_url)
     feedback_service = FeedbackService(

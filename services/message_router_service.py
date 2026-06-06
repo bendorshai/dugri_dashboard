@@ -10,11 +10,14 @@ message_router_service.py — מנתב הודעות מסווגות ל-service ה
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from services.habit_service import HabitService
 from services.qa_service import QaService
 from services.help_service import HelpService
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,10 +32,12 @@ class MessageRouterService:
         habit_service: HabitService,
         qa_service: QaService,
         help_service: HelpService,
+        feature_request_repo=None,
     ):
         self._habit = habit_service
         self._qa = qa_service
         self._help = help_service
+        self._feature_request_repo = feature_request_repo
 
     def route_sleep(
         self, telegram_user_id: int, sleep_time: str, date: str,
@@ -61,9 +66,23 @@ class MessageRouterService:
             light_confirmation=True,
         )
 
-    def route_help(self, question_text: str) -> RouteResult:
-        answer = self._help.answer(question_text)
-        return RouteResult(response_text=answer)
+    def route_help(
+        self,
+        question_text: str,
+        recent_messages: list[dict] | None = None,
+        telegram_user_id: int | None = None,
+    ) -> RouteResult:
+        result = self._help.answer(question_text, recent_messages=recent_messages)
+
+        if result.knowledge_gap and self._feature_request_repo and telegram_user_id:
+            try:
+                self._feature_request_repo.log(
+                    telegram_user_id, question_text, result.response_text,
+                )
+            except Exception:
+                logger.exception("Failed to log feature request")
+
+        return RouteResult(response_text=result.response_text)
 
     def route_answer_question(
         self, telegram_user_id: int, question_text: str,

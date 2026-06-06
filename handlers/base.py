@@ -631,8 +631,13 @@ class HealthHandlers:
             return
 
         if classification.type == "help" and self.message_router:
-            result = self.message_router.route_help(classification.question_text or message.text)
+            result = self.message_router.route_help(
+                classification.question_text or message.text,
+                recent_messages=recent_messages,
+                telegram_user_id=tid,
+            )
             await send_long_text(message, result.response_text, reply_markup=make_daily_summary_keyboard())
+            self._save_bot_message(tid, result.response_text)
             return
 
         if classification.type == "answer_question" and self.message_router:

@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "4.9.0"
-VERSION_NOTES = "smart toggle_cancel: sharp/soft refusal, goal skip without cancel, remind flow"
+VERSION = "5.0.0"
+VERSION_NOTES = "self-knowledge: help answers use dugri-self-knowledge.md + conversation history, knowledge gaps logged to feature_requests"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -91,6 +91,9 @@ def main():
     self_care_repo = SelfCareRepository(db["self_care_logs"])
     hook_schedule_store = HookScheduleStore(db["hook_schedule"])
 
+    from repositories.feature_request_repository import FeatureRequestRepository
+    feature_request_repo = FeatureRequestRepository(db["feature_requests"])
+
     # Services
     eating_day_service = EatingDayService(food_repo)
 
@@ -115,6 +118,7 @@ def main():
         self_care_repo=self_care_repo,
         hook_schedule_store=hook_schedule_store,
         landing_page_url=landing_page_url,
+        feature_request_repo=feature_request_repo,
     )
 
     # Startup notification to admin
