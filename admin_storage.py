@@ -75,6 +75,56 @@ class AdminStorage:
         self._workouts = self._db["workout_logs"]
         self._self_care = self._db["self_care_logs"]
         self._errors = self._db["error_logs"]
+        self._feature_requests = self._db["feature_requests"]
+
+    # -- Feature Requests --
+
+    def get_feature_requests(self) -> list[dict]:
+        def _fetch():
+            docs = list(
+                self._feature_requests
+                .find()
+                .sort("timestamp", -1)
+                .limit(200)
+            )
+
+            # Enrich with user name
+            tids = list({d["telegram_user_id"] for d in docs if d.get("telegram_user_id")})
+            users_by_tid = {}
+            if tids:
+                for user in self._users.find(
+                    {"telegram_user_id": {"$in": tids}},
+                    {"_id": 1, "name": 1, "telegram_user_id": 1},
+                ):
+                    users_by_tid[user["telegram_user_id"]] = user
+
+            result = []
+            for d in docs:
+                tid = d.get("telegram_user_id")
+                user = users_by_tid.get(tid, {})
+                result.append({
+                    "timestamp": d.get("timestamp"),
+                    "telegram_user_id": tid,
+                    "user_name": user.get("name") or user.get("_id") or str(tid),
+                    "question_text": d.get("question_text", ""),
+                    "bot_response": d.get("bot_response", ""),
+                })
+            return result
+
+        return _cached("feature_requests", _fetch)
+
+    def get_feature_request_stats(self) -> dict:
+        def _fetch():
+            total = self._feature_requests.count_documents({})
+            pipeline = [
+                {"$group": {"_id": "$telegram_user_id"}},
+                {"$count": "n"},
+            ]
+            unique_result = list(self._feature_requests.aggregate(pipeline))
+            unique_users = unique_result[0]["n"] if unique_result else 0
+            return {"total": total, "unique_users": unique_users}
+
+        return _cached("feature_request_stats", _fetch)
 
     # -- Error Analytics --
 

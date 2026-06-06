@@ -1,0 +1,102 @@
+{% extends "dashboard/layout.html" %}
+
+{% block title %}Dugri — Feature Requests{% endblock %}
+
+{% block dashboard_content %}
+<div class="admin-dashboard">
+
+    <!-- Admin Sub-tabs -->
+    <div class="admin-tabs">
+        <a href="{{ url_for('admin.dashboard') }}" class="admin-tab">Dashboard</a>
+        <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
+        <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab active">Feature Requests</a>
+    </div>
+
+    <!-- KPI Cards -->
+    <section class="admin-kpis" style="grid-template-columns: 1fr 1fr;">
+        <div class="kpi-card">
+            <span class="kpi-label">Total Requests</span>
+            <span class="kpi-value">{{ total_requests }}</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Unique Users</span>
+            <span class="kpi-value">{{ unique_users }}</span>
+        </div>
+    </section>
+
+    <!-- Feature Requests Table -->
+    <section class="admin-leads" x-data="{ expanded: null }">
+        <h2>Knowledge Gaps</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
+            Questions Dugri couldn't fully answer from its self-knowledge doc.
+        </p>
+        {% if feature_requests %}
+        <table class="leads-table error-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>User</th>
+                    <th>Question</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fr in feature_requests %}
+                <tr class="error-row" @click="expanded = expanded === {{ loop.index0 }} ? null : {{ loop.index0 }}" style="cursor: pointer;">
+                    <td>{{ fr.timestamp.strftime('%Y-%m-%d %H:%M') if fr.timestamp and fr.timestamp.strftime else (fr.timestamp[:16] if fr.timestamp is string else '-') }}</td>
+                    <td>{{ fr.user_name }}</td>
+                    <td class="error-msg-cell" title="{{ fr.question_text }}">{{ fr.question_text[:80] }}{% if fr.question_text|length > 80 %}...{% endif %}</td>
+                    <td class="lead-actions" @click.stop>
+                        <button class="btn-copy-msg" onclick='copyFeatureRequest({{ loop.index0 }})'>Copy</button>
+                    </td>
+                </tr>
+                <tr x-show="expanded === {{ loop.index0 }}" x-transition>
+                    <td colspan="4" class="error-expand-cell">
+                        <div class="error-meta">
+                            <strong>Bot response:</strong>
+                        </div>
+                        <pre class="error-traceback" style="white-space: pre-wrap; direction: rtl; text-align: right;">{{ fr.bot_response }}</pre>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="leads-empty">No feature requests yet.</p>
+        {% endif %}
+    </section>
+
+</div>
+
+<script>
+const featureRequests = {{ feature_requests | tojson }};
+
+function copyFeatureRequest(index) {
+    const fr = featureRequests[index];
+    const text = [
+        'User: ' + fr.user_name,
+        'Question: ' + fr.question_text,
+        'Bot Response: ' + fr.bot_response,
+        'Date: ' + (fr.timestamp || '-'),
+    ].join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied!');
+    });
+}
+
+function showToast(msg) {
+    let toast = document.getElementById('copyToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'copyToast';
+        toast.className = 'copy-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+}
+</script>
+
+<div id="copyToast" class="copy-toast">Copied!</div>
+{% endblock %}

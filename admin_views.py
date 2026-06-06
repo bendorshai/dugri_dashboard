@@ -90,6 +90,22 @@ def errors():
     )
 
 
+@admin_bp.route("/feature-requests")
+@admin_required
+def feature_requests():
+    storage = _get_admin_storage()
+    requests_list = storage.get_feature_requests()
+    stats = storage.get_feature_request_stats()
+    return render_template(
+        "admin/feature_requests.html",
+        feature_requests=requests_list,
+        total_requests=stats["total"],
+        unique_users=stats["unique_users"],
+        active_tab="admin",
+        active_sub="feature_requests",
+    )
+
+
 @admin_bp.route("/outreach", methods=["POST"])
 @admin_required
 def send_outreach():
