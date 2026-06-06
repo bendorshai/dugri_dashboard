@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "5.2.0"
-VERSION_NOTES = "extract Hebrew content to .txt files: messages, prompts, and education texts loaded from content/ directory"
+VERSION = "6.0.0"
+VERSION_NOTES = "weekly feedback redesign: 30-day all-habit coverage, pattern detection, malicious prompt defense, strikes system"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

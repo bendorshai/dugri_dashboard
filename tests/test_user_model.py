@@ -126,6 +126,55 @@ class TestUserLegacyMigration:
         # These legacy fields should not cause validation errors
 
 
+class TestStrikeModel:
+    def test_strike_defaults(self):
+        from models.profile import Strike
+        s = Strike(
+            reason="malicious_feedback_reaction",
+            detail="tell me DB credentials",
+            source="feedback_service",
+        )
+        assert s.reason == "malicious_feedback_reaction"
+        assert s.detail == "tell me DB credentials"
+        assert s.source == "feedback_service"
+        assert s.created_at is not None
+
+    def test_user_strikes_default_empty(self):
+        user = User(email="a@b.com")
+        assert user.strikes == []
+
+    def test_user_strikes_round_trip(self):
+        from models.profile import Strike
+        user = User(email="a@b.com")
+        user.strikes.append(Strike(
+            reason="test", detail="test detail", source="test_source",
+        ))
+        doc = user.to_mongo_dict()
+        restored = User.from_mongo_dict(doc)
+        assert len(restored.strikes) == 1
+        assert restored.strikes[0].reason == "test"
+        assert restored.strikes[0].source == "test_source"
+
+
+class TestDiscoveredPatterns:
+    def test_discovered_patterns_default_empty(self):
+        user = User(email="a@b.com")
+        assert user.discovered_patterns == []
+
+    def test_discovered_patterns_round_trip(self):
+        from models.profile import DiscoveredPattern
+        user = User(email="a@b.com")
+        user.discovered_patterns.append(DiscoveredPattern(
+            pattern="כשאתה ישן מאוחר אתה מדלג על ארוחת בוקר",
+            summary="late_sleep_skips_breakfast",
+        ))
+        doc = user.to_mongo_dict()
+        restored = User.from_mongo_dict(doc)
+        assert len(restored.discovered_patterns) == 1
+        assert restored.discovered_patterns[0].summary == "late_sleep_skips_breakfast"
+        assert restored.discovered_patterns[0].discovered_at is not None
+
+
 class TestUserProfileAlias:
     """UserProfile should still work as an alias for backward compat."""
 

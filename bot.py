@@ -118,6 +118,7 @@ def create_bot(
     trial_service = TrialService(user_repo, landing_page_url)
     feedback_service = FeedbackService(
         analyzer, food_repo, user_repo, feedback_repo,
+        sleep_repo, workout_repo, self_care_repo,
     )
 
     h = HealthHandlers(

@@ -64,6 +64,16 @@ class UserRepository(BaseRepository[User]):
         fields["updated_at"] = datetime.now(timezone.utc).isoformat()
         self.update_by_id(email, fields)
 
+    def push_to_list(self, telegram_user_id: int, field: str, item: dict) -> None:
+        """Atomically append an item to a list field."""
+        self._collection.update_one(
+            {"telegram_user_id": telegram_user_id},
+            {
+                "$push": {field: item},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
+            },
+        )
+
     def push_messages(self, telegram_user_id: int, messages: list[dict], max_messages: int = 8) -> None:
         """Atomically append messages and trim to last max_messages."""
         self._collection.update_one(

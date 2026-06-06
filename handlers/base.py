@@ -297,20 +297,6 @@ class HealthHandlers:
                 self._save_bot_message(tid, response)
                 return
 
-        # Feedback reaction: check if recent bot message was feedback
-        if self.feedback_service:
-            recent = self.user_repo.get_recent_messages(tid, 3)
-            for msg in reversed(recent):
-                if msg.get("role") == "bot" and "💬" in msg.get("text", ""):
-                    steering = profile.feedback_steering_prompt if profile else None
-                    response = self.feedback_service.process_reaction(tid, text, steering)
-                    if response:
-                        await message.reply_text(response)
-                        self._save_bot_message(tid, response)
-                        return
-                if msg.get("role") == "user":
-                    break
-
         # Safety net: no route matched - don't silently fail
         logger.warning("conversation_reply matched no route for tid=%d, text=%r", tid, text)
         fallback = "לא הבנתי על מה אתה עונה. אפשר לנסות שוב?"
@@ -685,16 +671,21 @@ class HealthHandlers:
             if self.feedback_service:
                 is_first = self.feedback_service.is_first_feedback(tid)
                 feedback_text = self.feedback_service.give_feedback(
-                    tid, today_str,
-                    self._target_cal(profile),
-                    self._target_prot(profile),
-                    profile.feedback_steering_prompt,
-                    is_first,
+                    tid, today_str, profile, is_first,
                 )
                 await send_long_text(message, feedback_text, reply_markup=make_main_menu_keyboard())
             elif self.message_router:
                 result = self.message_router.route_feedback_request()
                 await message.reply_text(result.response_text, reply_markup=make_main_menu_keyboard())
+            return
+
+        if classification.type == "feedback_reaction":
+            if self.feedback_service:
+                steering = profile.feedback_steering_prompt if profile else None
+                response = self.feedback_service.process_reaction(tid, text, steering)
+                if response:
+                    await message.reply_text(response)
+                    self._save_bot_message(tid, response)
             return
 
         if classification.type == "none":

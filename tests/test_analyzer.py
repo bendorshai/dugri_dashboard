@@ -171,6 +171,27 @@ class TestAnalyzeFoodPhoto:
 
 
 class TestWeeklyFeedback:
+    _SAMPLE_MONTH_STATS = {
+        "raw_entries": {
+            "food": [
+                {"date": "05/06/2026", "time": "08:00", "description": "ביצים",
+                 "calories": 300, "protein": 25, "within_window": True},
+                {"date": "05/06/2026", "time": "13:00", "description": "שניצל",
+                 "calories": 700, "protein": 50, "within_window": True},
+            ],
+        },
+        "summaries": {
+            "food_weekly": [
+                {"days_tracked": 1, "avg_calories": 1000, "avg_protein": 75},
+            ],
+            "focus_week_cal_pct": 50,
+            "focus_week_prot_pct": 50,
+        },
+        "targets": {"calories": 2000, "protein": 150, "sleep_time": None, "workouts_per_week": None},
+        "active_toggles": ["nutrition"],
+        "eating_window": None,
+    }
+
     def test_uses_structured_output(self, analyzer):
         fa, mock_client = analyzer
         expected = WeeklyFeedbackResult(
@@ -182,14 +203,13 @@ class TestWeeklyFeedback:
         mock_client.beta.chat.completions.parse.return_value = mock_response
 
         result = fa.generate_weekly_feedback(
-            week_csv="date,food,cal,prot,window\n05/05,שניצל,400,30,כן",
-            targets={"calories": 2000, "protein": 150},
+            month_stats=self._SAMPLE_MONTH_STATS,
             past_feedbacks=["יפה מאוד!"],
         )
 
         call_args = mock_client.beta.chat.completions.parse.call_args
         assert call_args[1]["response_format"] == WeeklyFeedbackResult
-        assert "שניצל" in call_args[1]["messages"][1]["content"]
+        assert "ביצים" in call_args[1]["messages"][1]["content"]
         assert "יפה מאוד!" in call_args[1]["messages"][1]["content"]
         assert result["feedback_text"] == "כל הכבוד!"
 
@@ -198,8 +218,7 @@ class TestWeeklyFeedback:
         mock_client.beta.chat.completions.parse.side_effect = Exception("API error")
 
         result = fa.generate_weekly_feedback(
-            week_csv="data",
-            targets={"calories": 2000, "protein": 150},
+            month_stats=self._SAMPLE_MONTH_STATS,
             past_feedbacks=[],
         )
         assert result is None
@@ -212,11 +231,53 @@ class TestWeeklyFeedback:
         mock_client.beta.chat.completions.parse.return_value = mock_response
 
         result = fa.generate_weekly_feedback(
-            week_csv="data",
-            targets={"calories": 2000, "protein": 150},
+            month_stats=self._SAMPLE_MONTH_STATS,
             past_feedbacks=[],
         )
         assert result is None
+
+    def test_uses_gpt4o_model(self, analyzer):
+        fa, mock_client = analyzer
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = WeeklyFeedbackResult(feedback_text="x")
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        fa.generate_weekly_feedback(month_stats=self._SAMPLE_MONTH_STATS, past_feedbacks=[])
+
+        call_args = mock_client.beta.chat.completions.parse.call_args
+        assert call_args[1]["model"] == "gpt-4o"
+
+    def test_uses_enhanced_prompt(self, analyzer):
+        fa, mock_client = analyzer
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = WeeklyFeedbackResult(feedback_text="x")
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        fa.generate_weekly_feedback(month_stats=self._SAMPLE_MONTH_STATS, past_feedbacks=[])
+
+        call_args = mock_client.beta.chat.completions.parse.call_args
+        system_content = call_args[1]["messages"][0]["content"]
+        assert "כל המספרים כבר מחושבים" in system_content
+
+    def test_returns_discovered_pattern(self, analyzer):
+        fa, mock_client = analyzer
+        expected = WeeklyFeedbackResult(
+            feedback_text="x",
+            discovered_pattern="כשאתה ישן מאוחר אתה מדלג",
+            pattern_summary="late_sleep_skips_breakfast",
+        )
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.parsed = expected
+        mock_client.beta.chat.completions.parse.return_value = mock_response
+
+        result = fa.generate_weekly_feedback(
+            month_stats=self._SAMPLE_MONTH_STATS, past_feedbacks=[],
+        )
+        assert result["discovered_pattern"] == "כשאתה ישן מאוחר אתה מדלג"
+        assert result["pattern_summary"] == "late_sleep_skips_breakfast"
 
 
 class TestMealSuggestions:

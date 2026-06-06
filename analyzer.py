@@ -75,6 +75,8 @@ class BulkCorrectionResult(BaseModel):
 
 class WeeklyFeedbackResult(BaseModel):
     feedback_text: str
+    discovered_pattern: str | None = None
+    pattern_summary: str | None = None
 
 
 class HabitEntry(BaseModel):
@@ -95,6 +97,7 @@ class MessageClassification(BaseModel):
     type: Literal[
         "meal", "correction", "sleep", "workout", "self_care",
         "help", "answer_question", "feedback_request",
+        "feedback_reaction",
         "toggle_cancel", "toggle_activate",
         "conversation_reply", "name_declaration",
         "none",
@@ -352,38 +355,31 @@ class FoodAnalyzer:
 
     def generate_weekly_feedback(
         self,
-        week_stats: dict,
+        month_stats: dict,
         past_feedbacks: list[str],
+        past_patterns: list[str] | None = None,
+        steering_prompt: str | None = None,
     ) -> dict | None:
+        import json
+
         feedbacks_block = "\n".join(f"- {f}" for f in past_feedbacks) if past_feedbacks else "(אין משובים קודמים)"
-
-        # Build daily breakdown from pre-computed summaries
-        daily_lines = []
-        for day in week_stats.get("daily_summaries", []):
-            daily_lines.append(
-                f"- יום {day['day_name']} ({day['date']}): "
-                f"{day['total_calories']} קק\"ל, {day['total_protein']}g חלבון "
-                f"({day['meal_count']} ארוחות)"
-            )
-        daily_block = "\n".join(daily_lines) if daily_lines else "(אין נתונים)"
-
-        # Build percentage line
-        pct_parts = []
-        if week_stats.get("cal_vs_target_pct") is not None:
-            pct_parts.append(f"{week_stats['cal_vs_target_pct']}% מיעד הקלוריות")
-        if week_stats.get("prot_vs_target_pct") is not None:
-            pct_parts.append(f"{week_stats['prot_vs_target_pct']}% מיעד החלבון")
-        pct_line = ", ".join(pct_parts) if pct_parts else "אין יעדים מוגדרים"
+        patterns_block = "\n".join(f"- {p}" for p in (past_patterns or [])) if past_patterns else "(אין דפוסים קודמים)"
+        steering_block = steering_prompt or "(אין היגוי - פידבק ראשון)"
 
         user_msg = (
-            f"סיכום שבועי מחושב:\n\n"
-            f"ממוצע יומי: {week_stats.get('avg_calories', 0)} קלוריות, "
-            f"{week_stats.get('avg_protein', 0)}g חלבון ({pct_line})\n"
-            f"ימים עם תיעוד: {week_stats.get('days_tracked', 0)} מתוך {week_stats.get('days_total', 7)}\n"
-            f"יעדים: {week_stats.get('target_calories', 0)} קלוריות, "
-            f"{week_stats.get('target_protein', 0)}g חלבון\n\n"
-            f"פירוט יומי:\n{daily_block}\n\n"
-            f"המשובים האחרונים שלך:\n{feedbacks_block}"
+            f"## נתונים גולמיים (30 יום)\n"
+            f"{json.dumps(month_stats.get('raw_entries', {}), ensure_ascii=False, indent=1)}\n\n"
+            f"## סיכומים מחושבים\n"
+            f"{json.dumps(month_stats.get('summaries', {}), ensure_ascii=False, indent=1)}\n\n"
+            f"## יעדים\n"
+            f"{json.dumps(month_stats.get('targets', {}), ensure_ascii=False)}\n\n"
+            f"## מתגים פעילים\n"
+            f"{', '.join(month_stats.get('active_toggles', []))}\n\n"
+            f"## חלון אכילה\n"
+            f"{json.dumps(month_stats.get('eating_window'), ensure_ascii=False) if month_stats.get('eating_window') else 'לא מוגדר'}\n\n"
+            f"## המשובים האחרונים שלך\n{feedbacks_block}\n\n"
+            f"## דפוסים שכבר גילינו\n{patterns_block}\n\n"
+            f"## היגוי משתמש\n{steering_block}"
         )
 
         try:
@@ -402,6 +398,8 @@ class FoodAnalyzer:
                 return None
             return {
                 "feedback_text": result.feedback_text,
+                "discovered_pattern": result.discovered_pattern,
+                "pattern_summary": result.pattern_summary,
             }
         except Exception:
             logger.exception("GPT weekly feedback failed")

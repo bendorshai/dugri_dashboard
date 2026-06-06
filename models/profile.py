@@ -49,6 +49,21 @@ class Targets(BaseModel):
         return v
 
 
+class Strike(BaseModel):
+    """A user strike for malicious behavior. General-purpose - any service can add."""
+    reason: str
+    detail: str
+    source: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class DiscoveredPattern(BaseModel):
+    """A behavioral pattern discovered during weekly feedback."""
+    pattern: str          # Hebrew description shown to user
+    summary: str          # English key for dedup (e.g. "late_sleep_skips_breakfast")
+    discovered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class HabitState(BaseModel):
     """Legacy habit state — kept for backward compatibility during migration."""
     state: Literal["offered", "active", "declined", "pending"] = "pending"
@@ -132,6 +147,8 @@ class User(BaseModel):
 
     feedback_steering_prompt: str | None = None
     last_feedback_offered_at: datetime | None = None
+    discovered_patterns: list[DiscoveredPattern] = Field(default_factory=list)
+    strikes: list[Strike] = Field(default_factory=list)
 
     subscription_status: str = "trial_pending"
     trial_started_at: datetime | None = None
