@@ -17,6 +17,7 @@ import random
 from datetime import datetime, timezone
 
 from constants import (
+    HOOK_CONFIG,
     POLL_INTERVAL_SECONDS,
     EATING_WINDOW_WARN_MINUTES,
     SLEEP_HOOK_WINDOW,

@@ -21,9 +21,9 @@ mock_ext = sys.modules["telegram.ext"]
 mock_ext.ContextTypes = MagicMock()
 mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
-from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult, CorrectionFoodItem
+from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult, CorrectionFoodItem, MessageClassification
 from keyboards import format_daily_status
-from models.profile import UserProfile, EatingWindow, Targets
+from models.profile import UserProfile, EatingWindow, Targets, ToggleState, Toggles
 from models.food import FoodEntry
 
 
@@ -648,3 +648,190 @@ class TestFoodAgainCallback:
         call_text = context.bot.send_message.call_args[1]["text"]
         assert "חזה עוף 200 גרם" in call_text
         assert "350" in call_text
+
+
+# ============================================================================
+# TOGGLE CANCEL HANDLER - context-aware refusal behavior
+# ============================================================================
+
+class TestToggleCancelHandler:
+    """Tests for the rewritten toggle_cancel handler.
+
+    The handler must distinguish:
+    - Sharp refusal during offer -> ask remind (don't activate)
+    - Soft refusal during offer -> softer message + ask remind
+    - Sharp refusal during goal-setting -> keep habit active, skip goal, ask remind
+    - Soft refusal during goal-setting -> keep active, per-habit soft message, ask remind
+    - Decline during remind_pending -> permanent decline (GOAL_DECLINED_FOREVER)
+    - Cancel active habit (no flow) -> full cancel (EXIT_DOOR_CANCELLED)
+    """
+
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        h.user_repo = MagicMock()
+        h.toggle_service = MagicMock()
+        h.goal_service = MagicMock()
+        h.feedback_service = None
+        h.message_router = None
+        h.trial_service = None
+        h.onboarding_service = None
+        h.eating_day_svc = MagicMock()
+        h.food_repo = MagicMock()
+        h.analyzer = None
+        h.landing_page_url = "https://test.com"
+        h.user_repo.get_recent_messages.return_value = []
+        h.user_repo.push_messages = MagicMock()
+        return h
+
+    def _make_classification(self, toggle_name=None, refusal_tone="sharp"):
+        return MessageClassification(
+            type="toggle_cancel",
+            toggle_name=toggle_name,
+            refusal_tone=refusal_tone,
+        )
+
+    # -- Sharp refusal during OFFER (dormant + revealed) --
+
+    @pytest.mark.asyncio
+    async def test_sharp_cancel_during_offer_asks_remind(self):
+        """Sharp refusal of offered toggle -> ask_remind, NOT cancel_toggle."""
+        h = self._make_handler()
+        profile = _make_profile()
+        profile.toggles.sleep.status = "dormant"
+        profile.toggles.sleep.revealed_at = "2026-06-01T00:00:00+00:00"
+
+        h.goal_service.ask_remind.return_value = "בסדר. רוצה שאזכיר לך בעתיד?"
+
+        message = AsyncMock()
+        message.text = "לא רוצה"
+        context = MagicMock()
+        context.chat_data = {}
+
+        classification = self._make_classification(toggle_name="sleep", refusal_tone="sharp")
+        await h._handle_toggle_cancel(message, context, 123, profile, classification)
+
+        h.toggle_service.cancel_toggle.assert_not_called()
+        h.goal_service.ask_remind.assert_called_once_with(123, "sleep")
+
+    # -- Soft refusal during OFFER --
+
+    @pytest.mark.asyncio
+    async def test_soft_cancel_during_offer_asks_remind(self):
+        """Soft refusal of offered toggle -> soft message + ask remind."""
+        h = self._make_handler()
+        profile = _make_profile()
+        profile.toggles.sleep.status = "dormant"
+        profile.toggles.sleep.revealed_at = "2026-06-01T00:00:00+00:00"
+
+        h.goal_service.ask_remind.return_value = "רוצה שאזכיר לך בהמשך?"
+
+        message = AsyncMock()
+        message.text = "לא סגור על זה"
+        context = MagicMock()
+        context.chat_data = {}
+
+        classification = self._make_classification(toggle_name="sleep", refusal_tone="soft")
+        await h._handle_toggle_cancel(message, context, 123, profile, classification)
+
+        h.toggle_service.cancel_toggle.assert_not_called()
+        h.goal_service.ask_remind.assert_called_once_with(123, "sleep")
+
+    # -- Sharp refusal during GOAL SETTING --
+
+    @pytest.mark.asyncio
+    async def test_sharp_cancel_during_goal_keeps_habit_active(self):
+        """Sharp refusal during goal-setting -> keep active, skip goal, ask remind."""
+        h = self._make_handler()
+        profile = _make_profile()
+        profile.toggles.nutrition.status = "active"
+        profile.toggles.nutrition.goal_status = "pending"
+        profile.toggles.nutrition.goal_offered_at = "2026-06-01T00:00:00+00:00"
+
+        h.goal_service.skip_goal.return_value = None
+        h.goal_service.ask_remind.return_value = "רוצה שאזכיר לך בעתיד?"
+
+        message = AsyncMock()
+        message.text = "לא"
+        context = MagicMock()
+        context.chat_data = {}
+
+        classification = self._make_classification(toggle_name="nutrition", refusal_tone="sharp")
+        await h._handle_toggle_cancel(message, context, 123, profile, classification)
+
+        h.toggle_service.cancel_toggle.assert_not_called()
+        h.goal_service.skip_goal.assert_called_once_with(123, "nutrition")
+        h.goal_service.ask_remind.assert_called_once_with(123, "nutrition")
+
+    # -- Soft refusal during GOAL SETTING --
+
+    @pytest.mark.asyncio
+    async def test_soft_cancel_during_goal_keeps_habit_sends_soft_message(self):
+        """Soft refusal during goal-setting -> keep active, soft per-habit message."""
+        h = self._make_handler()
+        profile = _make_profile()
+        profile.toggles.nutrition.status = "active"
+        profile.toggles.nutrition.goal_status = "pending"
+        profile.toggles.nutrition.goal_offered_at = "2026-06-01T00:00:00+00:00"
+
+        h.goal_service.skip_goal.return_value = None
+        h.goal_service.ask_remind.return_value = "רוצה שאזכיר לך בהמשך?"
+
+        message = AsyncMock()
+        message.text = "לא בטוח"
+        context = MagicMock()
+        context.chat_data = {}
+
+        classification = self._make_classification(toggle_name="nutrition", refusal_tone="soft")
+        await h._handle_toggle_cancel(message, context, 123, profile, classification)
+
+        h.toggle_service.cancel_toggle.assert_not_called()
+        h.goal_service.skip_goal.assert_called_once_with(123, "nutrition")
+        # Should have sent a response (soft decline message + remind ask)
+        message.reply_text.assert_called()
+
+    # -- Decline during REMIND PENDING --
+
+    @pytest.mark.asyncio
+    async def test_cancel_during_remind_pending_uses_declined_forever(self):
+        """Decline reminder -> permanent decline with GOAL_DECLINED_FOREVER."""
+        import messages as M
+        h = self._make_handler()
+        profile = _make_profile()
+        profile.toggles.nutrition.status = "dormant"
+        profile.toggles.nutrition.goal_status = "remind_pending"
+
+        message = AsyncMock()
+        message.text = "לא, תעזוב"
+        context = MagicMock()
+        context.chat_data = {}
+
+        classification = self._make_classification(toggle_name="nutrition", refusal_tone="sharp")
+        await h._handle_toggle_cancel(message, context, 123, profile, classification)
+
+        h.toggle_service.cancel_toggle.assert_called_once_with(123, "nutrition")
+        sent_text = message.reply_text.call_args[0][0]
+        assert sent_text in M.GOAL_DECLINED_FOREVER
+
+    # -- Cancel ACTIVE habit (no flow) --
+
+    @pytest.mark.asyncio
+    async def test_cancel_active_habit_full_cancel(self):
+        """Cancel an active habit with no pending goal flow -> full cancel."""
+        import messages as M
+        h = self._make_handler()
+        profile = _make_profile()
+        profile.toggles.sleep.status = "active"
+        profile.toggles.sleep.goal_status = "set"
+
+        message = AsyncMock()
+        message.text = "תפסיק לשאול אותי על שינה"
+        context = MagicMock()
+        context.chat_data = {}
+
+        classification = self._make_classification(toggle_name="sleep", refusal_tone="sharp")
+        await h._handle_toggle_cancel(message, context, 123, profile, classification)
+
+        h.toggle_service.cancel_toggle.assert_called_once_with(123, "sleep")
+        sent_text = message.reply_text.call_args[0][0]
+        assert sent_text == M.EXIT_DOOR_CANCELLED

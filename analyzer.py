@@ -109,6 +109,7 @@ class MessageClassification(BaseModel):
     toggle_name: str | None = None
     declared_name: str | None = None
     freeform_response: str | None = None
+    refusal_tone: Literal["sharp", "soft"] | None = None
 
 
 from prompts import (

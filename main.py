@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "4.8.0"
-VERSION_NOTES = "photo analysis: flag unidentified food items + ask for clarification"
+VERSION = "4.9.0"
+VERSION_NOTES = "smart toggle_cancel: sharp/soft refusal, goal skip without cancel, remind flow"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

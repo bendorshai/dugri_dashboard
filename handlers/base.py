@@ -348,6 +348,100 @@ class HealthHandlers:
         return self.goal_service.handle_body_stats(tid, text)
 
     # ------------------------------------------------------------------
+    # Toggle cancel handler (context-aware refusal)
+    # ------------------------------------------------------------------
+
+    async def _handle_toggle_cancel(
+        self, message, context, tid: int, profile: UserProfile, classification,
+    ):
+        """Handle toggle_cancel with context-aware behavior.
+
+        Distinguishes:
+        - Decline during remind_pending -> permanent decline (GOAL_DECLINED_FOREVER)
+        - Decline during goal-setting -> keep habit active, skip goal, ask remind
+        - Decline during offer (not yet activated) -> ask remind
+        - Cancel an active habit (no flow) -> full cancel (EXIT_DOOR_CANCELLED)
+
+        refusal_tone (sharp/soft) affects the message but not the flow.
+        """
+        import messages as M
+        import random
+
+        if not self.toggle_service:
+            return
+
+        toggle_name = classification.toggle_name
+        if not toggle_name:
+            # Infer from offered toggle or active goal-pending toggle
+            for name in ("nutrition", "sleep", "eating_window", "workouts", "self_care"):
+                toggle = getattr(profile.toggles, name, None)
+                if toggle and toggle.revealed_at and toggle.status == "dormant":
+                    toggle_name = name
+                    break
+            if not toggle_name:
+                for name in ("nutrition", "sleep", "eating_window", "workouts"):
+                    toggle = getattr(profile.toggles, name, None)
+                    if toggle and toggle.status == "active" and toggle.goal_status == "pending" and toggle.goal_offered_at:
+                        toggle_name = name
+                        break
+
+        if not toggle_name or toggle_name not in {"sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"}:
+            return
+
+        toggle = getattr(profile.toggles, toggle_name, None)
+        tone = classification.refusal_tone or "sharp"
+
+        # Case 1: Decline during remind_pending -> permanent decline
+        if toggle and toggle.goal_status == "remind_pending":
+            self.toggle_service.cancel_toggle(tid, toggle_name)
+            response = random.choice(M.GOAL_DECLINED_FOREVER)
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return
+
+        # Case 2: Decline during goal-setting (active + goal pending)
+        if toggle and toggle.status == "active" and toggle.goal_status == "pending" and toggle.goal_offered_at:
+            if self.goal_service:
+                self.goal_service.skip_goal(tid, toggle_name)
+
+                # Per-habit soft decline message
+                soft_pools = {
+                    "nutrition": M.GOAL_SOFT_DECLINE_NUTRITION,
+                    "sleep": M.GOAL_SOFT_DECLINE_SLEEP,
+                    "workouts": M.GOAL_SOFT_DECLINE_WORKOUTS,
+                    "eating_window": M.GOAL_SOFT_DECLINE_EATING_WINDOW,
+                }
+                pool = soft_pools.get(toggle_name)
+                if pool:
+                    decline_msg = random.choice(pool)
+                    remind_msg = self.goal_service.ask_remind(tid, toggle_name)
+                    response = decline_msg + "\n\n" + remind_msg
+                else:
+                    response = self.goal_service.ask_remind(tid, toggle_name)
+
+                await message.reply_text(response)
+                self._save_bot_message(tid, response)
+            return
+
+        # Case 3: Decline during offer (dormant + revealed, not yet activated)
+        if toggle and toggle.revealed_at and toggle.status == "dormant":
+            if tone == "soft":
+                response = random.choice(M.OFFER_SOFT_DECLINE)
+            else:
+                response = random.choice(M.OFFER_SHARP_DECLINE)
+            # Set remind_pending so the handler catches the user's next answer
+            if self.goal_service:
+                self.goal_service.ask_remind(tid, toggle_name)
+            await message.reply_text(response)
+            self._save_bot_message(tid, response)
+            return
+
+        # Case 4: Cancel an active habit (no pending flow) -> full cancel
+        self.toggle_service.cancel_toggle(tid, toggle_name)
+        await message.reply_text(M.EXIT_DOOR_CANCELLED)
+        self._save_bot_message(tid, M.EXIT_DOOR_CANCELLED)
+
+    # ------------------------------------------------------------------
     # Command handlers
     # ------------------------------------------------------------------
 
@@ -550,21 +644,7 @@ class HealthHandlers:
             return
 
         if classification.type == "toggle_cancel":
-            import messages as M
-            if self.toggle_service:
-                # Determine which toggle to cancel: from classifier or from offered state
-                toggle_name = classification.toggle_name
-                if not toggle_name:
-                    # Find the most recently offered toggle
-                    for name in ("nutrition", "sleep", "eating_window", "workouts", "self_care"):
-                        toggle = getattr(profile.toggles, name, None)
-                        if toggle and toggle.revealed_at and toggle.status == "dormant":
-                            toggle_name = name
-                            break
-                if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"}:
-                    self.toggle_service.cancel_toggle(tid, toggle_name)
-                    await message.reply_text(M.EXIT_DOOR_CANCELLED)
-                    self._save_bot_message(tid, M.EXIT_DOOR_CANCELLED)
+            await self._handle_toggle_cancel(message, context, tid, profile, classification)
             return
 
         if classification.type == "toggle_activate" and self.toggle_service:

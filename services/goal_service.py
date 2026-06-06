@@ -135,13 +135,29 @@ class GoalService:
         text = random.choice(pool)
         return text
 
-    def _ask_remind(self, tid: int, toggle_name: str) -> str:
-        """Ask if user wants to be reminded later."""
+    def ask_remind(self, tid: int, toggle_name: str) -> str:
+        """Ask if user wants to be reminded later.
+
+        Sets goal_status to remind_pending so the handler knows the user
+        is answering a reminder question on their next message.
+        """
         import messages as M
 
         text = random.choice(M.GOAL_DECLINED_REMIND_ASK)
         self._toggle_service.set_goal_status(tid, toggle_name, "remind_pending")
         return text
+
+    def skip_goal(self, tid: int, toggle_name: str) -> None:
+        """Skip goal without canceling the habit.
+
+        The habit stays active but without a quantitative target.
+        Clears goal_offered_at so the flow doesn't re-trigger.
+        """
+        self._toggle_service.set_goal_status(tid, toggle_name, "declined")
+        self._user_repo.update_fields(tid, {
+            f"toggles.{toggle_name}.goal_offered_at": None,
+            f"toggles.{toggle_name}.goal_value": None,
+        })
 
     # ------------------------------------------------------------------
     # Goal value collection

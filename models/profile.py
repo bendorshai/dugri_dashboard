@@ -86,7 +86,7 @@ class ToggleState(BaseModel):
     consecutive_unanswered: int = 0
 
     # Goal lifecycle
-    goal_status: Literal["pending", "set", "declined", "remind"] = "pending"
+    goal_status: Literal["pending", "set", "declined", "remind", "remind_pending"] = "pending"
     goal_value: dict | None = None
     goal_remind_at: datetime | None = None
     goal_offered_at: datetime | None = None

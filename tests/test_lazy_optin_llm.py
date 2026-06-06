@@ -116,14 +116,22 @@ Skip in CI: pytest -m "not integration"
 # ----------------------------------------------------
 #
 # OFFER STEP (toggle_state = offered, bot's offer visible in history):
-#   - ACCEPT: user cooperates ("יאללה", "אשמח", "בוא", "כן", or any
-#     affirmative in natural Israeli Hebrew)
+#   - ACCEPT: user cooperates ("יאללה", "אשמח", "בוא", "כן", "זורם",
+#     "נו בסדר", "למה לא", "אחלה", "עושים", "טוב", or any affirmative
+#     in natural Israeli Hebrew)
 #     -> classifier: conversation_reply
 #     -> handler: activate toggle, proceed to goal (or done for self-care)
 #
-#   - DECLINE: user refuses ("לא", "עזוב", "לא מעניין")
-#     -> classifier: toggle_cancel
+#   - SHARP DECLINE: clear decisive refusal ("לא", "עזוב", "לא מעניין",
+#     "לא רוצה")
+#     -> classifier: toggle_cancel with refusal_tone="sharp"
 #     -> handler: Dugri asks "want me to remind you later?"
+#     -> toggle moves to remind_pending
+#
+#   - SOFT DECLINE: hesitation/discomfort ("לא סגור על זה", "לא בטוח",
+#     "אולי לא עכשיו", "אולי בהמשך")
+#     -> classifier: toggle_cancel with refusal_tone="soft"
+#     -> handler: softer tone message, asks "want me to remind you?"
 #     -> toggle moves to remind_pending
 #
 #   - GHOST: user doesn't reply, sends food or nothing
@@ -153,7 +161,20 @@ Skip in CI: pytest -m "not integration"
 #
 # GOAL STEP (toggle_state = active_goal_pending, bot's goal question in history):
 #   - ACCEPT: user cooperates -> collect goal value
-#   - DECLINE: user refuses -> toggle moves to remind_pending
+#   - UNCERTAINTY/DEFERENCE: user doesn't know, defers to the bot
+#     ("אין לי שמץ", "מה שאתה אומר", "אני לא יודע", "תחליט אתה")
+#     -> classifier: conversation_reply (not none!)
+#     -> handler: accept the bot's suggestion (same as ACCEPT)
+#   - SHARP DECLINE: clear refusal ("לא", "עזוב", "לא רוצה")
+#     -> classifier: toggle_cancel with refusal_tone="sharp"
+#     -> handler: keep habit active, skip goal, ask "want a reminder?"
+#     -> goal_status moves to remind_pending
+#   - SOFT DECLINE: hesitation/discomfort ("לא סגור על זה", "לא בטוח",
+#     "אולי לא עכשיו")
+#     -> classifier: toggle_cancel with refusal_tone="soft"
+#     -> handler: keep habit active, skip goal, per-habit soft message
+#       ("סבבה, בלי יעד בינתיים..."), ask "want a reminder?"
+#     -> goal_status moves to remind_pending
 #   - GHOST: offer scrolls out of history -> poller sets reminder
 #
 # GOAL VALUE STEP (toggle_state = active_goal_pending, bot asked for value):
@@ -164,7 +185,8 @@ Skip in CI: pytest -m "not integration"
 #
 # REMIND STEP (toggle_state = remind_pending, "want me to remind you?" in history):
 #   - ACCEPT REMINDER: conversation_reply -> set reminder, done
-#   - DECLINE REMINDER: toggle_cancel -> cancelled, never ask again
+#   - DECLINE REMINDER: toggle_cancel -> permanently declined
+#     -> handler: sends GOAL_DECLINED_FOREVER message, never asks again
 #   - GHOST: offer scrolls out -> auto-reminder
 #
 # GHOSTING RULES (cross-cutting)
@@ -281,6 +303,14 @@ Skip in CI: pytest -m "not integration"
 # - Toggle state is the primary routing signal: when toggle shows
 #   active_goal_pending and the user sends a value, it's a goal - not a
 #   food entry, correction, or sleep log.
+# - none is a LAST RESORT: only when the message is completely unrelated
+#   to any tracked habit, ongoing flow, or bot question, and context
+#   provides no clue. If ANY toggle is in an active flow (offered /
+#   goal_pending / remind_pending), none is almost impossible.
+# - refusal_tone: when type=toggle_cancel, the classifier also sets
+#   refusal_tone to "sharp" (clear decisive "no") or "soft" (hesitation,
+#   discomfort, "not sure"). The handler uses this to choose between
+#   canceling vs skipping the goal with a softer message.
 #
 # TEST INFRASTRUCTURE
 # --------------------
@@ -1184,6 +1214,66 @@ class TestGoalRemind:
         )
         assert result.type == "toggle_cancel"
 
+    def test_accept_reminder_casual(self):
+        """Casual 'כן' to reminder question -> conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "כן",
+            toggle_state=_build_toggle_state(sleep="remind_pending"),
+            history=_build_history(
+                ("bot", SLEEP_OFFER),
+                ("user", "עזוב"),
+                ("bot", GOAL_REMIND_ASK),
+            ),
+        )
+        assert result.type in ("conversation_reply", "toggle_activate")
+
+    def test_accept_reminder_sure(self):
+        """'סבבה' to reminder question -> conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "סבבה",
+            toggle_state=_build_toggle_state(eating_window="remind_pending"),
+            history=_build_history(
+                ("bot", EATING_WINDOW_OFFER),
+                ("user", "לא עכשיו"),
+                ("bot", GOAL_REMIND_ASK),
+            ),
+        )
+        assert result.type in ("conversation_reply", "toggle_activate")
+
+    def test_decline_reminder_not_interested(self):
+        """'לא מעניין' to reminder question -> toggle_cancel."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לא מעניין",
+            toggle_state=_build_toggle_state(workouts="remind_pending"),
+            history=_build_history(
+                ("bot", WORKOUTS_OFFER),
+                ("user", "לא"),
+                ("bot", GOAL_REMIND_ASK),
+            ),
+        )
+        assert result.type == "toggle_cancel"
+
+    def test_reminder_not_none(self):
+        """Any response during remind_pending -> never none."""
+        analyzer = _make_analyzer()
+        messages = ["כן", "לא", "אולי", "נו", "סבבה"]
+        for msg in messages:
+            result = _classify(
+                analyzer, msg,
+                toggle_state=_build_toggle_state(nutrition="remind_pending"),
+                history=_build_history(
+                    ("bot", NUTRITION_OFFER),
+                    ("user", "לא עכשיו"),
+                    ("bot", GOAL_REMIND_ASK),
+                ),
+            )
+            assert result.type != "none", (
+                f"'{msg}' classified as none during remind_pending"
+            )
+
 
 class TestToggleCancel:
     """Tests for cancelling tracking mid-flow or standalone."""
@@ -1565,3 +1655,236 @@ class TestNameDeclaration:
             ),
         )
         assert result.type == "conversation_reply"
+
+
+# ============================================================================
+# UNCERTAINTY / DEFERENCE DURING GOAL FLOW
+#
+# When the user expresses uncertainty ("I have no clue", "whatever you say")
+# during goal-setting, it's NOT a refusal - it's deference. The classifier
+# must route to conversation_reply so the handler accepts the suggestion.
+# ============================================================================
+
+class TestUncertaintyDuringGoal:
+    """Uncertain/deferring responses during goal-setting -> conversation_reply."""
+
+    def test_no_clue_during_nutrition_confirm(self):
+        """'אין לי שמץ' after nutrition suggestion -> conversation_reply.
+
+        Regression: was misclassified as none, breaking the goal flow.
+        """
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אין לי שמץ",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "לרדת"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
+        )
+        assert result.type == "conversation_reply", (
+            f"'אין לי שמץ' during goal confirm misclassified as {result.type}"
+        )
+
+    def test_deference_during_nutrition_confirm(self):
+        """'מה שאתה אומר' after nutrition suggestion -> conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "מה שאתה אומר",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "ירידה"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
+        )
+        assert result.type == "conversation_reply"
+
+    def test_dont_know_during_sleep_goal(self):
+        """'אני לא יודע' when asked for sleep goal -> conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אני לא יודע",
+            toggle_state=_build_toggle_state(sleep="active_goal_pending"),
+            history=_build_history(
+                ("bot", SLEEP_OFFER),
+                ("user", "יאללה"),
+                ("bot", SLEEP_GOAL_ASK),
+            ),
+        )
+        assert result.type == "conversation_reply"
+
+    def test_you_decide_during_goal(self):
+        """'תחליט אתה' after suggestion -> conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "תחליט אתה",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "שמירה"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
+        )
+        assert result.type == "conversation_reply"
+
+    def test_doesnt_matter_during_goal(self):
+        """'לא משנה' during goal -> conversation_reply (deference, not refusal)."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לא משנה",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "לרדת"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
+        )
+        assert result.type == "conversation_reply"
+
+
+# ============================================================================
+# SHARP vs SOFT REFUSAL (refusal_tone field)
+#
+# toggle_cancel now carries a refusal_tone: "sharp" for clear decisive
+# refusal, "soft" for hesitation/discomfort. The handler uses this to
+# choose between canceling vs skipping the goal with a softer response.
+# ============================================================================
+
+class TestRefusalTone:
+    """Tests that toggle_cancel includes correct refusal_tone."""
+
+    def test_sharp_refusal_during_offer(self):
+        """'לא רוצה' to offer -> toggle_cancel, refusal_tone=sharp."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לא רוצה",
+            toggle_state=_build_toggle_state(sleep="offered"),
+            history=_build_history(
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", SLEEP_OFFER),
+            ),
+        )
+        assert result.type == "toggle_cancel"
+        assert result.refusal_tone == "sharp"
+
+    def test_soft_refusal_during_offer(self):
+        """'לא סגור על זה' to offer -> toggle_cancel, refusal_tone=soft."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לא סגור על זה",
+            toggle_state=_build_toggle_state(sleep="offered"),
+            history=_build_history(
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", SLEEP_OFFER),
+            ),
+        )
+        assert result.type == "toggle_cancel"
+        assert result.refusal_tone == "soft"
+
+    def test_sharp_refusal_during_goal(self):
+        """'לא' to goal question -> toggle_cancel, refusal_tone=sharp."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לא",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "לרדת"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
+        )
+        assert result.type == "toggle_cancel"
+        assert result.refusal_tone == "sharp"
+
+    def test_soft_refusal_during_goal(self):
+        """'לא בטוח שזה מתאים לי' to suggestion -> toggle_cancel, refusal_tone=soft."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לא בטוח שזה מתאים לי",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "ירידה"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
+        )
+        assert result.type == "toggle_cancel"
+        assert result.refusal_tone == "soft"
+
+    def test_maybe_later_is_soft(self):
+        """'אולי בהמשך' -> toggle_cancel, refusal_tone=soft."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אולי בהמשך",
+            toggle_state=_build_toggle_state(eating_window="offered"),
+            history=_build_history(
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", EATING_WINDOW_OFFER),
+            ),
+        )
+        assert result.type == "toggle_cancel"
+        assert result.refusal_tone == "soft"
+
+    def test_not_now_is_soft(self):
+        """'לא עכשיו' -> toggle_cancel, refusal_tone=soft."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "לא עכשיו",
+            toggle_state=_build_toggle_state(workouts="offered"),
+            history=_build_history(
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", WORKOUTS_OFFER),
+            ),
+        )
+        assert result.type == "toggle_cancel"
+        assert result.refusal_tone == "soft"
+
+
+# ============================================================================
+# NONE IS IMPOSSIBLE DURING ACTIVE FLOWS
+#
+# When any toggle is in an active flow (offered/goal_pending/remind_pending),
+# none should never be returned. The classifier must always find a more
+# specific route.
+# ============================================================================
+
+class TestNoneDuringActiveFlow:
+    """none must not occur when a toggle is in an active flow."""
+
+    def test_none_impossible_during_goal_pending(self):
+        """Various ambiguous messages during goal_pending -> never none."""
+        analyzer = _make_analyzer()
+        messages = ["אין לי שמץ", "לא יודע", "אממ", "מה?", "נו"]
+        for msg in messages:
+            result = _classify(
+                analyzer, msg,
+                toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+                history=_build_history(
+                    ("bot", WEIGHT_GOAL_ASK),
+                    ("user", "לרדת"),
+                    ("bot", NUTRITION_SUGGESTION),
+                ),
+            )
+            assert result.type != "none", (
+                f"'{msg}' classified as none during active goal flow"
+            )
+
+    def test_none_impossible_during_remind_pending(self):
+        """Ambiguous messages during remind_pending -> never none."""
+        analyzer = _make_analyzer()
+        messages = ["אממ", "לא יודע", "נו"]
+        for msg in messages:
+            result = _classify(
+                analyzer, msg,
+                toggle_state=_build_toggle_state(nutrition="remind_pending"),
+                history=_build_history(
+                    ("bot", NUTRITION_OFFER),
+                    ("user", "לא עכשיו"),
+                    ("bot", GOAL_REMIND_ASK),
+                ),
+            )
+            assert result.type != "none", (
+                f"'{msg}' classified as none during remind_pending"
+            )
