@@ -151,6 +151,8 @@ class ToggleService:
         toggle = profile.toggles.nutrition
         if toggle.status != "dormant" or toggle.revealed_at is not None:
             return False
+        if not profile.onboarding.name_collected:
+            return False
         return profile.trial_started_at is not None
 
     def should_reveal_sleep(self, profile: User) -> bool:
