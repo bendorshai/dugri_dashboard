@@ -370,6 +370,34 @@ class HealthHandlers:
         return self.goal_service.handle_body_stats(tid, text)
 
     # ------------------------------------------------------------------
+    # Toggle flow guard
+    # ------------------------------------------------------------------
+
+    def _is_toggle_in_flow(self, profile: UserProfile, toggle_name: str) -> bool:
+        """Check if a toggle is in an active conversational flow.
+
+        When True, toggle_activate is invalid - the user is answering
+        a bot question, not proactively requesting activation.
+        """
+        toggle = getattr(profile.toggles, toggle_name, None)
+        if not toggle:
+            return False
+        if toggle.status == "active" and toggle.goal_status == "pending" and toggle.goal_offered_at:
+            return True
+        if toggle.status == "dormant" and toggle.revealed_at:
+            return True
+        if toggle.goal_status == "remind_pending":
+            return True
+        return False
+
+    def _any_toggle_in_flow(self, profile: UserProfile) -> bool:
+        """Check if ANY toggle is in an active conversational flow."""
+        for name in ("nutrition", "sleep", "eating_window", "workouts", "self_care", "weekly_summary"):
+            if self._is_toggle_in_flow(profile, name):
+                return True
+        return False
+
+    # ------------------------------------------------------------------
     # Toggle cancel handler (context-aware refusal)
     # ------------------------------------------------------------------
 
@@ -576,18 +604,18 @@ class HealthHandlers:
             if not toggle:
                 continue
             if toggle.status == "active" and toggle.goal_status == "pending" and toggle.goal_offered_at:
-                toggle_lines.append(f"- {label}: פעיל, בתהליך הגדרת יעד")
+                toggle_lines.append(f"- {label}: active_goal_pending")
             elif toggle.status == "active":
-                goal = f", יעד: {toggle.goal_value}" if toggle.goal_value else ", בלי יעד"
-                toggle_lines.append(f"- {label}: פעיל{goal}")
+                goal = f", goal: {toggle.goal_value}" if toggle.goal_value else ""
+                toggle_lines.append(f"- {label}: active{goal}")
             elif toggle.goal_status == "remind_pending":
-                toggle_lines.append(f"- {label}: סירב, שאלנו אם להזכיר")
+                toggle_lines.append(f"- {label}: remind_pending")
             elif toggle.revealed_at and toggle.status == "dormant":
-                toggle_lines.append(f"- {label}: הוצע, ממתין לתשובה")
+                toggle_lines.append(f"- {label}: offered")
             elif toggle.status == "dormant":
-                toggle_lines.append(f"- {label}: לא הוצע עדיין")
+                toggle_lines.append(f"- {label}: dormant")
             elif toggle.status == "cancelled":
-                toggle_lines.append(f"- {label}: בוטל")
+                toggle_lines.append(f"- {label}: cancelled")
         toggle_state = "\n".join(toggle_lines) if toggle_lines else None
 
         # Classifier is the SINGLE entry point for ALL messages.
@@ -672,9 +700,13 @@ class HealthHandlers:
         if classification.type == "toggle_activate" and self.toggle_service:
             toggle_name = classification.toggle_name
             if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"}:
+                if self._is_toggle_in_flow(profile, toggle_name):
+                    logger.info("toggle_activate for %s rerouted to conversation_reply (toggle in flow)", toggle_name)
+                    await self._handle_conversation_reply(message, context, tid, profile, classification)
+                    return
                 self.toggle_service.activate_toggle(tid, toggle_name)
                 if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
-                    response = self.goal_service.offer_goal_with_shortcut(tid, toggle_name, text)
+                    response = self.goal_service.offer_goal_with_shortcut(tid, toggle_name, message.text)
                     await self._send(response, tid=tid, message=message)
                 else:
                     import messages as M
@@ -716,9 +748,18 @@ class HealthHandlers:
                     await self._send(response, tid=tid, message=message)
             return
 
-        if classification.type == "none":
+        if classification.type == "unrelated":
             response = classification.freeform_response or "מה נשמע?"
             await self._send(response, tid=tid, message=message)
+            return
+
+        if classification.type == "none":
+            # Error fallback (429/timeout) - reroute if in active flow
+            if self._any_toggle_in_flow(profile):
+                logger.info("none (error fallback) rerouted to conversation_reply (toggle in flow)")
+                await self._handle_conversation_reply(message, context, tid, profile, classification)
+                return
+            await self._send("מה נשמע?", tid=tid, message=message)
             return
 
         # Default: treat as food (meal type or fallback)

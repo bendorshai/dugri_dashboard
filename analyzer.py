@@ -100,7 +100,8 @@ class MessageClassification(BaseModel):
         "feedback_reaction",
         "toggle_cancel", "toggle_activate",
         "conversation_reply", "name_declaration",
-        "none",
+        "unrelated",
+        "none",  # internal only: error/timeout fallback, never returned by LLM
     ]
     meal: TimedFoodAnalysisResult | None = None
     correction: CorrectionResult | None = None

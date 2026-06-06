@@ -541,13 +541,13 @@ def _build_toggle_state(**overrides) -> str:
     }
 
     state_map = {
-        "dormant": "לא הוצע עדיין",
-        "offered": "הוצע, ממתין לתשובה",
-        "active_goal_pending": "פעיל, בתהליך הגדרת יעד",
-        "active": "פעיל, בלי יעד",
-        "active_with_goal": "פעיל, עם יעד",
-        "remind_pending": "סירב, שאלנו אם להזכיר",
-        "cancelled": "בוטל",
+        "dormant": "dormant",
+        "offered": "offered",
+        "active_goal_pending": "active_goal_pending",
+        "active": "active",
+        "active_with_goal": "active",
+        "remind_pending": "remind_pending",
+        "cancelled": "cancelled",
     }
 
     lines = []
@@ -1285,7 +1285,7 @@ class TestGoalRemind:
                     ("bot", GOAL_REMIND_ASK),
                 ),
             )
-            assert result.type != "none", (
+            assert result.type != "unrelated", (
                 f"'{msg}' classified as none during remind_pending"
             )
 
@@ -1353,7 +1353,7 @@ class TestNoneIsRare:
                     ("bot", NUTRITION_OFFER),
                 ),
             )
-            assert result.type != "none", f"'{msg}' classified as none with offer in context"
+            assert result.type != "unrelated", f"'{msg}' classified as none with offer in context"
 
     def test_genuine_chitchat_is_none(self):
         """Genuine chitchat with no active flow -> none (with freeform response)."""
@@ -1366,7 +1366,7 @@ class TestNoneIsRare:
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
             ),
         )
-        assert result.type == "none"
+        assert result.type == "unrelated"
         assert result.freeform_response  # should have a natural response
 
 
@@ -1882,7 +1882,7 @@ class TestNoneDuringActiveFlow:
                     ("bot", NUTRITION_SUGGESTION),
                 ),
             )
-            assert result.type != "none", (
+            assert result.type != "unrelated", (
                 f"'{msg}' classified as none during active goal flow"
             )
 
@@ -1900,6 +1900,6 @@ class TestNoneDuringActiveFlow:
                     ("bot", GOAL_REMIND_ASK),
                 ),
             )
-            assert result.type != "none", (
+            assert result.type != "unrelated", (
                 f"'{msg}' classified as none during remind_pending"
             )

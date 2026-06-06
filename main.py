@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.0.1"
-VERSION_NOTES = "fix inline hooks firing outside time windows (midnight weekly summary bug)"
+VERSION = "6.1.0"
+VERSION_NOTES = "rename none->unrelated, fix toggle_activate text bug, toggle flow guard, body stats classification"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

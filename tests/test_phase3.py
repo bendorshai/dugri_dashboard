@@ -151,9 +151,9 @@ class TestMessageClassification:
         assert mc.type == "sleep"
         assert mc.sleep_time == "23:30"
 
-    def test_none_classification(self):
-        mc = MessageClassification(type="none")
-        assert mc.type == "none"
+    def test_unrelated_classification(self):
+        mc = MessageClassification(type="unrelated")
+        assert mc.type == "unrelated"
 
     def test_help_classification(self):
         mc = MessageClassification(type="help", question_text="איך אתה עובד?")
