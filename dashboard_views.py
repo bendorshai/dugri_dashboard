@@ -91,8 +91,14 @@ def preferences_post():
 
     old_targets = storage.update_user_targets(email, calories, protein)
 
-    # Additional targets: sleep_time, workouts_per_week
+    # Additional targets: weight_goal, sleep_time, workouts_per_week
     extra = {}
+    weight_goal = request.form.get("weight_goal", "").strip()
+    if weight_goal in ("lose", "maintain", "gain"):
+        extra["targets.weight_goal"] = weight_goal
+    elif weight_goal == "":
+        extra["targets.weight_goal"] = None
+
     sleep_target = request.form.get("sleep_target", "").strip()
     if sleep_target:
         extra["targets.sleep_time"] = sleep_target
@@ -222,10 +228,16 @@ def profile_post():
     email = session["user_email"]
 
     profile_data = {}
+    name = request.form.get("name", "").strip()
     birth_year = request.form.get("birth_year", "").strip()
     weight_kg = request.form.get("weight_kg", "").strip()
     height_cm = request.form.get("height_cm", "").strip()
 
+    if name:
+        profile_data["name"] = name
+        profile_data["onboarding.name_collected"] = True
+    else:
+        profile_data["name"] = None
     if birth_year:
         profile_data["birth_year"] = int(birth_year)
     else:

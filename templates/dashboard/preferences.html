@@ -79,6 +79,15 @@
             {% if name == 'nutrition' %}
             <div class="pref-fields" x-show="isActive" x-transition>
                 <div class="field-row">
+                    <label>מטרה</label>
+                    <select name="weight_goal" class="form-input" @change="fieldChanged()">
+                        <option value="" {% if not targets.get('weight_goal') %}selected{% endif %}>לא הוגדר</option>
+                        <option value="lose" {% if targets.get('weight_goal') == 'lose' %}selected{% endif %}>ירידה במשקל</option>
+                        <option value="maintain" {% if targets.get('weight_goal') == 'maintain' %}selected{% endif %}>שמירה על המשקל</option>
+                        <option value="gain" {% if targets.get('weight_goal') == 'gain' %}selected{% endif %}>עלייה במשקל</option>
+                    </select>
+                </div>
+                <div class="field-row">
                     <label>יעד קלוריות</label>
                     <input type="number" name="calories" value="{{ targets.get('calories', '') or '' }}"
                            min="800" max="6000" step="50" placeholder="לא הוגדר" class="form-input"
