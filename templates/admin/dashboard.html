@@ -14,6 +14,7 @@
         <a href="{{ url_for('admin.dashboard') }}" class="admin-tab active">Dashboard</a>
         <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
         <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
+        <a href="{{ url_for('admin.tokens') }}" class="admin-tab">Tokens</a>
     </div>
 
     <!-- KPI Cards -->
@@ -114,7 +115,7 @@
                 <tbody>
                     {% for lead in super_active %}
                     <tr>
-                        <td>{{ lead.name or '-' }}</td>
+                        <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
@@ -145,7 +146,7 @@
                 <tbody>
                     {% for lead in consistently_active %}
                     <tr>
-                        <td>{{ lead.name or '-' }}</td>
+                        <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
@@ -176,7 +177,7 @@
                 <tbody>
                     {% for lead in inconsistently_active %}
                     <tr>
-                        <td>{{ lead.name or '-' }}</td>
+                        <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.active_days }}/7</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
@@ -207,7 +208,7 @@
                 <tbody>
                     {% for lead in stopped %}
                     <tr>
-                        <td>{{ lead.name or '-' }}</td>
+                        <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
@@ -238,7 +239,7 @@
                 <tbody>
                     {% for lead in stuck %}
                     <tr>
-                        <td>{{ lead.name or '-' }}</td>
+                        <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
                         <td>

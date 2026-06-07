@@ -1,0 +1,134 @@
+{% extends "dashboard/layout.html" %}
+
+{% block title %}Dugri — Token Analytics{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="admin-dashboard">
+
+    <!-- Admin Sub-tabs -->
+    <div class="admin-tabs">
+        <a href="{{ url_for('admin.dashboard') }}" class="admin-tab">Dashboard</a>
+        <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
+        <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
+        <a href="{{ url_for('admin.tokens') }}" class="admin-tab active">Tokens</a>
+    </div>
+
+    <!-- Date Range Picker -->
+    <section class="admin-kpis" style="margin-bottom: 1.5rem;">
+        <form method="get" action="{{ url_for('admin.tokens') }}" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <label>From: <input type="date" name="start" value="{{ start_date }}"></label>
+            <label>To: <input type="date" name="end" value="{{ end_date }}"></label>
+            <button type="submit" class="btn-outreach">Apply</button>
+        </form>
+    </section>
+
+    <!-- KPI Cards -->
+    <section class="admin-kpis">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ '{:,}'.format(grand_total_tokens) }}</div>
+            <div class="kpi-label">Total Tokens</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">${{ '%.4f' | format(grand_total_cost) }}</div>
+            <div class="kpi-label">Total Cost (USD)</div>
+        </div>
+        {% for model, data in totals.items() | sort %}
+        <div class="kpi-card">
+            <div class="kpi-value">{{ '{:,}'.format(data.total_tokens) }}</div>
+            <div class="kpi-label">{{ model }} (${{ '%.4f' | format(data.cost) }})</div>
+        </div>
+        {% endfor %}
+    </section>
+
+    <!-- Token Usage Chart -->
+    <section class="admin-charts">
+        <div class="chart-card" style="grid-column: 1 / -1;">
+            <h3>Daily Token Usage</h3>
+            <canvas id="tokenChart"></canvas>
+        </div>
+    </section>
+
+</div>
+
+<script>
+const CINNAMON = '#A67448';
+const BLUE = '#5BA8C4';
+const OLIVE = '#8FA876';
+const TERRA = '#C97A6B';
+const GRAY = '#5A554D';
+
+Chart.defaults.font.family = "'Segoe UI', Tahoma, Arial, sans-serif";
+Chart.defaults.color = GRAY;
+
+const MODEL_COLORS = {
+    'gpt-4o': BLUE,
+    'gpt-4o-mini': CINNAMON,
+};
+
+const usageData = {{ usage_json | safe }};
+
+// Group by date, then by model
+const dateMap = {};
+const models = new Set();
+usageData.forEach(d => {
+    if (!dateMap[d.date]) dateMap[d.date] = {};
+    dateMap[d.date][d.model] = (d.prompt_tokens || 0) + (d.completion_tokens || 0);
+    models.add(d.model);
+});
+
+const dates = Object.keys(dateMap).sort();
+const datasets = [];
+const modelList = Array.from(models).sort();
+
+modelList.forEach(model => {
+    datasets.push({
+        label: model,
+        data: dates.map(d => dateMap[d][model] || 0),
+        borderColor: MODEL_COLORS[model] || GRAY,
+        backgroundColor: (MODEL_COLORS[model] || GRAY) + '33',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+    });
+});
+
+new Chart(document.getElementById('tokenChart'), {
+    type: 'line',
+    data: {
+        labels: dates.map(d => d.slice(5)),
+        datasets: datasets,
+    },
+    options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: true, position: 'top' },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString() + ' tokens';
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(v) {
+                        if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+                        if (v >= 1000) return (v / 1000).toFixed(0) + 'K';
+                        return v;
+                    }
+                }
+            },
+            x: { ticks: { maxTicksLimit: 15 } },
+        },
+    },
+});
+</script>
+{% endblock %}

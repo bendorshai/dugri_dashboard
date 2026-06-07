@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timedelta
 
 import requests
 from flask import Blueprint, render_template, current_app, request, jsonify
@@ -12,6 +13,29 @@ from auth import admin_required
 logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+# OpenAI pricing per 1M tokens (source: openai.com/api/pricing, 2026-06-07)
+MODEL_PRICING = {
+    "gpt-4o":      {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+}
+
+
+def _format_tokens_tooltip(tokens_used: dict) -> str:
+    """Build a tooltip string showing per-model token counts + USD cost."""
+    if not tokens_used:
+        return ""
+    lines = []
+    for model, counts in sorted(tokens_used.items()):
+        if not isinstance(counts, dict):
+            continue
+        prompt = counts.get("prompt", 0)
+        completion = counts.get("completion", 0)
+        total = prompt + completion
+        pricing = MODEL_PRICING.get(model, {"input": 0, "output": 0})
+        cost = prompt * pricing["input"] / 1_000_000 + completion * pricing["output"] / 1_000_000
+        lines.append(f"{model}: {total:,} tokens (${cost:.4f})")
+    return "\n".join(lines)
 
 OUTREACH_TEMPLATES = {
     "super_active": "היי {name}, ראיתי שאתה ממש פעיל עם דוגרי. אשמח לשמוע מה עובד לך ומה אפשר לשפר",
@@ -51,6 +75,11 @@ def dashboard():
     inconsistently_active = storage.get_inconsistently_active_users()
     stopped = storage.get_stopped_users()
     stuck = storage.get_stuck_at_gate_users()
+
+    # Pre-compute token tooltips for all leads
+    for leads in [super_active, consistently_active, inconsistently_active, stopped, stuck]:
+        for lead in leads:
+            lead["tokens_tooltip"] = _format_tokens_tooltip(lead.get("tokens_used", {}))
 
     return render_template(
         "admin/dashboard.html",
@@ -103,6 +132,48 @@ def feature_requests():
         unique_users=stats["unique_users"],
         active_tab="admin",
         active_sub="feature_requests",
+    )
+
+
+@admin_bp.route("/tokens")
+@admin_required
+def tokens():
+    storage = _get_admin_storage()
+
+    # Date range from query params, default last 30 days
+    end_str = request.args.get("end", datetime.utcnow().strftime("%Y-%m-%d"))
+    start_str = request.args.get("start", (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d"))
+
+    usage = storage.get_token_usage(start_str, end_str)
+    totals = storage.get_token_totals(start_str, end_str)
+
+    # Compute USD costs for totals
+    totals_with_cost = {}
+    grand_total_cost = 0.0
+    grand_total_tokens = 0
+    for model, counts in totals.items():
+        pricing = MODEL_PRICING.get(model, {"input": 0, "output": 0})
+        cost = counts["prompt_tokens"] * pricing["input"] / 1_000_000 + counts["completion_tokens"] * pricing["output"] / 1_000_000
+        total_tokens = counts["prompt_tokens"] + counts["completion_tokens"]
+        totals_with_cost[model] = {
+            "prompt_tokens": counts["prompt_tokens"],
+            "completion_tokens": counts["completion_tokens"],
+            "total_tokens": total_tokens,
+            "cost": round(cost, 4),
+        }
+        grand_total_cost += cost
+        grand_total_tokens += total_tokens
+
+    return render_template(
+        "admin/tokens.html",
+        active_tab="admin",
+        active_sub="tokens",
+        start_date=start_str,
+        end_date=end_str,
+        usage_json=json.dumps(usage),
+        totals=totals_with_cost,
+        grand_total_cost=round(grand_total_cost, 4),
+        grand_total_tokens=grand_total_tokens,
     )
 
 

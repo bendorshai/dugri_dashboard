@@ -76,6 +76,48 @@ class AdminStorage:
         self._self_care = self._db["self_care_logs"]
         self._errors = self._db["error_logs"]
         self._feature_requests = self._db["feature_requests"]
+        self._token_logs = self._db["token_logs"]
+
+    # -- Token Analytics --
+
+    def get_token_usage(self, start_date: str, end_date: str) -> list[dict]:
+        """Aggregate token usage by date and model within a date range."""
+        pipeline = [
+            {"$match": {"date": {"$gte": start_date, "$lte": end_date}}},
+            {"$group": {
+                "_id": {"date": "$date", "model": "$model"},
+                "prompt_tokens": {"$sum": "$prompt_tokens"},
+                "completion_tokens": {"$sum": "$completion_tokens"},
+            }},
+            {"$sort": {"_id.date": 1, "_id.model": 1}},
+        ]
+        results = []
+        for doc in self._token_logs.aggregate(pipeline):
+            results.append({
+                "date": doc["_id"]["date"],
+                "model": doc["_id"]["model"],
+                "prompt_tokens": doc["prompt_tokens"],
+                "completion_tokens": doc["completion_tokens"],
+            })
+        return results
+
+    def get_token_totals(self, start_date: str, end_date: str) -> dict:
+        """Sum tokens by model within a date range."""
+        pipeline = [
+            {"$match": {"date": {"$gte": start_date, "$lte": end_date}}},
+            {"$group": {
+                "_id": "$model",
+                "prompt_tokens": {"$sum": "$prompt_tokens"},
+                "completion_tokens": {"$sum": "$completion_tokens"},
+            }},
+        ]
+        result = {}
+        for doc in self._token_logs.aggregate(pipeline):
+            result[doc["_id"]] = {
+                "prompt_tokens": doc["prompt_tokens"],
+                "completion_tokens": doc["completion_tokens"],
+            }
+        return result
 
     # -- Feature Requests --
 
@@ -564,7 +606,7 @@ class AdminStorage:
         users_by_tid = {}
         for user in self._users.find(
             {"telegram_user_id": {"$in": tids}},
-            {"_id": 1, "name": 1, "telegram_user_id": 1, "created_at": 1},
+            {"_id": 1, "name": 1, "telegram_user_id": 1, "created_at": 1, "tokens_used": 1},
         ):
             users_by_tid[user["telegram_user_id"]] = user
 
@@ -578,6 +620,7 @@ class AdminStorage:
                 "category": category,
                 "signup_date": user.get("created_at"),
                 "last_active": r.get("last_active"),
+                "tokens_used": user.get("tokens_used", {}),
             }
             if "active_days" in r:
                 lead["active_days"] = r["active_days"]
