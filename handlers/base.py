@@ -1802,8 +1802,9 @@ class HealthHandlers:
         user_message = context.chat_data.get("emotional_message", "")
         prompt = self.emotional_support_service.build_chatgpt_prompt(tid, user_message)
         await self._send(f"```\n{prompt}\n```", tid=tid, context=context)
+        import messages as M
         await self._send(
-            "העתק את הטקסט למעלה ושלח ל-ChatGPT \U0001f447",
+            M.EMOTIONAL_CHATGPT_GUIDANCE,
             tid=tid, context=context,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("פתח ChatGPT", url="https://chatgpt.com")]
