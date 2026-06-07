@@ -2085,6 +2085,21 @@ class TestEmotionalClassification:
         assert result.type == "meal"
         assert result.emotional_context is True
 
+    def test_angry_about_eating_is_meal_with_empathy(self):
+        """'אני כועס על עצמי שאכלתי גלידה' -> meal + emotional_context + empathy_reflection.
+
+        This is a food entry with emotional context - should log the meal AND
+        provide empathy, but NOT offer ChatGPT/boundary messages.
+        """
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "אני כועס על עצמי שאכלתי גלידה עכשיו")
+        assert result.type == "meal"
+        assert result.emotional_context is True
+        assert result.empathy_reflection
+        assert len(result.empathy_reflection) > 5
+        # Should have food data
+        assert result.meal is not None
+
     def test_sleep_with_emotion_is_sleep(self):
         """Sleep + emotion -> sleep with emotional_context=True."""
         analyzer = _make_analyzer()

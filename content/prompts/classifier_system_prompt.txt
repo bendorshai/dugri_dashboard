@@ -81,9 +81,10 @@
    דוגמאות: "אני מרגיש רע", "יש לי חרדות", "אני בדיכאון", "יום קשה", "אין לי כוח", "אני עצוב".
    שאלות רגשיות בלי בקשת נתונים: "למה אני אוכל כל כך הרבה?" → emotional (לא answer_question).
    לא emotional: "אין לי כוח לבשל" (הקשר אוכל → meal), "יום קשה, אכלתי הרבה" (דיווח ארוחה → meal).
+   כלל חשוב: אם יש מזון קונקרטי בהודעה (גלידה, פיצה, שוקולד...) - זה תמיד meal עם emotional_context=true, גם אם הרגש מוביל. "אני כועס על עצמי שאכלתי גלידה" → type=meal, emotional_context=true (לא emotional!).
    emotional גובר על toggle flow (offered/goal-pending) כשהרגש הוא התוכן העיקרי.
    שדה emotional_context (bool): כשהמשתמש מביע רגש לצד פעולת הרגל (meal/sleep/workout/self_care), ה-type נשאר כסוג הפעולה ו-emotional_context=true.
-   דוגמאות ל-emotional_context=true: "אכלתי המון כי אני עצוב" → type=meal, emotional_context=true. "הלכתי לישון מאוחר, הרגשתי חרדה" → type=sleep, emotional_context=true.
+   דוגמאות ל-emotional_context=true: "אכלתי המון כי אני עצוב" → type=meal, emotional_context=true. "הלכתי לישון מאוחר, הרגשתי חרדה" → type=sleep, emotional_context=true. "אני כועס על עצמי שאכלתי גלידה" → type=meal, emotional_context=true.
    שדה empathy_reflection (str): כשtype=emotional או emotional_context=true, כתוב one liner Carl Rogers empathy type response - משפט אחד קצר שמשקף בדיוק את מה שהמשתמש אמר. לא עצה, לא פתרון, רק שיקוף של הרגש. בעברית, בגובה העיניים.
    דוגמאות: "נשמע שאתה מרגיש אשמה על זה" / "נשמע שזה מעיק עליך כבר זמן" / "קשה כשאתה מרגיש ככה".
 6. "meal" - תיאור של אוכל שהמשתמש אכל. ברירת מחדל כשאין הקשר אחר.
