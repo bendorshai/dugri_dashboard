@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from datetime import datetime, timedelta
 
 from services.emotional_support_service import EmotionalSupportService
+from keyboards import make_emotional_support_keyboard
 
 
 @pytest.fixture
@@ -58,16 +59,8 @@ class TestGetInlineEmpathy:
         assert len(inline) < len(standalone)
 
 
-class TestGetOfferText:
-    def test_returns_string(self, service):
-        result = service.get_offer_text()
-        assert isinstance(result, str)
-        assert "ChatGPT" in result or "פרומפט" in result
-
-
 class TestBuildChatgptPrompt:
     def test_includes_user_message(self, service, repos):
-        repos["user_repo"].get.return_value = None
         repos["food_repo"].get_by_user_and_dates.return_value = []
         repos["sleep_repo"].get_recent.return_value = []
         repos["workout_repo"].get_recent.return_value = []
@@ -76,37 +69,79 @@ class TestBuildChatgptPrompt:
         result = service.build_chatgpt_prompt(123, "אני מרגיש רע")
         assert "אני מרגיש רע" in result
 
-    def test_includes_habit_data(self, service, repos):
-        repos["user_repo"].get.return_value = None
-
-        # Create mock food entries
+    def test_includes_detailed_food_entries(self, service, repos):
         food_entry = MagicMock()
         food_entry.calories = 500
         food_entry.protein = 30
-        food_entry.date = (datetime.now() - timedelta(days=1)).strftime("%d/%m/%Y")
+        food_entry.date = "06/06/2026"
+        food_entry.time = "12:30"
+        food_entry.description = "סלט ירקות עם טונה"
         repos["food_repo"].get_by_user_and_dates.return_value = [food_entry]
         repos["sleep_repo"].get_recent.return_value = []
         repos["workout_repo"].get_recent.return_value = []
         repos["self_care_repo"].get_recent.return_value = []
 
         result = service.build_chatgpt_prompt(123, "אני עצוב")
-        assert "500" in result or "קלוריות" in result
+        assert "סלט ירקות עם טונה" in result
+        assert "500" in result
+        assert "12:30" in result
 
-    def test_no_profile_graceful(self, service, repos):
-        """With no user profile, should still produce a valid prompt."""
-        repos["user_repo"].get.return_value = None
+    def test_includes_detailed_sleep_entries(self, service, repos):
+        repos["food_repo"].get_by_user_and_dates.return_value = []
+        sleep_log = MagicMock()
+        sleep_log.date = "06/06/2026"
+        sleep_log.sleep_time = "23:30"
+        repos["sleep_repo"].get_recent.return_value = [sleep_log]
+        repos["workout_repo"].get_recent.return_value = []
+        repos["self_care_repo"].get_recent.return_value = []
+
+        result = service.build_chatgpt_prompt(123, "test")
+        assert "23:30" in result
+
+    def test_includes_detailed_workout_entries(self, service, repos):
+        repos["food_repo"].get_by_user_and_dates.return_value = []
+        repos["sleep_repo"].get_recent.return_value = []
+        workout_log = MagicMock()
+        workout_log.date = "05/06/2026"
+        workout_log.note = "ריצה 5 קמ"
+        repos["workout_repo"].get_recent.return_value = [workout_log]
+        repos["self_care_repo"].get_recent.return_value = []
+
+        result = service.build_chatgpt_prompt(123, "test")
+        assert "ריצה 5 קמ" in result
+
+    def test_includes_detailed_self_care_entries(self, service, repos):
+        repos["food_repo"].get_by_user_and_dates.return_value = []
+        repos["sleep_repo"].get_recent.return_value = []
+        repos["workout_repo"].get_recent.return_value = []
+        self_care_log = MagicMock()
+        self_care_log.description = "יצאתי לטיול עם חברים"
+        repos["self_care_repo"].get_recent.return_value = [self_care_log]
+
+        result = service.build_chatgpt_prompt(123, "test")
+        assert "יצאתי לטיול עם חברים" in result
+
+    def test_no_dugri_mention(self, service, repos):
         repos["food_repo"].get_by_user_and_dates.return_value = []
         repos["sleep_repo"].get_recent.return_value = []
         repos["workout_repo"].get_recent.return_value = []
         repos["self_care_repo"].get_recent.return_value = []
 
-        result = service.build_chatgpt_prompt(123, "אני מרגיש רע")
-        assert isinstance(result, str)
-        assert len(result) > 0
+        result = service.build_chatgpt_prompt(123, "test")
+        assert "דוגרי" not in result
+
+    def test_no_therapist_disclaimer(self, service, repos):
+        repos["food_repo"].get_by_user_and_dates.return_value = []
+        repos["sleep_repo"].get_recent.return_value = []
+        repos["workout_repo"].get_recent.return_value = []
+        repos["self_care_repo"].get_recent.return_value = []
+
+        result = service.build_chatgpt_prompt(123, "test")
+        assert "מטפל מוסמך" not in result
+        assert "לא מטפל" not in result
 
     def test_empty_data_no_crash(self, service, repos):
         """With completely empty habit data, should not crash."""
-        repos["user_repo"].get.return_value = None
         repos["food_repo"].get_by_user_and_dates.return_value = []
         repos["sleep_repo"].get_recent.return_value = []
         repos["workout_repo"].get_recent.return_value = []
@@ -114,3 +149,16 @@ class TestBuildChatgptPrompt:
 
         result = service.build_chatgpt_prompt(999, "test")
         assert isinstance(result, str)
+
+
+class TestEmotionalSupportKeyboard:
+    def test_single_button(self):
+        keyboard = make_emotional_support_keyboard()
+        all_buttons = [btn for row in keyboard.inline_keyboard for btn in row]
+        assert len(all_buttons) == 1
+
+    def test_button_is_callback(self):
+        keyboard = make_emotional_support_keyboard()
+        button = keyboard.inline_keyboard[0][0]
+        assert button.callback_data is not None
+        assert button.url is None

@@ -103,8 +103,7 @@ def make_food_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
 
 def make_emotional_support_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("בא לי לדבר עם מישהו", callback_data=f"{CB_EMOTIONAL}chatgpt")],
-        [InlineKeyboardButton("פתח ChatGPT", url="https://chatgpt.com")],
+        [InlineKeyboardButton("רוצה לדבר על זה?", callback_data=f"{CB_EMOTIONAL}chatgpt")],
     ])
 
 

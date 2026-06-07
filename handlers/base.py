@@ -14,7 +14,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from analyzer import FoodAnalyzer, _token_callback_var
@@ -788,10 +788,9 @@ class HealthHandlers:
 
         if classification.type == "emotional" and self.emotional_support_service:
             empathy = self.emotional_support_service.get_empathy_response()
-            offer = self.emotional_support_service.get_offer_text()
             context.chat_data["emotional_message"] = message.text
             await self._send(
-                f"{empathy}\n\n{offer}", tid=tid, message=message,
+                empathy, tid=tid, message=message,
                 reply_markup=make_emotional_support_keyboard(),
             )
             return
@@ -1803,3 +1802,10 @@ class HealthHandlers:
         user_message = context.chat_data.get("emotional_message", "")
         prompt = self.emotional_support_service.build_chatgpt_prompt(tid, user_message)
         await self._send(f"```\n{prompt}\n```", tid=tid, context=context)
+        await self._send(
+            "העתק את הטקסט למעלה ושלח ל-ChatGPT \U0001f447",
+            tid=tid, context=context,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("פתח ChatGPT", url="https://chatgpt.com")]
+            ]),
+        )

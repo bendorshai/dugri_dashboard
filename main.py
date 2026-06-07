@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.5.0"
-VERSION_NOTES = "emotional support boundary: empathy responses, ChatGPT handoff for emotional messages"
+VERSION = "6.5.1"
+VERSION_NOTES = "fix emotional support: Rogerian empathy, single-button flow, detailed GPT prompt"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
