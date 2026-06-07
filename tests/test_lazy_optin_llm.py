@@ -176,15 +176,12 @@ Skip in CI: pytest -m "not integration"
 #       ("סבבה, בלי יעד בינתיים..."), ask "want a reminder?"
 #     -> goal_status moves to remind_pending
 #   - GHOST: offer scrolls out of history -> poller sets reminder
-#   - [GAP] PARTIAL ADJUSTMENT: user adjusts only ONE value from the
+#   - PARTIAL ADJUSTMENT: user adjusts only ONE value from the
 #     suggestion ("אני מעדיף 170 גרם חלבון" when bot suggested 2200 cal +
 #     179g protein). This is cooperation, not refusal.
 #     -> classifier: conversation_reply (NOT toggle_cancel)
 #     -> handler: merge the user's adjusted value with the original
 #        suggestion. E.g., keep calories=2200, update protein=170.
-#     Currently broken: (1) classifier routes as toggle_cancel,
-#     (2) handle_nutrition_confirm requires BOTH calories AND protein
-#     from extraction - partial values are silently dropped.
 #
 # GOAL VALUE STEP (toggle_state = active_goal_pending, bot asked for value):
 #   - VALID: GPT extracts structured data from natural text (no format
@@ -229,8 +226,11 @@ Skip in CI: pytest -m "not integration"
 # - User can say "I want to update my sleep goal" / "change my eating
 #   window" / "update my calorie target" at any time in natural language
 # - classifier: toggle_activate with the relevant toggle_name
-# - If toggle is already active, Dugri re-enters the goal setting flow
-#   (asks for the new value) instead of just re-activating
+# - If toggle is already active with a goal set:
+#   - If the user's message contains the new value (e.g., "change
+#     calories to 2000"), extract and update directly - no re-flow.
+#   - If no value in the message (e.g., "change my targets"), ask for
+#     the specific number. For nutrition, skip body stats (already stored).
 # - Dugri understands the intent from context, not from exact phrasing
 #
 # RECURRING HOOKS (scheduled prompts for active toggles)

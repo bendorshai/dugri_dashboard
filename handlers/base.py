@@ -704,6 +704,13 @@ class HealthHandlers:
                     logger.info("toggle_activate for %s rerouted to conversation_reply (toggle in flow)", toggle_name)
                     await self._handle_conversation_reply(message, context, tid, profile, classification)
                     return
+                # Goal update: toggle already active with goal set
+                toggle = getattr(profile.toggles, toggle_name, None)
+                if toggle and toggle.goal_status == "set" and self.goal_service:
+                    response = self.goal_service.handle_goal_update(tid, toggle_name, message.text, profile)
+                    if response:
+                        await self._send(response, tid=tid, message=message)
+                        return
                 self.toggle_service.activate_toggle(tid, toggle_name)
                 if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
                     response = self.goal_service.offer_goal_with_shortcut(tid, toggle_name, message.text)

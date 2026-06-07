@@ -24,8 +24,8 @@ from repositories.hook_schedule_repository import HookScheduleStore
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.2.0"
-VERSION_NOTES = "restructure classifier prompt: context-first routing, negotiation patterns, back-reference resolution"
+VERSION = "6.3.0"
+VERSION_NOTES = "partial nutrition adjustment merge, targets sync, user-initiated goal update"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

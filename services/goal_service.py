@@ -311,24 +311,106 @@ class GoalService:
     def handle_nutrition_confirm(self, tid: int, text: str) -> str:
         """User responded to nutrition suggestion. conversation_reply = cooperation.
 
-        Try to extract corrected numbers via GPT. If none found, accept
-        the original suggestion. Refusals are caught by toggle_cancel.
+        Handles three cases:
+        1. User provides both calories AND protein -> use both
+        2. User adjusts only ONE value -> merge with original suggestion
+        3. User accepts without numbers -> keep original suggestion
+        All paths sync targets.calories/protein for weekly feedback.
         """
         import messages as M
 
         loop_close = M.LOOP_CLOSE_GOAL_SET.get("nutrition", "")
 
+        # Load original suggestion from profile
+        profile = self._user_repo.get(tid)
+        original = (profile.toggles.nutrition.goal_value or {}) if profile else {}
+
         # Try to extract corrected numbers from natural text
         if self._analyzer:
             parsed = self._analyzer.extract_goal_value(text, "nutrition_targets")
-            if parsed and parsed.get("calories") and parsed.get("protein"):
-                self._toggle_service.set_goal_value(tid, "nutrition",
-                                                    {"calories": parsed["calories"], "protein": parsed["protein"]})
+            if parsed and (parsed.get("calories") or parsed.get("protein")):
+                # Merge: user's value wins, fall back to original suggestion
+                cal = parsed.get("calories") or original.get("calories", 2000)
+                prot = parsed.get("protein") or original.get("protein", 150)
+                merged = {"calories": cal, "protein": prot}
+                self._toggle_service.set_goal_value(tid, "nutrition", merged)
+                self._user_repo.update_fields(tid, {
+                    "targets.calories": cal, "targets.protein": prot,
+                })
                 return random.choice(self._get_goal_set_pool("nutrition")) + loop_close
 
-        # No corrected numbers - accept the original suggestion
+        # No corrected numbers - accept original suggestion, sync targets
+        cal = original.get("calories", 2000)
+        prot = original.get("protein", 150)
         self._toggle_service.set_goal_status(tid, "nutrition", "set")
+        self._user_repo.update_fields(tid, {
+            "targets.calories": cal, "targets.protein": prot,
+        })
         return random.choice(self._get_goal_set_pool("nutrition")) + loop_close
+
+    # ------------------------------------------------------------------
+    # User-initiated goal update (toggle already active with goal set)
+    # ------------------------------------------------------------------
+
+    def handle_goal_update(
+        self, tid: int, toggle_name: str, text: str, profile: User,
+    ) -> str | None:
+        """User wants to update an existing goal.
+
+        If the user's message contains the new value, extract and update
+        directly. Otherwise, re-enter the goal flow (ask for value).
+        Returns None if the habit has no goal (e.g. self_care).
+        """
+        import messages as M
+
+        config = HOOK_CONFIG.get(toggle_name, {})
+        if not config.get("has_goal", False):
+            return None
+
+        extraction_types = {
+            "sleep": "sleep_time",
+            "workouts": "workout_count",
+            "eating_window": "eating_window",
+            "nutrition": "nutrition_targets",
+        }
+        goal_type = extraction_types.get(toggle_name)
+
+        # Try to extract value from user's text (shortcut)
+        if goal_type and self._analyzer:
+            parsed = self._analyzer.extract_goal_value(text, goal_type)
+            if parsed is not None:
+                # Nutrition: merge partial values with existing goal
+                if toggle_name == "nutrition":
+                    original = (profile.toggles.nutrition.goal_value or {})
+                    cal = parsed.get("calories") or original.get("calories", 2000)
+                    prot = parsed.get("protein") or original.get("protein", 150)
+                    parsed = {"calories": cal, "protein": prot}
+                    self._user_repo.update_fields(tid, {
+                        "targets.calories": cal, "targets.protein": prot,
+                    })
+
+                self._toggle_service.set_goal_value(tid, toggle_name, parsed)
+
+                # Sync eating_window field
+                if toggle_name == "eating_window" and "start" in parsed and "end" in parsed:
+                    self._user_repo.update_fields(tid, {
+                        "eating_window": {"start": parsed["start"], "end": parsed["end"]},
+                    })
+
+                pool = self._get_goal_set_pool(toggle_name)
+                loop_close = M.LOOP_CLOSE_GOAL_SET.get(toggle_name, "")
+                return random.choice(pool) + loop_close
+
+        # No value found - re-enter goal flow
+        if toggle_name == "nutrition":
+            # Skip body stats (already stored), ask for specific numbers
+            self._toggle_service.set_goal_offered(tid, "nutrition")
+            return random.choice(M.GOAL_VALUE_ASK_NUTRITION)
+        else:
+            # Re-offer goal question for other habits
+            self._toggle_service.set_goal_offered(tid, toggle_name)
+            pool = self._get_goal_value_ask_pool(toggle_name)
+            return random.choice(pool)
 
     # ------------------------------------------------------------------
     # Ghosting detection (called by poller)
