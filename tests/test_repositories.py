@@ -17,6 +17,7 @@ from repositories.user_repository import UserRepository
 from repositories.food_repository import FoodRepository
 from repositories.feedback_repository import WeeklyFeedbackRepository
 from repositories.error_repository import ErrorRepository
+from repositories.token_log_repository import TokenLogRepository
 
 
 FAKE_OID = str(ObjectId())
@@ -147,6 +148,33 @@ class TestUserRepository:
 
         result = repo.get_by_signup_token("nonexistent")
         assert result is None
+
+    def test_increment_tokens_uses_inc_operator(self):
+        col = _make_mock_collection()
+        repo = UserRepository(col)
+
+        repo.increment_tokens(123, "gpt-4o-mini", 500, 200)
+        col.update_one.assert_called_once()
+        args = col.update_one.call_args[0]
+        assert args[0] == {"telegram_user_id": 123}
+        assert args[1] == {"$inc": {
+            "tokens_used.gpt-4o-mini.prompt": 500,
+            "tokens_used.gpt-4o-mini.completion": 200,
+        }}
+
+    def test_increment_tokens_skips_when_zero(self):
+        col = _make_mock_collection()
+        repo = UserRepository(col)
+
+        repo.increment_tokens(123, "gpt-4o", 0, 0)
+        col.update_one.assert_not_called()
+
+    def test_increment_tokens_allows_partial_zero(self):
+        col = _make_mock_collection()
+        repo = UserRepository(col)
+
+        repo.increment_tokens(123, "gpt-4o", 100, 0)
+        col.update_one.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -364,3 +392,59 @@ class TestFoodRepositoryCleanup:
 
         result = repo.cleanup_expired_edits()
         assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# TokenLogRepository
+# ---------------------------------------------------------------------------
+
+class TestTokenLogRepository:
+    def test_log_upserts_with_inc(self):
+        col = _make_mock_collection()
+        repo = TokenLogRepository(col)
+
+        repo.log(123, "gpt-4o-mini", "2026-06-07", 500, 200)
+        col.update_one.assert_called_once()
+        args, kwargs = col.update_one.call_args
+        assert args[0] == {"telegram_user_id": 123, "model": "gpt-4o-mini", "date": "2026-06-07"}
+        assert args[1] == {"$inc": {"prompt_tokens": 500, "completion_tokens": 200}}
+        assert kwargs["upsert"] is True
+
+    def test_log_skips_when_zero(self):
+        col = _make_mock_collection()
+        repo = TokenLogRepository(col)
+
+        repo.log(123, "gpt-4o", "2026-06-07", 0, 0)
+        col.update_one.assert_not_called()
+
+    def test_get_usage_aggregates_by_date_and_model(self):
+        col = _make_mock_collection()
+        col.aggregate.return_value = [
+            {"_id": {"date": "2026-06-06", "model": "gpt-4o-mini"}, "prompt_tokens": 1000, "completion_tokens": 400},
+            {"_id": {"date": "2026-06-07", "model": "gpt-4o"}, "prompt_tokens": 500, "completion_tokens": 300},
+        ]
+        repo = TokenLogRepository(col)
+
+        results = repo.get_usage("2026-06-01", "2026-06-07")
+        assert len(results) == 2
+        assert results[0] == {"date": "2026-06-06", "model": "gpt-4o-mini", "prompt_tokens": 1000, "completion_tokens": 400}
+        assert results[1] == {"date": "2026-06-07", "model": "gpt-4o", "prompt_tokens": 500, "completion_tokens": 300}
+
+    def test_get_totals_sums_by_model(self):
+        col = _make_mock_collection()
+        col.aggregate.return_value = [
+            {"_id": "gpt-4o", "prompt_tokens": 2000, "completion_tokens": 1000},
+            {"_id": "gpt-4o-mini", "prompt_tokens": 8000, "completion_tokens": 4000},
+        ]
+        repo = TokenLogRepository(col)
+
+        result = repo.get_totals("2026-06-01", "2026-06-07")
+        assert result == {
+            "gpt-4o": {"prompt_tokens": 2000, "completion_tokens": 1000},
+            "gpt-4o-mini": {"prompt_tokens": 8000, "completion_tokens": 4000},
+        }
+
+    def test_creates_indexes(self):
+        col = _make_mock_collection()
+        TokenLogRepository(col)
+        assert col.create_index.call_count == 2

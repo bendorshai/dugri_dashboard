@@ -221,7 +221,7 @@ class TestFeedbackService:
     def test_process_reaction_saves_steering(self):
         svc, analyzer, _, user_repo, _ = self._make_service()
         from services.feedback_service import SteeringRewriteResult
-        analyzer.client.beta.chat.completions.parse.return_value = MagicMock(
+        analyzer.rewrite_steering.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(parsed=SteeringRewriteResult(
                 is_malicious=False, new_steering="updated steering",
             )))]
@@ -234,7 +234,7 @@ class TestFeedbackService:
     def test_process_reaction_malicious_adds_strike(self):
         svc, analyzer, _, user_repo, _ = self._make_service()
         from services.feedback_service import SteeringRewriteResult
-        analyzer.client.beta.chat.completions.parse.return_value = MagicMock(
+        analyzer.rewrite_steering.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(parsed=SteeringRewriteResult(
                 is_malicious=True, malicious_reason="prompt injection attempt",
             )))]

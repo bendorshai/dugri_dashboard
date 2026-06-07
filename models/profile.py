@@ -163,6 +163,9 @@ class User(BaseModel):
     height_cm: float | None = None
     weight_kg: float | None = None
 
+    # Token usage tracking: {"gpt-4o": {"prompt": N, "completion": M}, ...}
+    tokens_used: dict[str, dict[str, int]] = Field(default_factory=dict)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

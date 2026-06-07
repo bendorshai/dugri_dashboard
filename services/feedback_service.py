@@ -176,14 +176,7 @@ class FeedbackService:
         )
 
         try:
-            response = self._analyzer.client.beta.chat.completions.parse(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": prompt},
-                ],
-                response_format=SteeringRewriteResult,
-                temperature=0,
-            )
+            response = self._analyzer.rewrite_steering(prompt, SteeringRewriteResult)
             result = response.choices[0].message.parsed
             if result is None:
                 return "תודה, רשמתי."

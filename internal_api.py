@@ -61,13 +61,7 @@ async def handle_target_change(
     )
 
     try:
-        response = analyzer.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": prompt}],
-            temperature=0.7,
-            max_tokens=200,
-        )
-        message_text = response.choices[0].message.content
+        message_text = analyzer.generate_target_change_message(prompt)
         if not message_text:
             return None
 

@@ -21,11 +21,12 @@ from repositories.sleep_repository import SleepRepository
 from repositories.workout_repository import WorkoutRepository
 from repositories.self_care_repository import SelfCareRepository
 from repositories.hook_schedule_repository import HookScheduleStore
+from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.3.0"
-VERSION_NOTES = "partial nutrition adjustment merge, targets sync, user-initiated goal update"
+VERSION = "6.4.0"
+VERSION_NOTES = "per-model token usage tracking, admin token analytics tab with USD costs"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -90,6 +91,7 @@ def main():
     workout_repo = WorkoutRepository(db["workout_logs"])
     self_care_repo = SelfCareRepository(db["self_care_logs"])
     hook_schedule_store = HookScheduleStore(db["hook_schedule"])
+    token_log_repo = TokenLogRepository(db["token_logs"])
 
     from repositories.feature_request_repository import FeatureRequestRepository
     feature_request_repo = FeatureRequestRepository(db["feature_requests"])
@@ -123,6 +125,7 @@ def main():
         landing_page_url=landing_page_url,
         feature_request_repo=feature_request_repo,
         admin_chat_id=admin_chat_id,
+        token_log_repo=token_log_repo,
     )
 
     # Startup notification to admin

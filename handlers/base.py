@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from analyzer import FoodAnalyzer
+from analyzer import FoodAnalyzer, _token_callback_var
 from models.food import FoodEntry
 from models.profile import UserProfile
 from parsing import get_user_now, hebrew_day_name, is_within_eating_window
@@ -69,6 +69,7 @@ class HealthHandlers:
         goal_service=None,
         landing_page_url: str = "https://www.dugri.life",
         admin_chat_id: int = 0,
+        token_log_repo=None,
     ):
         self.landing_page_url = landing_page_url
         self.analyzer = analyzer
@@ -83,7 +84,26 @@ class HealthHandlers:
         self.toggle_service = toggle_service
         self.goal_service = goal_service
         self.admin_chat_id = admin_chat_id
+        self.token_log_repo = token_log_repo
         self._debug_classification = None
+
+    # ------------------------------------------------------------------
+    # Token tracking
+    # ------------------------------------------------------------------
+
+    def _setup_token_tracking(self, tid: int) -> None:
+        """Set the contextvar token callback for this request's GPT calls."""
+        if not getattr(self, "token_log_repo", None):
+            return
+        user_repo = self.user_repo
+        token_log_repo = self.token_log_repo
+
+        def _report(model: str, prompt_tokens: int, completion_tokens: int) -> None:
+            date_str = get_user_now("Asia/Jerusalem").strftime("%Y-%m-%d")
+            user_repo.increment_tokens(tid, model, prompt_tokens, completion_tokens)
+            token_log_repo.log(tid, model, date_str, prompt_tokens, completion_tokens)
+
+        _token_callback_var.set(_report)
 
     # ------------------------------------------------------------------
     # Conversation history helpers
@@ -549,6 +569,8 @@ class HealthHandlers:
             return
 
         tid = update.effective_user.id
+        self._setup_token_tracking(tid)
+
         profile = self._get_profile(tid)
         if profile is None:
             await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
@@ -1088,6 +1110,8 @@ class HealthHandlers:
             return
 
         tid = update.effective_user.id
+        self._setup_token_tracking(tid)
+
         profile = self._get_profile(tid)
         if profile is None:
             await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
@@ -1448,6 +1472,8 @@ class HealthHandlers:
         await safe_answer(query)
 
         tid = update.effective_user.id
+        self._setup_token_tracking(tid)
+
         profile = self._get_profile(tid)
         if profile is None:
             return
@@ -1717,6 +1743,7 @@ class HealthHandlers:
         await safe_answer(query)
 
         tid = update.effective_user.id
+        self._setup_token_tracking(tid)
 
         await self._send("🤔 מכין משוב...", tid=tid, context=context, save=False)
 

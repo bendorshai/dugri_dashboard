@@ -78,13 +78,14 @@ class TestHelpService:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.parsed = _make_help_response()
-        analyzer.client.beta.chat.completions.parse.return_value = mock_response
+        analyzer.answer_help.return_value = mock_response
 
         service = HelpService(analyzer, knowledge_path=doc)
         service.answer("מי אתה?")
 
-        call_args = analyzer.client.beta.chat.completions.parse.call_args
-        system_msg = call_args.kwargs["messages"][0]
+        call_args = analyzer.answer_help.call_args
+        messages = call_args[0][0]
+        system_msg = messages[0]
         assert system_msg["role"] == "system"
         assert "דוגרי הוא חבר ישראלי" in system_msg["content"]
 
@@ -96,13 +97,13 @@ class TestHelpService:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.parsed = _make_help_response()
-        analyzer.client.beta.chat.completions.parse.return_value = mock_response
+        analyzer.answer_help.return_value = mock_response
 
         service = HelpService(analyzer, knowledge_path=doc)
         service.answer("למה רק 5 הרגלים?", recent_messages=SAMPLE_MESSAGES)
 
-        call_args = analyzer.client.beta.chat.completions.parse.call_args
-        messages = call_args.kwargs["messages"]
+        call_args = analyzer.answer_help.call_args
+        messages = call_args[0][0]
 
         # system + 3 history messages + 1 user question = 5
         assert len(messages) == 5
@@ -124,7 +125,7 @@ class TestHelpService:
             response_text="כי 5 שבאמת משנים עדיפים על 15.",
             knowledge_gap=False,
         )
-        analyzer.client.beta.chat.completions.parse.return_value = mock_response
+        analyzer.answer_help.return_value = mock_response
 
         service = HelpService(analyzer, knowledge_path=doc)
         result = service.answer("למה רק 5 הרגלים?")
@@ -144,7 +145,7 @@ class TestHelpService:
             response_text="לא יודע לענות על זה.",
             knowledge_gap=True,
         )
-        analyzer.client.beta.chat.completions.parse.return_value = mock_response
+        analyzer.answer_help.return_value = mock_response
 
         service = HelpService(analyzer, knowledge_path=doc)
         result = service.answer("למה אתה לא עוקב אחרי רגשות?")
@@ -159,7 +160,7 @@ class TestHelpService:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.parsed = None
-        analyzer.client.beta.chat.completions.parse.return_value = mock_response
+        analyzer.answer_help.return_value = mock_response
 
         service = HelpService(analyzer, knowledge_path=doc)
         result = service.answer("שאלה כלשהי")
@@ -172,7 +173,7 @@ class TestHelpService:
         doc.write_text("ידע", encoding="utf-8")
 
         analyzer = _make_analyzer_mock()
-        analyzer.client.beta.chat.completions.parse.side_effect = Exception("API error")
+        analyzer.answer_help.side_effect = Exception("API error")
 
         service = HelpService(analyzer, knowledge_path=doc)
         result = service.answer("שאלה כלשהי")
@@ -181,7 +182,7 @@ class TestHelpService:
         assert result.response_text != ""
         assert result.knowledge_gap is False
 
-    def test_uses_gpt4o_mini(self, tmp_path):
+    def test_uses_answer_help_method(self, tmp_path):
         doc = tmp_path / "knowledge.md"
         doc.write_text("ידע", encoding="utf-8")
 
@@ -189,13 +190,15 @@ class TestHelpService:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.parsed = _make_help_response()
-        analyzer.client.beta.chat.completions.parse.return_value = mock_response
+        analyzer.answer_help.return_value = mock_response
 
         service = HelpService(analyzer, knowledge_path=doc)
         service.answer("שאלה")
 
-        call_args = analyzer.client.beta.chat.completions.parse.call_args
-        assert call_args.kwargs["model"] == "gpt-4o-mini"
+        analyzer.answer_help.assert_called_once()
+        call_args = analyzer.answer_help.call_args
+        assert call_args[0][1] is HelpResponse
+        assert call_args[1]["max_tokens"] == 1000
 
 
 # ---------------------------------------------------------------------------

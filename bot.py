@@ -96,6 +96,7 @@ def create_bot(
     landing_page_url: str = "https://www.dugri.life",
     feature_request_repo=None,
     admin_chat_id: int = 0,
+    token_log_repo=None,
 ) -> Application:
     app = Application.builder().token(token).build()
 
@@ -136,6 +137,7 @@ def create_bot(
         goal_service=goal_service,
         landing_page_url=landing_page_url,
         admin_chat_id=admin_chat_id,
+        token_log_repo=token_log_repo,
     )
 
     # Start handler with linking

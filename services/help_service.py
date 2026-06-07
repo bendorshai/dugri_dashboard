@@ -51,13 +51,7 @@ class HelpService:
         messages.append({"role": "user", "content": question_text})
 
         try:
-            response = self._analyzer.client.beta.chat.completions.parse(
-                model="gpt-4o-mini",
-                messages=messages,
-                response_format=HelpResponse,
-                temperature=0,
-                max_tokens=1000,
-            )
+            response = self._analyzer.answer_help(messages, HelpResponse, max_tokens=1000)
             result = response.choices[0].message.parsed
             if result is None:
                 return HelpResponse(response_text="לא הצלחתי לענות.")

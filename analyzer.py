@@ -1,13 +1,22 @@
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
-from typing import Literal
+from typing import Callable, Literal
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+TokenCallback = Callable[[str, int, int], None]  # (model, prompt_tokens, completion_tokens)
+
+# Context-scoped token callback. Set once at handler entry point;
+# _parse/_create pick it up automatically for all downstream GPT calls.
+_token_callback_var: contextvars.ContextVar[TokenCallback | None] = contextvars.ContextVar(
+    "_token_callback_var", default=None,
+)
 
 
 class FoodItem(BaseModel):
@@ -148,14 +157,31 @@ class FoodAnalyzer:
     def __init__(self, api_key: str):
         self.client = OpenAI(api_key=api_key)
 
-    def analyze_food_text(self, text: str, today_str: str, day_name: str = "") -> TimedFoodAnalysisResult | None:
+    def _parse(self, *, on_usage: TokenCallback | None = None, **kwargs):
+        """Wrapper for client.beta.chat.completions.parse with usage reporting."""
+        response = self.client.beta.chat.completions.parse(**kwargs)
+        cb = on_usage or _token_callback_var.get(None)
+        if cb and response.usage:
+            cb(kwargs["model"], response.usage.prompt_tokens, response.usage.completion_tokens)
+        return response
+
+    def _create(self, *, on_usage: TokenCallback | None = None, **kwargs):
+        """Wrapper for client.chat.completions.create with usage reporting."""
+        response = self.client.chat.completions.create(**kwargs)
+        cb = on_usage or _token_callback_var.get(None)
+        if cb and response.usage:
+            cb(kwargs["model"], response.usage.prompt_tokens, response.usage.completion_tokens)
+        return response
+
+    def analyze_food_text(self, text: str, today_str: str, day_name: str = "",
+                          on_usage: TokenCallback | None = None) -> TimedFoodAnalysisResult | None:
         date_line = f"\nהתאריך של היום: {today_str}"
         if day_name:
             date_line += f" (יום {day_name})"
         date_line += "\n"
         system = FOOD_TEXT_SYSTEM_PROMPT + date_line
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = self._parse(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system},
@@ -163,6 +189,7 @@ class FoodAnalyzer:
                 ],
                 response_format=TimedFoodAnalysisResult,
                 temperature=0,
+                on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
@@ -175,6 +202,7 @@ class FoodAnalyzer:
 
     def parse_message(
         self, text: str, today_str: str, last_entry: dict | None = None,
+        on_usage: TokenCallback | None = None,
     ) -> MessageParseResult:
         """Classify a message as new food or correction to last entry."""
         system = PARSE_MESSAGE_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
@@ -189,7 +217,7 @@ class FoodAnalyzer:
             system += "\nאין רשומה קודמת. התייחס לכל הודעה כ-food חדש.\n"
 
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = self._parse(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system},
@@ -197,6 +225,7 @@ class FoodAnalyzer:
                 ],
                 response_format=MessageParseResult,
                 temperature=0,
+                on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
@@ -213,6 +242,7 @@ class FoodAnalyzer:
         toggle_state: str | None = None,
         reply_context: str | None = None,
         day_name: str = "",
+        on_usage: TokenCallback | None = None,
     ) -> MessageClassification:
         """Classify a message using GPT. This is the ONLY entry point for all user messages."""
         system = ""
@@ -249,7 +279,7 @@ class FoodAnalyzer:
             system += "\nההודעה הנוכחית של המשתמש מופיעה למטה. השתמש בהיסטוריה כדי להבין את ההקשר.\n"
 
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = self._parse(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system},
@@ -257,6 +287,7 @@ class FoodAnalyzer:
                 ],
                 response_format=MessageClassification,
                 temperature=0,
+                on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
@@ -276,6 +307,7 @@ class FoodAnalyzer:
         new_correction: str,
         today_str: str,
         photo_base64: str | None = None,
+        on_usage: TokenCallback | None = None,
     ) -> CorrectionResult | None:
         """Re-analyze a food entry given the original + chain of corrections.
 
@@ -307,7 +339,7 @@ class FoodAnalyzer:
         model = "gpt-4o" if photo_base64 else "gpt-4o-mini"
 
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = self._parse(
                 model=model,
                 messages=[
                     {"role": "system", "content": system},
@@ -315,6 +347,7 @@ class FoodAnalyzer:
                 ],
                 response_format=CorrectionResult,
                 temperature=0,
+                on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
@@ -327,6 +360,7 @@ class FoodAnalyzer:
 
     def analyze_food_photo(
         self, base64_image: str, today_str: str, caption: str = "",
+        on_usage: TokenCallback | None = None,
     ) -> FoodPhotoResult | None:
         system = FOOD_PHOTO_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
         user_content = [
@@ -336,7 +370,7 @@ class FoodAnalyzer:
             user_content.append({"type": "text", "text": caption})
 
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = self._parse(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system},
@@ -344,6 +378,7 @@ class FoodAnalyzer:
                 ],
                 response_format=FoodPhotoResult,
                 temperature=0,
+                on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
@@ -360,6 +395,7 @@ class FoodAnalyzer:
         past_feedbacks: list[str],
         past_patterns: list[str] | None = None,
         steering_prompt: str | None = None,
+        on_usage: TokenCallback | None = None,
     ) -> dict | None:
         import json
 
@@ -384,7 +420,7 @@ class FoodAnalyzer:
         )
 
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = self._parse(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": ENHANCED_WEEKLY_SUMMARY_PROMPT},
@@ -392,6 +428,7 @@ class FoodAnalyzer:
                 ],
                 response_format=WeeklyFeedbackResult,
                 temperature=0.3,
+                on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
@@ -411,13 +448,14 @@ class FoodAnalyzer:
         remaining_calories: int,
         remaining_protein: int,
         today_entries: str,
+        on_usage: TokenCallback | None = None,
     ) -> str:
         user_msg = (
             f"נותרו היום: {remaining_calories} קלוריות, {remaining_protein}g חלבון\n"
             f"מה שנאכל היום:\n{today_entries}"
         )
         try:
-            response = self.client.chat.completions.create(
+            response = self._create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": MEAL_SUGGESTION_SYSTEM_PROMPT},
@@ -425,6 +463,7 @@ class FoodAnalyzer:
                 ],
                 temperature=0.7,
                 max_tokens=1000,
+                on_usage=on_usage,
             )
             return response.choices[0].message.content.strip()
         except Exception:
@@ -436,6 +475,7 @@ class FoodAnalyzer:
         question: str,
         week_csv: str,
         targets: dict,
+        on_usage: TokenCallback | None = None,
     ) -> str:
         user_msg = (
             f"הנתונים:\n{week_csv}\n\n"
@@ -443,7 +483,7 @@ class FoodAnalyzer:
             f"שאלה: {question}"
         )
         try:
-            response = self.client.chat.completions.create(
+            response = self._create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": QA_SYSTEM_PROMPT},
@@ -451,13 +491,15 @@ class FoodAnalyzer:
                 ],
                 temperature=0,
                 max_tokens=1000,
+                on_usage=on_usage,
             )
             return response.choices[0].message.content.strip()
         except Exception:
             logger.exception("GPT Q&A failed for: %s", question)
             return ""
 
-    def suggest_targets(self, height_cm: int, weight_kg: int, age: int, weight_goal: str = "") -> dict | None:
+    def suggest_targets(self, height_cm: int, weight_kg: int, age: int, weight_goal: str = "",
+                         on_usage: TokenCallback | None = None) -> dict | None:
         """Calculate nutrition targets using GPT. Retries 3 times on failure."""
         import time as _time
 
@@ -467,7 +509,7 @@ class FoodAnalyzer:
 
         for attempt in range(3):
             try:
-                response = self.client.chat.completions.create(
+                response = self._create(
                     model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": TARGET_SUGGESTION_SYSTEM_PROMPT},
@@ -475,6 +517,7 @@ class FoodAnalyzer:
                     ],
                     temperature=0,
                     max_tokens=200,
+                    on_usage=on_usage,
                 )
                 content = response.choices[0].message.content.strip()
                 if content.startswith("```"):
@@ -488,7 +531,8 @@ class FoodAnalyzer:
         logger.error("FATAL ERROR CONVERSATION BREAKER: suggest_targets failed after 3 attempts")
         return None
 
-    def extract_goal_value(self, text: str, goal_type: str) -> dict | None:
+    def extract_goal_value(self, text: str, goal_type: str,
+                           on_usage: TokenCallback | None = None) -> dict | None:
         """Extract structured goal data from natural Hebrew text using GPT.
 
         goal_type: "body_stats", "sleep_time", "workout_count",
@@ -501,7 +545,7 @@ class FoodAnalyzer:
             return None
 
         try:
-            response = self.client.chat.completions.create(
+            response = self._create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": prompt},
@@ -509,6 +553,7 @@ class FoodAnalyzer:
                 ],
                 temperature=0,
                 max_tokens=100,
+                on_usage=on_usage,
             )
             content = response.choices[0].message.content.strip()
             # Strip markdown code fences if present
@@ -521,13 +566,14 @@ class FoodAnalyzer:
 
     def analyze_bulk_correction(
         self, correction_text: str, entries_csv: str,
+        on_usage: TokenCallback | None = None,
     ) -> list[BulkCorrectionItem]:
         user_msg = (
             f"רשומות האכילה:\n{entries_csv}\n\n"
             f"תיקון מהמשתמש: {correction_text}"
         )
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = self._parse(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": BULK_CORRECTION_SYSTEM_PROMPT},
@@ -535,6 +581,7 @@ class FoodAnalyzer:
                 ],
                 response_format=BulkCorrectionResult,
                 temperature=0,
+                on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
@@ -543,3 +590,42 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT bulk correction failed")
             return []
+
+    # ------------------------------------------------------------------
+    # Public wrappers for external callers (feedback_service, help_service, internal_api)
+    # ------------------------------------------------------------------
+
+    def rewrite_steering(self, prompt: str, response_format,
+                         on_usage: TokenCallback | None = None):
+        """Steering rewrite for feedback reactions."""
+        return self._parse(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": prompt}],
+            response_format=response_format,
+            temperature=0,
+            on_usage=on_usage,
+        )
+
+    def answer_help(self, messages: list[dict], response_format,
+                    max_tokens: int = 1000, on_usage: TokenCallback | None = None):
+        """Self-knowledge Q&A for help_service."""
+        return self._parse(
+            model="gpt-4o-mini",
+            messages=messages,
+            response_format=response_format,
+            temperature=0,
+            max_tokens=max_tokens,
+            on_usage=on_usage,
+        )
+
+    def generate_target_change_message(self, prompt: str,
+                                       on_usage: TokenCallback | None = None) -> str | None:
+        """Target change notification for internal_api."""
+        response = self._create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200,
+            on_usage=on_usage,
+        )
+        return response.choices[0].message.content

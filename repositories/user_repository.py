@@ -64,6 +64,18 @@ class UserRepository(BaseRepository[User]):
         fields["updated_at"] = datetime.now(timezone.utc).isoformat()
         self.update_by_id(email, fields)
 
+    def increment_tokens(self, telegram_user_id: int, model: str, prompt_tokens: int, completion_tokens: int) -> None:
+        """Atomically increment per-model token usage counters."""
+        if prompt_tokens <= 0 and completion_tokens <= 0:
+            return
+        self._collection.update_one(
+            {"telegram_user_id": telegram_user_id},
+            {"$inc": {
+                f"tokens_used.{model}.prompt": prompt_tokens,
+                f"tokens_used.{model}.completion": completion_tokens,
+            }},
+        )
+
     def push_to_list(self, telegram_user_id: int, field: str, item: dict) -> None:
         """Atomically append an item to a list field."""
         self._collection.update_one(

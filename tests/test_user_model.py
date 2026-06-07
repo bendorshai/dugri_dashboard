@@ -197,6 +197,29 @@ class TestWeightGoal:
             Targets(weight_goal="bulk")
 
 
+class TestTokensUsed:
+    def test_tokens_used_defaults_empty(self):
+        user = User(email="a@b.com")
+        assert user.tokens_used == {}
+
+    def test_tokens_used_round_trip(self):
+        user = User(email="a@b.com")
+        user.tokens_used = {
+            "gpt-4o": {"prompt": 1200, "completion": 800},
+            "gpt-4o-mini": {"prompt": 5000, "completion": 3000},
+        }
+        doc = user.to_mongo_dict()
+        restored = User.from_mongo_dict(doc)
+        assert restored.tokens_used["gpt-4o"]["prompt"] == 1200
+        assert restored.tokens_used["gpt-4o"]["completion"] == 800
+        assert restored.tokens_used["gpt-4o-mini"]["prompt"] == 5000
+
+    def test_tokens_used_missing_from_doc_defaults_empty(self):
+        doc = {"_id": "a@b.com"}
+        user = User.from_mongo_dict(doc)
+        assert user.tokens_used == {}
+
+
 class TestUserProfileAlias:
     """UserProfile should still work as an alias for backward compat."""
 
