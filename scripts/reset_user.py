@@ -20,7 +20,7 @@ import io
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -107,6 +107,7 @@ def reset_user(email: str) -> None:
     }
 
     now = datetime.now(timezone.utc).isoformat()
+    trial_start = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
 
     reset_fields = {
         "toggles": fresh_toggles,
@@ -119,7 +120,7 @@ def reset_user(email: str) -> None:
         },
         "eating_window": None,
         "subscription_status": "trial_active",
-        "trial_started_at": now,
+        "trial_started_at": trial_start,
         "recent_messages": [],
         "dashboard_intro_shown": False,
         "target_retry_done": False,

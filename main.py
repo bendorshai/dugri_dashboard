@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.4.0"
-VERSION_NOTES = "per-model token usage tracking, admin token analytics tab with USD costs"
+VERSION = "6.5.0"
+VERSION_NOTES = "emotional support boundary: empathy responses, ChatGPT handoff for emotional messages"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

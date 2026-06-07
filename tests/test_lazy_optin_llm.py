@@ -403,6 +403,30 @@ Skip in CI: pytest -m "not integration"
 # "שלשום", "ביום שני", etc. "אותו דבר" / "גם" = same value as the
 # previous entry mentioned.
 #
+# EMOTIONAL MESSAGES
+# ------------------
+# Dugri is not a therapist. Two sub-flows handle emotional content:
+#
+# 1. STANDALONE EMOTIONAL: User shares emotions as the main content,
+#    with no habit action embedded.
+#    - Examples: "אני מרגיש רע", "יש לי חרדות", "יום קשה", "אין לי כוח"
+#    - Emotional questions without data ask: "למה אני אוכל כל כך הרבה?"
+#    - classifier: type=emotional
+#    - handler: brief empathy + boundary + ChatGPT handoff offer button
+#    - NOT emotional: "אין לי כוח לבשל" (food context), "יום קשה, אכלתי
+#      הרבה" (meal with emotional context)
+#    - emotional overrides active toggle flows when emotion is the main
+#      content
+#
+# 2. ACTION WITH EMOTIONAL CONTEXT: User logs a habit but expresses
+#    emotion alongside it.
+#    - Examples: "אכלתי המון כי אני עצוב" (meal), "הלכתי לישון מאוחר,
+#      הרגשתי חרדה" (sleep)
+#    - classifier: type stays as the action type (meal/sleep/etc.),
+#      emotional_context=true
+#    - handler: prepends brief inline empathy to the normal response
+#    - The action is processed normally (food logged, sleep logged, etc.)
+#
 # ============================================================================
 
 """
@@ -2018,3 +2042,73 @@ class TestNoneDuringActiveFlow:
             assert result.type != "unrelated", (
                 f"'{msg}' classified as none during remind_pending"
             )
+
+
+# ============================================================================
+# EMOTIONAL MESSAGES
+#
+# Dugri is not a therapist. Emotional messages are classified as "emotional".
+# Action messages with emotional context get emotional_context=True.
+# ============================================================================
+
+class TestEmotionalClassification:
+    """Emotional messages and emotional context on actions."""
+
+    def test_pure_emotional_message(self):
+        """Pure emotional message -> type=emotional."""
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "אני מרגיש רע")
+        assert result.type == "emotional"
+
+    def test_emotional_distress(self):
+        """Distress message -> type=emotional."""
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "יש לי חרדות")
+        assert result.type == "emotional"
+
+    def test_emotional_question_no_data_ask(self):
+        """Emotional question without data ask -> emotional, not answer_question."""
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "למה אני אוכל כל כך הרבה?")
+        assert result.type == "emotional"
+
+    def test_food_with_emotion_is_meal(self):
+        """Food + emotion -> meal with emotional_context=True."""
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "אכלתי המון כי אני עצוב")
+        assert result.type == "meal"
+        assert result.emotional_context is True
+
+    def test_sleep_with_emotion_is_sleep(self):
+        """Sleep + emotion -> sleep with emotional_context=True."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "הלכתי לישון ב-2 בלילה, הרגשתי חרדה",
+            toggle_state=_build_toggle_state(sleep="active"),
+        )
+        assert result.type == "sleep"
+        assert result.emotional_context is True
+
+    def test_informational_question_not_emotional(self):
+        """Data question -> answer_question, not emotional."""
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "כמה קלוריות אכלתי השבוע?")
+        assert result.type == "answer_question"
+
+    def test_no_energy_to_cook_is_meal(self):
+        """Food context with 'no energy' -> meal, not emotional."""
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "אין לי כוח לבשל אז הזמנתי פיצה")
+        assert result.type == "meal"
+
+    def test_emotional_overrides_offered_toggle(self):
+        """Emotional message during offered toggle -> emotional, not conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אני בדיכאון",
+            toggle_state=_build_toggle_state(sleep="offered"),
+            history=_build_history(
+                ("bot", "אני יכול לעקוב גם אחרי שעת השינה שלך. מעניין?"),
+            ),
+        )
+        assert result.type == "emotional"

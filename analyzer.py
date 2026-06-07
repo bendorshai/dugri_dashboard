@@ -109,6 +109,7 @@ class MessageClassification(BaseModel):
         "feedback_reaction",
         "toggle_cancel", "toggle_activate",
         "conversation_reply", "name_declaration",
+        "emotional",
         "unrelated",
         "none",  # internal only: error/timeout fallback, never returned by LLM
     ]
@@ -123,6 +124,7 @@ class MessageClassification(BaseModel):
     declared_name: str | None = None
     freeform_response: str | None = None
     refusal_tone: Literal["sharp", "soft"] | None = None
+    emotional_context: bool = False
 
 
 from prompts import (

@@ -19,6 +19,7 @@ CB_WEEKLY = "weekly_"
 CB_DAILY = "daily_"
 CB_BACK = "back_"
 CB_FEEDBACK = "feedback_"
+CB_EMOTIONAL = "emo_"
 
 
 def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
@@ -97,6 +98,13 @@ def make_food_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("📋 תפריט", callback_data=f"{CB_BACK}main"),
         ],
+    ])
+
+
+def make_emotional_support_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("בא לי לדבר עם מישהו", callback_data=f"{CB_EMOTIONAL}chatgpt")],
+        [InlineKeyboardButton("פתח ChatGPT", url="https://chatgpt.com")],
     ])
 
 

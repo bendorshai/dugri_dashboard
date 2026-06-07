@@ -36,11 +36,12 @@ from services.trial_service import TrialService
 from services.feedback_service import FeedbackService
 from services.toggle_service import ToggleService
 from services.goal_service import GoalService
+from services.emotional_support_service import EmotionalSupportService
 from handlers.start_handler import StartHandler
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
-    CB_FEEDBACK,
+    CB_FEEDBACK, CB_EMOTIONAL,
 )
 from handlers import HealthHandlers
 from scheduler import schedule_global_poller
@@ -117,6 +118,17 @@ def create_bot(
             habit_service, qa_service, help_service, feature_request_repo,
         )
 
+    # Emotional support (ChatGPT handoff)
+    emotional_support_service = None
+    if sleep_repo and workout_repo and self_care_repo:
+        emotional_support_service = EmotionalSupportService(
+            food_repo=food_repo,
+            sleep_repo=sleep_repo,
+            workout_repo=workout_repo,
+            self_care_repo=self_care_repo,
+            user_repo=user_repo,
+        )
+
     trial_service = TrialService(user_repo, landing_page_url)
     feedback_service = FeedbackService(
         analyzer, food_repo, user_repo, feedback_repo,
@@ -135,6 +147,7 @@ def create_bot(
         feedback_service=feedback_service,
         toggle_service=toggle_service,
         goal_service=goal_service,
+        emotional_support_service=emotional_support_service,
         landing_page_url=landing_page_url,
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,
@@ -165,6 +178,7 @@ def create_bot(
     app.add_handler(CallbackQueryHandler(h.handle_weekly_callback, pattern=f"^{CB_WEEKLY}"))
     app.add_handler(CallbackQueryHandler(h.handle_daily_callback, pattern=f"^{CB_DAILY}"))
     app.add_handler(CallbackQueryHandler(h.handle_feedback_callback, pattern=f"^{CB_FEEDBACK}"))
+    app.add_handler(CallbackQueryHandler(h.handle_emotional_callback, pattern=f"^{CB_EMOTIONAL}"))
     app.add_handler(CallbackQueryHandler(h.handle_back_callback, pattern=f"^{CB_BACK}"))
 
     # Error handler

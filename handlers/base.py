@@ -35,9 +35,10 @@ from keyboards import (
     make_daily_summary_keyboard, make_main_menu_keyboard,
     make_profile_keyboard, make_settings_keyboard,
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
+    make_emotional_support_keyboard,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
-    CB_FEEDBACK,
+    CB_FEEDBACK, CB_EMOTIONAL,
 )
 from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, send_long_bot, safe_answer
 
@@ -67,6 +68,7 @@ class HealthHandlers:
         feedback_service: FeedbackService | None = None,
         toggle_service: ToggleService | None = None,
         goal_service=None,
+        emotional_support_service=None,
         landing_page_url: str = "https://www.dugri.life",
         admin_chat_id: int = 0,
         token_log_repo=None,
@@ -83,6 +85,7 @@ class HealthHandlers:
         self.feedback_service = feedback_service
         self.toggle_service = toggle_service
         self.goal_service = goal_service
+        self.emotional_support_service = emotional_support_service
         self.admin_chat_id = admin_chat_id
         self.token_log_repo = token_log_repo
         self._debug_classification = None
@@ -671,6 +674,8 @@ class HealthHandlers:
                 text = result.response_text
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
+            if classification.emotional_context and self.emotional_support_service:
+                text = f"{self.emotional_support_service.get_inline_empathy()} {text}"
             await self._send(text, tid=tid, message=message)
             return
 
@@ -682,6 +687,8 @@ class HealthHandlers:
                 text = result.response_text
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
+            if classification.emotional_context and self.emotional_support_service:
+                text = f"{self.emotional_support_service.get_inline_empathy()} {text}"
             await self._send(text, tid=tid, message=message)
             return
 
@@ -695,6 +702,8 @@ class HealthHandlers:
                 text = result.response_text
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{text}\n\n{edu}" if edu else text
+            if classification.emotional_context and self.emotional_support_service:
+                text = f"{self.emotional_support_service.get_inline_empathy()} {text}"
             await self._send(text, tid=tid, message=message)
             return
 
@@ -777,6 +786,16 @@ class HealthHandlers:
                     await self._send(response, tid=tid, message=message)
             return
 
+        if classification.type == "emotional" and self.emotional_support_service:
+            empathy = self.emotional_support_service.get_empathy_response()
+            offer = self.emotional_support_service.get_offer_text()
+            context.chat_data["emotional_message"] = message.text
+            await self._send(
+                f"{empathy}\n\n{offer}", tid=tid, message=message,
+                reply_markup=make_emotional_support_keyboard(),
+            )
+            return
+
         if classification.type == "unrelated":
             response = classification.freeform_response or "מה נשמע?"
             await self._send(response, tid=tid, message=message)
@@ -853,6 +872,8 @@ class HealthHandlers:
             response = f"{items_text}\n\n✅ נרשם ({', '.join(retro_labels)})"
 
         last_entry_id = last_saved.id
+        if classification.emotional_context and self.emotional_support_service:
+            response = f"{self.emotional_support_service.get_inline_empathy()} {response}"
         await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))
         await safe_react(message, OK_HAND)
 
@@ -1768,3 +1789,17 @@ class HealthHandlers:
                 await self._send("לא הצלחתי לייצר משוב כרגע.", tid=tid, context=context, reply_markup=make_main_menu_keyboard(), save=False)
         except Exception:
             logger.exception("Failed to generate feedback")
+
+    async def handle_emotional_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        tid = update.effective_user.id
+        if not self.emotional_support_service:
+            return
+
+        user_message = context.chat_data.get("emotional_message", "")
+        prompt = self.emotional_support_service.build_chatgpt_prompt(tid, user_message)
+        await self._send(f"```\n{prompt}\n```", tid=tid, context=context)
