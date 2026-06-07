@@ -176,6 +176,15 @@ Skip in CI: pytest -m "not integration"
 #       ("סבבה, בלי יעד בינתיים..."), ask "want a reminder?"
 #     -> goal_status moves to remind_pending
 #   - GHOST: offer scrolls out of history -> poller sets reminder
+#   - [GAP] PARTIAL ADJUSTMENT: user adjusts only ONE value from the
+#     suggestion ("אני מעדיף 170 גרם חלבון" when bot suggested 2200 cal +
+#     179g protein). This is cooperation, not refusal.
+#     -> classifier: conversation_reply (NOT toggle_cancel)
+#     -> handler: merge the user's adjusted value with the original
+#        suggestion. E.g., keep calories=2200, update protein=170.
+#     Currently broken: (1) classifier routes as toggle_cancel,
+#     (2) handle_nutrition_confirm requires BOTH calories AND protein
+#     from extraction - partial values are silently dropped.
 #
 # GOAL VALUE STEP (toggle_state = active_goal_pending, bot asked for value):
 #   - VALID: GPT extracts structured data from natural text (no format
@@ -961,6 +970,112 @@ class TestNutritionConfirm:
             assert result.type == "conversation_reply", (
                 f"NUTRITION_SUGGESTION variant {i+1}/{len(M.NUTRITION_SUGGESTION)} "
                 f"misclassified as {result.type}: {suggestion!r}"
+            )
+
+
+# ============================================================================
+# GAP 4: PARTIAL NUTRITION GOAL ADJUSTMENT
+#
+# When Dugri suggests nutrition targets and the user wants to adjust only
+# one value (e.g., protein but not calories), the classifier must route it
+# as conversation_reply (not toggle_cancel) and the handler must merge the
+# user's adjustment with the original suggestion.
+#
+# Real failure (2026-06-07): bot suggested 2200 cal + 179g protein, user
+# said "אני מעדיף 170 גרם חלבון", classifier returned toggle_cancel,
+# bot responded "ממשיכים בלי יעד" - lost the entire goal.
+# ============================================================================
+
+class TestNutritionPartialAdjustment:
+    """Tests for adjusting one value from the nutrition suggestion.
+
+    The user accepts the suggestion but wants to change only calories or
+    only protein. This is cooperation (conversation_reply), not refusal.
+    """
+
+    SUGGESTION_2200 = (
+        "לפי הנתונים שלך, אני ממליץ על 2200 קלוריות ו-179.2 גרם חלבון ביום. נשמע טוב?"
+    )
+
+    def test_adjust_protein_only(self):
+        """'אני מעדיף 170 גרם חלבון' -> conversation_reply, not toggle_cancel.
+
+        Real case from 2026-06-07. User accepted calories but wanted
+        different protein. Classifier misrouted as toggle_cancel.
+        """
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אני מעדיף 170 גרם חלבון",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", "כדי לחשב - מה הגובה, המשקל והגיל שלך?"),
+                ("user", "גובה 174. משקל 112. גיל 36"),
+                ("bot", "מה היעד? ירידה, שמירה, או עלייה?"),
+                ("user", "ירידה"),
+                ("bot", self.SUGGESTION_2200),
+            ),
+        )
+        assert result.type == "conversation_reply", (
+            f"partial adjustment classified as {result.type} - "
+            f"adjusting one number is cooperation, not refusal"
+        )
+
+    def test_adjust_calories_only(self):
+        """'בוא נעשה 2000 קלוריות' -> conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "בוא נעשה 2000 קלוריות",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "ירידה"),
+                ("bot", self.SUGGESTION_2200),
+            ),
+        )
+        assert result.type == "conversation_reply", (
+            f"partial adjustment classified as {result.type} - "
+            f"adjusting one number is cooperation, not refusal"
+        )
+
+    def test_adjust_both_values(self):
+        """'אני מעדיף 2000 ו-160' -> conversation_reply."""
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, "אני מעדיף 2000 ו-160",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "ירידה"),
+                ("bot", self.SUGGESTION_2200),
+            ),
+        )
+        assert result.type == "conversation_reply", (
+            f"full adjustment classified as {result.type} - "
+            f"changing numbers is cooperation, not refusal"
+        )
+
+    def test_prefer_phrasing(self):
+        """'אני מעדיף X' is negotiation, not refusal."""
+        analyzer = _make_analyzer()
+        phrases = [
+            "אני מעדיף 150 גרם חלבון",
+            "אפשר 1900 קלוריות?",
+            "בוא נוריד את החלבון ל-150",
+            "אני חושב ש-2000 קלוריות יותר מתאים לי",
+        ]
+        for phrase in phrases:
+            result = _classify(
+                analyzer, phrase,
+                toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+                history=_build_history(
+                    ("bot", WEIGHT_GOAL_ASK),
+                    ("user", "ירידה"),
+                    ("bot", self.SUGGESTION_2200),
+                ),
+            )
+            assert result.type == "conversation_reply", (
+                f"'{phrase}' classified as {result.type} - "
+                f"negotiating numbers is cooperation, not refusal"
             )
 
 
