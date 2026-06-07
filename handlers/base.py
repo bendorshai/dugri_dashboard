@@ -675,7 +675,8 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
             if classification.emotional_context and self.emotional_support_service:
-                text = f"{self.emotional_support_service.get_inline_empathy()} {text}"
+                inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
+                text = f"{inline}\n\n{text}"
             await self._send(text, tid=tid, message=message)
             return
 
@@ -688,7 +689,8 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
             if classification.emotional_context and self.emotional_support_service:
-                text = f"{self.emotional_support_service.get_inline_empathy()} {text}"
+                inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
+                text = f"{inline}\n\n{text}"
             await self._send(text, tid=tid, message=message)
             return
 
@@ -703,7 +705,8 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{text}\n\n{edu}" if edu else text
             if classification.emotional_context and self.emotional_support_service:
-                text = f"{self.emotional_support_service.get_inline_empathy()} {text}"
+                inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
+                text = f"{inline}\n\n{text}"
             await self._send(text, tid=tid, message=message)
             return
 
@@ -787,7 +790,9 @@ class HealthHandlers:
             return
 
         if classification.type == "emotional" and self.emotional_support_service:
-            empathy = self.emotional_support_service.get_empathy_response()
+            reflection = classification.empathy_reflection or ""
+            boundary = self.emotional_support_service.get_empathy_response()
+            empathy = f"{reflection}\n\n{boundary}" if reflection else boundary
             context.chat_data["emotional_message"] = message.text
             await self._send(
                 empathy, tid=tid, message=message,
@@ -872,7 +877,8 @@ class HealthHandlers:
 
         last_entry_id = last_saved.id
         if classification.emotional_context and self.emotional_support_service:
-            response = f"{self.emotional_support_service.get_inline_empathy()} {response}"
+            inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
+            response = f"{inline}\n\n{response}"
         await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))
         await safe_react(message, OK_HAND)
 

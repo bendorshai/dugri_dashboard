@@ -125,6 +125,7 @@ class MessageClassification(BaseModel):
     freeform_response: str | None = None
     refusal_tone: Literal["sharp", "soft"] | None = None
     emotional_context: bool = False
+    empathy_reflection: str | None = None
 
 
 from prompts import (

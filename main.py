@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.5.1"
-VERSION_NOTES = "fix emotional support: Rogerian empathy, single-button flow, detailed GPT prompt"
+VERSION = "6.5.2"
+VERSION_NOTES = "LLM-generated Rogerian empathy reflection for emotional messages"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
