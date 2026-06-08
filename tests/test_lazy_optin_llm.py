@@ -2133,23 +2133,27 @@ class TestEmotionalClassification:
         assert len(result.meal.groups) > 0
 
     def test_repeated_food_with_emotion_stays_meal(self):
-        """5th food+emotion message must still be meal even after 4 prior identical messages.
+        """5th food+emotion message must still be meal even after 4 prior rounds.
 
         Dugri logic: as long as user logs food (even with emotions), Dugri cooperates -
         logs the entry + adds empathy. Only pure emotion (no food) triggers GPT referral.
         The classifier must evaluate each message independently.
-        Emotional bot responses are not saved to history (save=False in handler),
-        so the classifier only sees the user's repeated messages.
+        History includes both user messages AND bot food+empathy responses.
         """
         user_msg = "מבואס על עצמי ששתיתי עוד כוס של קפה עם חלב שקדים"
+        bot_response = "נשמע שאתה קשה עם עצמך על זה.\n\n☕ קפה עם חלב שקדים\n~15 קל׳ | 0g חלבון\n\n✅ נרשם"
         analyzer = _make_analyzer()
         result = _classify(
             analyzer, user_msg,
             history=_build_history(
                 ("user", user_msg),
+                ("bot", bot_response),
                 ("user", user_msg),
+                ("bot", bot_response),
                 ("user", user_msg),
+                ("bot", bot_response),
                 ("user", user_msg),
+                ("bot", bot_response),
             ),
         )
         assert result.type == "meal"
@@ -2157,6 +2161,31 @@ class TestEmotionalClassification:
         assert result.meal is not None
         assert result.meal.groups[0].total_calories > 0
         assert result.meal.groups[0].total_protein >= 0
+
+    def test_food_emotion_after_emotional_boundary_in_history(self):
+        """Food+emotion must stay meal even when history contains an emotional boundary.
+
+        Production regression: after first correct classification (meal+empathy),
+        if the classifier once misclassified as emotional and the boundary response
+        entered history, subsequent identical messages also got misclassified.
+        The classifier must evaluate each message independently.
+        """
+        user_msg = "מבואס על עצמי ששתיתי קפה עם חלב שקדים"
+        food_response = "נשמע שאתה קשה עם עצמך על זה.\n\n☕ קפה עם חלב שקדים\n~15 קל׳ | 0g חלבון\n\n✅ נרשם"
+        emotional_boundary = "נשמע שזה מעיק עליך.\n\nאני פה בשביל לעקוב אחרי ההרגלים שלך. לשיחה רגשית יותר מעמיקה, אפשר לנסות את ChatGPT."
+        analyzer = _make_analyzer()
+        result = _classify(
+            analyzer, user_msg,
+            history=_build_history(
+                ("user", user_msg),
+                ("bot", food_response),
+                ("user", user_msg),
+                ("bot", emotional_boundary),
+            ),
+        )
+        assert result.type == "meal"
+        assert result.emotional_context is True
+        assert result.meal is not None
 
     def test_sleep_with_emotion_is_sleep(self):
         """Sleep + emotion -> sleep with emotional_context=True."""

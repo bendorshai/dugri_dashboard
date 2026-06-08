@@ -275,11 +275,12 @@ class FoodAnalyzer:
             system += "\nאין רשומה קודמת. תיקון → food חדש.\n"
 
         if recent_messages:
-            system += "\nהיסטוריית שיחה אחרונה (מהישנה לחדשה):\n"
+            system += "\nתזכורת: לצורך סיווג רגשות - התעלם מההיסטוריה. סווג רק לפי תוכן ההודעה הנוכחית.\n"
+            system += "היסטוריית שיחה אחרונה (מהישנה לחדשה):\n"
             for msg in recent_messages:
                 role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
                 system += f"[{role_label}]: {msg.get('text', '')}\n"
-            system += "\nההודעה הנוכחית של המשתמש מופיעה למטה. השתמש בהיסטוריה כדי להבין את ההקשר.\n"
+            system += "\nההודעה הנוכחית של המשתמש מופיעה למטה. השתמש בהיסטוריה כדי להבין את ההקשר.\nחשוב: אם ההודעה הנוכחית מזכירה מאכל/שתייה ספציפיים - סווג כ-meal עם emotional_context=true, לא כ-emotional, ללא קשר להיסטוריה.\n"
 
         try:
             response = self._parse(
