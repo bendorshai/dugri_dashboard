@@ -794,9 +794,13 @@ class HealthHandlers:
             boundary = self.emotional_support_service.get_empathy_response()
             empathy = f"{reflection}\n\n{boundary}" if reflection else boundary
             context.chat_data["emotional_message"] = message.text
+            # save=False: emotional boundary responses must not enter conversation history.
+            # If they do, repeated emotional messages poison the classifier into following
+            # the pattern instead of evaluating each message independently.
             await self._send(
                 empathy, tid=tid, message=message,
                 reply_markup=make_emotional_support_keyboard(),
+                save=False,
             )
             return
 
