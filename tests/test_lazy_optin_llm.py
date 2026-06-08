@@ -2100,6 +2100,20 @@ class TestEmotionalClassification:
         # Should have food data
         assert result.meal is not None
 
+    def test_bummed_about_drinking_coffee_is_meal_with_empathy(self):
+        """'מבואס על עצמי ששתיתי קפה עם חלב שקדים' -> meal + emotional_context + empathy.
+
+        Prod regression: this was classified as emotional and food was NOT logged.
+        Must be meal with emotional_context - the drink is concrete food.
+        """
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "מבואס על עצמי ששתיתי עכשיו קפה עם חלב שקדים")
+        assert result.type == "meal"
+        assert result.emotional_context is True
+        assert result.empathy_reflection
+        assert result.meal is not None
+        assert len(result.meal.groups) > 0
+
     def test_sleep_with_emotion_is_sleep(self):
         """Sleep + emotion -> sleep with emotional_context=True."""
         analyzer = _make_analyzer()
