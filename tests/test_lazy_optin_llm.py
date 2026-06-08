@@ -2078,12 +2078,22 @@ class TestEmotionalClassification:
         result = _classify(analyzer, "למה אני אוכל כל כך הרבה?")
         assert result.type == "emotional"
 
-    def test_food_with_emotion_is_meal(self):
-        """Food + emotion -> meal with emotional_context=True."""
+    def test_vague_eating_with_emotion_is_emotional(self):
+        """'אכלתי המון כי אני עצוב' - no specific food -> emotional, not meal.
+
+        There's nothing concrete to log. 'המון' is not a food item.
+        """
         analyzer = _make_analyzer()
         result = _classify(analyzer, "אכלתי המון כי אני עצוב")
+        assert result.type == "emotional"
+
+    def test_specific_food_with_emotion_is_meal(self):
+        """'אכלתי גלידה כי אני עצוב' - specific food -> meal with emotional_context."""
+        analyzer = _make_analyzer()
+        result = _classify(analyzer, "אכלתי גלידה כי אני עצוב")
         assert result.type == "meal"
         assert result.emotional_context is True
+        assert result.meal is not None
 
     def test_angry_about_eating_is_meal_with_empathy(self):
         """'אני כועס על עצמי שאכלתי גלידה' -> meal + emotional_context + empathy_reflection.
