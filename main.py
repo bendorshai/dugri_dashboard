@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.6.0"
-VERSION_NOTES = "fix emotional+food misclassification: restructure classifier prompt, save all responses to history"
+VERSION = "6.7.0"
+VERSION_NOTES = "fix clock bugs: separate calendar date from eating-day date in GPT prompts, add resolve_eating_day"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -86,13 +86,22 @@ class EatingDayService:
     # Eating day logic
     # ------------------------------------------------------------------
 
-    def get_stats_date(self, profile: UserProfile, now: datetime) -> str:
-        """Which date to show stats for.
+    def resolve_eating_day(self, profile: UserProfile, now: datetime) -> str:
+        """Map a timestamp to its eating day (DD/MM/YYYY).
 
-        Inside the window -> today.
-        After window close (evening) -> today (completed day).
-        Before window open (morning) -> yesterday.
-        Fallback (no window): 00:00-23:59 -> always today.
+        The eating day starts at window_start. Any time before window_start
+        belongs to the previous calendar day's eating day. A meal at 2am
+        belongs to yesterday's eating day, not today's.
+
+        Rules:
+          - Inside the window   -> current calendar day's eating day.
+          - After window close  -> same calendar day's eating day.
+          - Before window open  -> PREVIOUS calendar day's eating day.
+          - No window (fallback) -> calendar day (window = 00:00-23:59).
+
+        This is the canonical interface for eating-day resolution. All code
+        that needs "which eating day does this moment belong to?" MUST use
+        this method.
         """
         window_start = profile.eating_window.start if profile.eating_window else "00:00"
         window_end = profile.eating_window.end if profile.eating_window else "23:59"
@@ -108,6 +117,10 @@ class EatingDayService:
             yesterday = now - timedelta(days=1)
             return yesterday.strftime("%d/%m/%Y")
         return now.strftime("%d/%m/%Y")
+
+    def get_stats_date(self, profile: UserProfile, now: datetime) -> str:
+        """Alias for resolve_eating_day. Kept for backward compatibility."""
+        return self.resolve_eating_day(profile, now)
 
     def get_eating_day_entries(
         self, profile: UserProfile, date_str: str,

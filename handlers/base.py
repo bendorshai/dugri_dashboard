@@ -591,10 +591,12 @@ class HealthHandlers:
                 await self._send(self.trial_service.get_blocked_message(), tid=tid, message=message, save=False)
                 return
 
-        today_str = self._get_today_str(profile)
+        now = get_user_now(profile.timezone)
+        calendar_today = now.strftime("%d/%m/%Y")   # actual date (for GPT prompts)
+        day_name = hebrew_day_name(now)              # matches calendar_today
+        stats_date = self.eating_day_svc.resolve_eating_day(profile, now)  # eating-day (for daily summary)
         time_str = self._get_time_str(profile)
         within_window = self._is_within_window(profile)
-        day_name = hebrew_day_name(get_user_now(profile.timezone))
 
         last_entry = context.chat_data.get("last_entry")
 
@@ -646,7 +648,7 @@ class HealthHandlers:
         # Classifier is the SINGLE entry point for ALL messages.
         self._debug_classification = None
         classification = self.analyzer.classify_message(
-            message.text, today_str, last_entry,
+            message.text, calendar_today, last_entry,
             recent_messages=recent_messages[:-1],
             toggle_state=toggle_state,
             reply_context=reply_context,
@@ -663,14 +665,14 @@ class HealthHandlers:
 
         # Route non-food types through MessageRouterService
         if classification.type == "correction" and classification.correction and last_entry:
-            await self._handle_correction(message, context, classification.correction, last_entry, profile, today_str, tid)
+            await self._handle_correction(message, context, classification.correction, last_entry, profile, calendar_today, tid)
             return
 
         if classification.type == "sleep" and self.message_router:
             if classification.habit_entries:
-                text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+                text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
             else:
-                result = self.message_router.route_sleep(tid, classification.sleep_time or time_str, today_str)
+                result = self.message_router.route_sleep(tid, classification.sleep_time or time_str, stats_date)
                 text = result.response_text
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
@@ -682,9 +684,9 @@ class HealthHandlers:
 
         if classification.type == "workout" and self.message_router:
             if classification.habit_entries:
-                text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+                text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
             else:
-                result = self.message_router.route_workout(tid, today_str, classification.workout_note)
+                result = self.message_router.route_workout(tid, stats_date, classification.workout_note)
                 text = result.response_text
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
@@ -696,10 +698,10 @@ class HealthHandlers:
 
         if classification.type == "self_care" and self.message_router:
             if classification.habit_entries:
-                text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+                text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
             else:
                 from datetime import datetime as dt
-                week_id = dt.strptime(today_str, "%d/%m/%Y").strftime("%G-W%V")
+                week_id = dt.strptime(stats_date, "%d/%m/%Y").strftime("%G-W%V")
                 result = self.message_router.route_self_care(tid, classification.self_care_description or message.text, week_id)
                 text = result.response_text
             edu = self._get_education_intro(tid, "self_care", profile)
@@ -722,7 +724,7 @@ class HealthHandlers:
         if classification.type == "answer_question" and self.message_router:
             result = self.message_router.route_answer_question(
                 tid, classification.question_text or message.text,
-                today_str, self._target_cal(profile), self._target_prot(profile),
+                calendar_today, self._target_cal(profile), self._target_prot(profile),
             )
             await self._send(result.response_text, tid=tid, message=message, reply_markup=make_daily_summary_keyboard())
             return
@@ -773,7 +775,7 @@ class HealthHandlers:
             if self.feedback_service:
                 is_first = self.feedback_service.is_first_feedback(tid)
                 feedback_text = self.feedback_service.give_feedback(
-                    tid, today_str, profile, is_first,
+                    tid, stats_date, profile, is_first,
                 )
                 await self._send(feedback_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard())
             elif self.message_router:
@@ -820,7 +822,7 @@ class HealthHandlers:
         if classification.type == "meal" and classification.meal and classification.meal.groups:
             food_result = classification.meal
         else:
-            food_result = self.analyzer.analyze_food_text(message.text, today_str, day_name)
+            food_result = self.analyzer.analyze_food_text(message.text, calendar_today, day_name)
 
         if food_result is None or not food_result.groups:
             await self._send("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?", tid=tid, message=message, save=False)
@@ -837,7 +839,7 @@ class HealthHandlers:
                 description=combined_desc,
                 calories=group.total_calories,
                 protein=group.total_protein,
-                within_window=within_window if group.date == today_str else True,
+                within_window=within_window if group.date == calendar_today else True,
             )
             saved = self.food_repo.add(entry)
             saved_entries.append((group, saved))
@@ -855,11 +857,10 @@ class HealthHandlers:
             "entry_id": last_saved.id,
         }
 
-        stats_date = self.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
-        items_text = self._format_grouped_items_text(food_result.groups, stats_date)
+        items_text = self._format_grouped_items_text(food_result.groups, calendar_today)
 
-        # Check if any group lands on today
-        today_groups = [g for g in food_result.groups if g.date == stats_date]
+        # Check if any group lands on the current eating day
+        today_groups = [g for g in food_result.groups if g.date == calendar_today]
         if today_groups:
             today_cal = sum(g.total_calories for g in today_groups)
             today_prot = sum(g.total_protein for g in today_groups)
@@ -884,7 +885,7 @@ class HealthHandlers:
 
         # Mixed-type: process habit entries that came alongside the meal
         if classification.habit_entries:
-            habit_text = self._process_habit_entries(tid, classification.habit_entries, today_str)
+            habit_text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
             if habit_text:
                 await self._send(habit_text, tid=tid, message=message)
 
@@ -1143,7 +1144,8 @@ class HealthHandlers:
             await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
             return
 
-        today_str = self._get_today_str(profile)
+        now = get_user_now(profile.timezone)
+        calendar_today = now.strftime("%d/%m/%Y")
         time_str = self._get_time_str(profile)
         within_window = self._is_within_window(profile)
 
@@ -1154,7 +1156,7 @@ class HealthHandlers:
 
         caption = message.caption or ""
 
-        result = self.analyzer.analyze_food_photo(b64, today_str, caption=caption)
+        result = self.analyzer.analyze_food_photo(b64, calendar_today, caption=caption)
         if result is None or not result.items:
             await self._send("לא הצלחתי לזהות מאכל בתמונה. נסה לתאר מה אכלת בטקסט.", tid=tid, message=message, save=False)
             return
@@ -1165,7 +1167,7 @@ class HealthHandlers:
 
         entry = FoodEntry(
             telegram_user_id=tid,
-            date=today_str,
+            date=calendar_today,
             time=time_str,
             description=combined_desc,
             calories=total_cal,
@@ -1259,8 +1261,8 @@ class HealthHandlers:
 
         await safe_react(message, THUMBS_UP)
 
-        today_str = self._get_today_str(profile)
-        today = datetime.strptime(today_str, "%d/%m/%Y").date()
+        calendar_today = get_user_now(profile.timezone).strftime("%d/%m/%Y")
+        today = datetime.strptime(calendar_today, "%d/%m/%Y").date()
         dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(7)]
 
         entries = self.food_repo.get_by_user_and_dates(tid, dates)
@@ -1295,7 +1297,7 @@ class HealthHandlers:
 
         entry = pending["entry"]
         correction_history = pending.get("correction_history", [])
-        today_str = self._get_today_str(profile)
+        calendar_today = get_user_now(profile.timezone).strftime("%d/%m/%Y")
         entry_id = entry["entry_id"]
 
         # Re-download photo if available so the LLM has visual context
@@ -1315,12 +1317,12 @@ class HealthHandlers:
             original_protein=entry["protein"],
             correction_history=correction_history,
             new_correction=message.text,
-            today_str=today_str,
+            today_str=calendar_today,
             photo_base64=photo_b64,
         )
 
         if correction:
-            await self._handle_correction(message, context, correction, entry, profile, today_str, tid)
+            await self._handle_correction(message, context, correction, entry, profile, calendar_today, tid)
             updated_history = correction_history + [message.text]
             context.chat_data.setdefault("correction_histories", {})[entry_id] = updated_history
         else:
@@ -1553,7 +1555,9 @@ class HealthHandlers:
         entry_id = query.data.removeprefix(CB_FOOD_DELETE)
         try:
             self.food_repo.delete(entry_id)
-            await query.edit_message_text("🗑 הרשומה נמחקה.", reply_markup=make_daily_summary_keyboard())
+            import random
+            import messages as M
+            await query.edit_message_text(random.choice(M.FOOD_DELETED), reply_markup=make_daily_summary_keyboard())
         except Exception:
             logger.exception("Failed to delete food entry %s", entry_id)
 
@@ -1612,13 +1616,13 @@ class HealthHandlers:
             profile = self._get_profile(tid)
             if profile is None:
                 return
-            today_str = self._get_today_str(profile)
+            calendar_today = get_user_now(profile.timezone).strftime("%d/%m/%Y")
             time_str = self._get_time_str(profile)
             within_window = self._is_within_window(profile)
 
             new_entry = FoodEntry(
                 telegram_user_id=tid,
-                date=today_str,
+                date=calendar_today,
                 time=time_str,
                 description=food_entry.description,
                 calories=food_entry.calories,
@@ -1778,12 +1782,13 @@ class HealthHandlers:
             if profile is None:
                 return
 
-            today_str = self._get_today_str(profile)
+            now = get_user_now(profile.timezone)
+            stats_date = self.eating_day_svc.resolve_eating_day(profile, now)
 
             if self.feedback_service:
                 is_first = self.feedback_service.is_first_feedback(tid)
                 feedback_text = self.feedback_service.give_feedback(
-                    tid, today_str,
+                    tid, stats_date,
                     self._target_cal(profile),
                     self._target_prot(profile),
                     profile.feedback_steering_prompt,

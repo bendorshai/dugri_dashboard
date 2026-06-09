@@ -479,8 +479,12 @@ class FoodAnalyzer:
         question: str,
         week_csv: str,
         targets: dict,
+        today_str: str | None = None,
         on_usage: TokenCallback | None = None,
     ) -> str:
+        system = QA_SYSTEM_PROMPT
+        if today_str:
+            system += f"\nהתאריך של היום: {today_str}\n"
         user_msg = (
             f"הנתונים:\n{week_csv}\n\n"
             f"יעדים: {targets.get('calories', 0)} קלוריות, {targets.get('protein', 0)}g חלבון\n\n"
@@ -490,7 +494,7 @@ class FoodAnalyzer:
             response = self._create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": QA_SYSTEM_PROMPT},
+                    {"role": "system", "content": system},
                     {"role": "user", "content": user_msg},
                 ],
                 temperature=0,

@@ -34,4 +34,4 @@ class QaService:
         week_csv = "\n".join(csv_lines)
 
         targets = {"calories": target_cal, "protein": target_prot}
-        return self._analyzer.answer_question(question_text, week_csv, targets) or "לא הצלחתי לענות."
+        return self._analyzer.answer_question(question_text, week_csv, targets, today_str=today_str) or "לא הצלחתי לענות."
