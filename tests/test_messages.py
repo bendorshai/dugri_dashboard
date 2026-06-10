@@ -147,6 +147,18 @@ class TestWeeklySummaryMessages:
         assert isinstance(M.FEEDBACK_REACTION_ACK, str)
 
 
+class TestFoodDeletedMessages:
+    def test_food_deleted_is_list(self):
+        assert isinstance(M.FOOD_DELETED, list)
+
+    def test_food_deleted_has_four_variants(self):
+        assert len(M.FOOD_DELETED) == 4
+
+    def test_food_deleted_contains_expected_phrases(self):
+        expected = {"סוגר", "קיבלתי", "מחקתי", "טופל"}
+        assert set(M.FOOD_DELETED) == expected
+
+
 class TestRouterMessages:
     def test_sleep_logged_template(self):
         text = M.SLEEP_LOGGED.format(time="23:30")
