@@ -139,6 +139,7 @@ def create_app(config: dict | None = None) -> Flask:
             "welcome.html",
             deep_link=deep_link,
             user_name=user_name,
+            bot_username=bot_username,
             hs=hs,
         )
 

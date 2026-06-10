@@ -69,6 +69,14 @@ class TestWelcomePage:
         resp = client.get("/welcome")
         assert resp.status_code == 302
 
+    def test_welcome_shows_home_screen_tip(self, client):
+        _login(client)
+        resp = client.get("/welcome")
+        data = resp.data.decode("utf-8")
+        assert "טיפ מקצוען" in data
+        assert "אנדרואיד" in data
+        assert "אייפון" in data
+
 
 class TestLegalPages:
     def test_terms_page_renders(self, client):

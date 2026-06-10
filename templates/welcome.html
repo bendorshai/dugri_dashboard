@@ -83,6 +83,109 @@
         margin-right: 0.5rem;
     }
 
+    /* -- Home screen tip section -- */
+    .tip-section {
+        max-width: 380px;
+        width: 100%;
+        margin-bottom: 2rem;
+        padding: 1.25rem 1.5rem;
+        background: rgba(255, 255, 255, 0.55);
+        border-radius: 16px;
+        border: 1px solid rgba(166, 116, 72, 0.12);
+        text-align: right;
+    }
+
+    .tip-badge {
+        display: inline-block;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #A67448;
+        background: rgba(166, 116, 72, 0.1);
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        margin-bottom: 0.75rem;
+    }
+
+    .tip-intro {
+        font-size: 0.95rem;
+        color: #5C5550;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+
+    .tip-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .tip-tab {
+        flex: 1;
+        padding: 0.5rem 0.75rem;
+        border: 1.5px solid rgba(166, 116, 72, 0.2);
+        border-radius: 10px;
+        background: transparent;
+        color: #7A756D;
+        font-size: 0.9rem;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .tip-tab.active {
+        background: #A67448;
+        color: #fff;
+        border-color: #A67448;
+    }
+
+    .tip-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .tip-step {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        font-size: 0.9rem;
+        color: #5C5550;
+        line-height: 1.4;
+    }
+
+    .step-num {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #8FA876;
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .tip-alt {
+        font-size: 0.8rem;
+        color: #9C9590;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .tip-segue {
+        text-align: center;
+        font-size: 0.95rem;
+        color: #8B5E38;
+        font-weight: 600;
+        margin-top: 1rem;
+        margin-bottom: 0;
+    }
+
     .welcome-footer {
         margin-top: 3rem;
         font-size: 0.8rem;
@@ -97,10 +200,48 @@
 {% endblock %}
 
 {% block body %}
-<main class="welcome-page" x-data="{ copied: false }">
+<main class="welcome-page" x-data="{ copied: false, platform: 'android' }">
     <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="welcome-logo">
 
     <h1 class="welcome-heading">{{ hs.POST_SIGNUP_WELCOME.format(name=user_name or '') }}</h1>
+
+    <!-- Home screen tip -->
+    <div class="tip-section">
+        <div class="tip-badge">{{ hs.HOME_TIP_BADGE }}</div>
+        <p class="tip-intro">{{ hs.HOME_TIP_INTRO }}</p>
+
+        <div class="tip-tabs">
+            <button class="tip-tab" :class="{ active: platform === 'android' }"
+                    @click="platform = 'android'">
+                🤖 {{ hs.HOME_TIP_TAB_ANDROID }}
+            </button>
+            <button class="tip-tab" :class="{ active: platform === 'iphone' }"
+                    @click="platform = 'iphone'">
+                🍎 {{ hs.HOME_TIP_TAB_IPHONE }}
+            </button>
+        </div>
+
+        <div class="tip-steps" x-show="platform === 'android'" x-transition.opacity>
+            {% for step in hs.HOME_TIP_ANDROID_STEPS %}
+            <div class="tip-step">
+                <span class="step-num">{{ loop.index }}</span>
+                <span>{{ step }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="tip-steps" x-show="platform === 'iphone'" x-transition.opacity>
+            {% for step in hs.HOME_TIP_IPHONE_STEPS %}
+            <div class="tip-step">
+                <span class="step-num">{{ loop.index }}</span>
+                <span>{{ step.format(bot_username=bot_username) }}</span>
+            </div>
+            {% endfor %}
+            <p class="tip-alt">{{ hs.HOME_TIP_IPHONE_ALT }}</p>
+        </div>
+
+        <p class="tip-segue">{{ hs.HOME_TIP_SEGUE }}</p>
+    </div>
 
     <a href="{{ deep_link }}" class="welcome-cta">
         {{ hs.POST_SIGNUP_CTA }}
