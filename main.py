@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.8.0"
-VERSION_NOTES = "split LLM test file into focused modules, add spec headers to all test files, disable SUPER_DEBUG"
+VERSION = "7.0.0"
+VERSION_NOTES = "Modular LLM refactor: slim Router (12 types), Conversational module, Opt-in unification, Logger service. Eliminates false-unrelated classifications."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

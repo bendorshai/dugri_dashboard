@@ -22,7 +22,7 @@ mock_ext = sys.modules["telegram.ext"]
 mock_ext.ContextTypes = MagicMock()
 mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
-from analyzer import FoodItem, FoodAnalysisResult
+from analyzer import FoodItem, FoodAnalysisResult, RouterClassification
 from models.profile import UserProfile, EatingWindow, Targets
 from models.food import FoodEntry
 
@@ -228,9 +228,20 @@ class TestHandleMessageRetroactive:
         h.trial_service = None
         h.goal_service = None
         h.feedback_service = None
+        h.onboarding_service = None
+        h.emotional_support_service = None
+        h.conversational_service = None
+        h.token_log_repo = None
         h.landing_page_url = "https://test.com"
         h.admin_chat_id = 0
         return h
+
+    @staticmethod
+    def _set_meal_classification(handler, timed):
+        """Set both old and new classification mocks for a meal result."""
+        from analyzer import MessageClassification
+        handler.analyzer.classify_message.return_value = MessageClassification(type="meal", meal=timed)
+        handler.analyzer.route_message.return_value = RouterClassification(type="meal", meal=timed)
 
     @pytest.mark.asyncio
     @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
@@ -270,8 +281,7 @@ class TestHandleMessageRetroactive:
                 total_protein=5,
             ),
         ])
-        classification = MessageClassification(type="meal", meal=timed)
-        h.analyzer.classify_message.return_value = classification
+        self._set_meal_classification(h, timed)
 
         saved_entries = []
         def mock_add(entry):
@@ -343,8 +353,7 @@ class TestHandleMessageRetroactive:
                 total_protein=5,
             ),
         ])
-        classification = MessageClassification(type="meal", meal=timed)
-        h.analyzer.classify_message.return_value = classification
+        self._set_meal_classification(h, timed)
         h.food_repo.add.side_effect = lambda e: setattr(e, 'id', 'test_id') or e
         h.food_repo.get_all_for_user.return_value = [MagicMock(), MagicMock()]
 
@@ -394,8 +403,7 @@ class TestHandleMessageRetroactive:
                 total_protein=25,
             ),
         ])
-        classification = MessageClassification(type="meal", meal=timed)
-        h.analyzer.classify_message.return_value = classification
+        self._set_meal_classification(h, timed)
         h.food_repo.add.side_effect = lambda e: setattr(e, 'id', 'test_id') or e
         h.food_repo.get_all_for_user.return_value = [MagicMock(), MagicMock()]
 
@@ -447,8 +455,7 @@ class TestHandleMessageRetroactive:
                 total_protein=30,
             ),
         ])
-        classification = MessageClassification(type="meal", meal=timed)
-        h.analyzer.classify_message.return_value = classification
+        self._set_meal_classification(h, timed)
         h.food_repo.add.side_effect = lambda e: setattr(e, 'id', 'test_id') or e
         h.food_repo.get_all_for_user.return_value = [MagicMock()]
 
@@ -512,8 +519,7 @@ class TestHandleMessageRetroactive:
                 total_protein=5,
             ),
         ])
-        classification = MessageClassification(type="meal", meal=timed)
-        h.analyzer.classify_message.return_value = classification
+        self._set_meal_classification(h, timed)
 
         entry_counter = [0]
         def mock_add(entry):

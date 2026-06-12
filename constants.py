@@ -120,3 +120,8 @@ Makes the bot feel less robotic - like it's thinking before bringing up a new to
 
 SUPER_DEBUG = False
 """When True, admin sees classification + toggle state + next-step prediction on every message."""
+
+USE_ROUTER_V2 = True
+"""When True, use the new slim Router for message classification instead of the old classifier.
+The new Router uses modular dispatch (opt_in, conversational, etc.) instead of the old
+15-type classifier. Set to False to revert to old classifier if issues arise."""

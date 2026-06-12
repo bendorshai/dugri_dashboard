@@ -114,6 +114,8 @@ def create_bot(
         habit_service = HabitService(sleep_repo, workout_repo, self_care_repo)
         qa_service = QaService(analyzer, food_repo)
         help_service = HelpService(analyzer, knowledge_path=knowledge_path)
+        from services.conversational_service import ConversationalService
+        conversational_service = ConversationalService(analyzer, knowledge_path=knowledge_path)
         message_router = MessageRouterService(
             habit_service, qa_service, help_service, feature_request_repo,
         )
@@ -148,6 +150,7 @@ def create_bot(
         toggle_service=toggle_service,
         goal_service=goal_service,
         emotional_support_service=emotional_support_service,
+        conversational_service=conversational_service,
         landing_page_url=landing_page_url,
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,

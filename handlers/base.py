@@ -69,6 +69,7 @@ class HealthHandlers:
         toggle_service: ToggleService | None = None,
         goal_service=None,
         emotional_support_service=None,
+        conversational_service=None,
         landing_page_url: str = "https://www.dugri.life",
         admin_chat_id: int = 0,
         token_log_repo=None,
@@ -86,6 +87,7 @@ class HealthHandlers:
         self.toggle_service = toggle_service
         self.goal_service = goal_service
         self.emotional_support_service = emotional_support_service
+        self.conversational_service = conversational_service
         self.admin_chat_id = admin_chat_id
         self.token_log_repo = token_log_repo
         self._debug_classification = None
@@ -511,6 +513,311 @@ class HealthHandlers:
         await self._send(M.EXIT_DOOR_CANCELLED, tid=tid, message=message)
 
     # ------------------------------------------------------------------
+    # Router v2 dispatch
+    # ------------------------------------------------------------------
+
+    async def _dispatch_v2(
+        self, message, context, tid, profile, router_result,
+        calendar_today, day_name, stats_date, time_str, within_window,
+        last_entry, recent_messages, toggle_state, reply_context,
+    ):
+        """Dispatch based on new Router classification.
+
+        Maps RouterClassification types to handler logic.
+        """
+        rtype = router_result.type
+
+        if rtype == "opt_in":
+            await self._handle_opt_in(message, context, tid, profile, router_result)
+            return
+
+        if rtype == "conversational":
+            await self._handle_conversational(
+                message, tid, profile, toggle_state, recent_messages,
+            )
+            return
+
+        if rtype == "inappropriate":
+            await self._send("אני פה בשביל הרגלי בריאות. בוא נדבר על זה.", tid=tid, message=message)
+            return
+
+        if rtype == "correction" and last_entry:
+            # Re-analyze via old classifier for correction data
+            classification = self.analyzer.classify_message(
+                message.text, calendar_today, last_entry,
+                recent_messages=recent_messages[:-1] if recent_messages else [],
+                toggle_state=toggle_state,
+                reply_context=reply_context,
+                day_name=day_name,
+            )
+            if classification.correction:
+                await self._handle_correction(
+                    message, context, classification.correction, last_entry,
+                    profile, calendar_today, tid,
+                )
+                return
+
+        if rtype == "sleep" and self.message_router:
+            # Extract sleep time via existing service
+            result = self.message_router.route_sleep(tid, time_str, stats_date)
+            text = result.response_text
+            edu = self._get_education_intro(tid, "sleep", profile)
+            text = f"{text}\n\n{edu}" if edu else text
+            await self._send(text, tid=tid, message=message)
+            return
+
+        if rtype == "workout" and self.message_router:
+            result = self.message_router.route_workout(tid, stats_date, message.text)
+            text = result.response_text
+            edu = self._get_education_intro(tid, "workouts", profile)
+            text = f"{text}\n\n{edu}" if edu else text
+            await self._send(text, tid=tid, message=message)
+            return
+
+        if rtype == "self_care" and self.message_router:
+            from datetime import datetime as dt
+            week_id = dt.strptime(stats_date, "%d/%m/%Y").strftime("%G-W%V")
+            result = self.message_router.route_self_care(tid, message.text, week_id)
+            text = result.response_text
+            edu = self._get_education_intro(tid, "self_care", profile)
+            text = f"{text}\n\n{edu}" if edu else text
+            await self._send(text, tid=tid, message=message)
+            return
+
+        if rtype == "name_declaration" and self.onboarding_service:
+            name = message.text.strip()
+            # Remove common prefixes
+            for prefix in ["קוראים לי", "השם שלי", "אני"]:
+                if name.startswith(prefix):
+                    name = name[len(prefix):].strip()
+                    break
+            recent = self.user_repo.get_recent_messages(tid, 5)
+            last_bot = next((m for m in reversed(recent) if m.get("role") == "bot"), None)
+            late = not (last_bot and "איך אתה רוצה שאקרא לך?" in last_bot.get("text", ""))
+            response = self.onboarding_service.handle_name_response(tid, name, late=late)
+            if response:
+                await self._send(response, tid=tid, message=message)
+            return
+
+        if rtype == "feedback_request":
+            if self.feedback_service:
+                is_first = self.feedback_service.is_first_feedback(tid)
+                feedback_text = self.feedback_service.give_feedback(
+                    tid, stats_date, profile, is_first,
+                )
+                await self._send(feedback_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard())
+            return
+
+        if rtype == "feedback_reaction":
+            if self.feedback_service:
+                steering = profile.feedback_steering_prompt if profile else None
+                response = self.feedback_service.process_reaction(tid, message.text, steering)
+                if response:
+                    await self._send(response, tid=tid, message=message)
+            return
+
+        if rtype == "emotional" and self.emotional_support_service:
+            # Generate empathy via Logger
+            from services.logger_service import LoggerService
+            logger_svc = LoggerService(self.analyzer)
+            empathy_result = logger_svc.generate_empathy(message.text)
+            reflection = empathy_result.empathy_reflection
+            boundary = self.emotional_support_service.get_empathy_response()
+            empathy = f"{reflection}\n\n{boundary}" if reflection else boundary
+            context.chat_data["emotional_message"] = message.text
+            await self._send(
+                empathy, tid=tid, message=message,
+                reply_markup=make_emotional_support_keyboard(),
+            )
+            return
+
+        # Default: meal (with inline extraction from Router)
+        from analyzer import TimedFoodAnalysisResult
+
+        if rtype == "meal" and router_result.meal and router_result.meal.groups:
+            food_result = router_result.meal
+        else:
+            food_result = self.analyzer.analyze_food_text(message.text, calendar_today, day_name)
+
+        if food_result is None or not food_result.groups:
+            await self._send("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?", tid=tid, message=message, save=False)
+            return
+
+        # Reuse existing food logging logic
+        saved_entries = []
+        for group in food_result.groups:
+            combined_desc = ", ".join(item.description for item in group.items)
+            entry = FoodEntry(
+                telegram_user_id=tid,
+                date=group.date,
+                time=group.time,
+                description=combined_desc,
+                calories=group.total_calories,
+                protein=group.total_protein,
+                within_window=within_window if group.date == calendar_today else True,
+            )
+            saved = self.food_repo.add(entry)
+            saved_entries.append((group, saved))
+
+        last_group, last_saved = saved_entries[-1]
+        last_desc = ", ".join(item.description for item in last_group.items)
+        context.chat_data["last_entry"] = {
+            "description": last_desc,
+            "calories": last_group.total_calories,
+            "protein": last_group.total_protein,
+            "entry_id": last_saved.id,
+        }
+
+        items_text = self._format_grouped_items_text(food_result.groups, calendar_today)
+
+        today_groups = [g for g in food_result.groups if g.date == calendar_today]
+        if today_groups:
+            today_cal = sum(g.total_calories for g in today_groups)
+            today_prot = sum(g.total_protein for g in today_groups)
+            new_daily_cal, new_daily_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
+            prev_cal = new_daily_cal - today_cal
+            prev_protein = new_daily_prot - today_prot
+            alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
+            response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
+            if alerts:
+                response = f"{alerts}\n\n{response}"
+        else:
+            retro_labels = [g.temporal_label for g in food_result.groups]
+            response = f"{items_text}\n\n✅ נרשם ({', '.join(retro_labels)})"
+
+        last_entry_id = last_saved.id
+        await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))
+        await safe_react(message, OK_HAND)
+
+        # Protein education on first meal ever
+        if len(self.food_repo.get_all_for_user(tid)) == 1:
+            from dugri_messages import EDU_INTRO_FIRST_LOG
+            edu = EDU_INTRO_FIRST_LOG.get("protein")
+            if edu:
+                await self._send(edu, tid=tid, message=message, save=False)
+
+        await self._recompute_eating_window(context, tid, profile)
+        await self._check_inline_hooks(message, tid, profile)
+
+    async def _handle_conversational(self, message, tid, profile, toggle_state, recent_messages):
+        """Handle conversational type via ConversationalService."""
+        if not self.conversational_service:
+            await self._send("מה נשמע?", tid=tid, message=message)
+            return
+
+        # Build user context string
+        user_context_parts = []
+        if profile.name:
+            user_context_parts.append(f"שם: {profile.name}")
+        if profile.height_cm:
+            user_context_parts.append(f"גובה: {profile.height_cm} ס\"מ")
+        if profile.weight_kg:
+            user_context_parts.append(f"משקל: {profile.weight_kg} ק\"ג")
+        if profile.age:
+            user_context_parts.append(f"גיל: {profile.age}")
+        tc = self._target_cal(profile)
+        tp = self._target_prot(profile)
+        if tc:
+            user_context_parts.append(f"יעד קלוריות: {tc}")
+        if tp:
+            user_context_parts.append(f"יעד חלבון: {tp}")
+        user_context = "\n".join(user_context_parts) if user_context_parts else "לא זמין"
+
+        # Build data summary (lightweight - just daily totals)
+        now = get_user_now(profile.timezone)
+        stats_date = self.eating_day_svc.resolve_eating_day(profile, now)
+        total_cal, total_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
+        data_summary = f"היום: {total_cal} קלוריות, {total_prot} גרם חלבון"
+
+        response = self.conversational_service.respond(
+            user_text=message.text,
+            user_context=user_context,
+            data_summary=data_summary,
+            toggle_state=toggle_state or "",
+            recent_messages=recent_messages[:-1] if recent_messages else None,
+        )
+        await self._send(response, tid=tid, message=message)
+
+    # ------------------------------------------------------------------
+    # Opt-in unified handler (Router v2 dispatch)
+    # ------------------------------------------------------------------
+
+    async def _handle_opt_in(
+        self, message, context, tid: int, profile: UserProfile, router_result,
+    ):
+        """Unified opt_in handler for the new Router.
+
+        Maps Router's single 'opt_in' type to the existing handler logic by
+        reading MongoDB toggle state to determine whether this is an acceptance,
+        refusal, goal value, or user-initiated request.
+
+        This method replaces the combined logic of:
+        - _handle_conversation_reply (acceptance, goal values, remind)
+        - _handle_toggle_cancel (refusal)
+        - toggle_activate branch (user-initiated tracking)
+        """
+        text = message.text.strip()
+
+        # Determine which toggle this is about
+        toggle_name = router_result.toggle_name
+        if not toggle_name:
+            # Infer from the first toggle in flow
+            for name in ("nutrition", "sleep", "eating_window", "workouts", "self_care"):
+                if self._is_toggle_in_flow(profile, name):
+                    toggle_name = name
+                    break
+
+        # Check if this is a refusal (use existing classifier for tone detection)
+        # For now, delegate to existing handlers based on MongoDB state
+        # The Router says "opt_in" = toggle-related, MongoDB state determines the action
+
+        # Strategy: check MongoDB state and route to existing handler methods
+        if toggle_name:
+            toggle = getattr(profile.toggles, toggle_name, None)
+            if toggle:
+                # Goal pending -> goal value or acceptance/refusal
+                if toggle.status == "active" and toggle.goal_status == "pending" and toggle.goal_offered_at:
+                    # Could be goal value, acceptance, or refusal
+                    # Try conversation_reply path first (cooperation)
+                    await self._handle_conversation_reply(message, context, tid, profile, router_result)
+                    return
+
+                # Remind pending
+                if toggle.goal_status == "remind_pending":
+                    await self._handle_conversation_reply(message, context, tid, profile, router_result)
+                    return
+
+                # Offered (dormant + revealed) -> acceptance or refusal
+                if toggle.revealed_at and toggle.status == "dormant":
+                    await self._handle_conversation_reply(message, context, tid, profile, router_result)
+                    return
+
+                # Active with goal -> possible goal update
+                if toggle.goal_status == "set" and self.goal_service:
+                    response = self.goal_service.handle_goal_update(tid, toggle_name, text, profile)
+                    if response:
+                        await self._send(response, tid=tid, message=message)
+                        return
+
+        # User-initiated tracking request (toggle dormant/cancelled)
+        if toggle_name and self.toggle_service:
+            toggle = getattr(profile.toggles, toggle_name, None)
+            if toggle and toggle.status in ("dormant", "cancelled"):
+                self.toggle_service.activate_toggle(tid, toggle_name)
+                if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
+                    response = self.goal_service.offer_goal_with_shortcut(tid, toggle_name, text)
+                    await self._send(response, tid=tid, message=message)
+                else:
+                    import messages as M
+                    loop_close = M.LOOP_CLOSE_ACTIVATION.get(toggle_name, "")
+                    response = "יפה, נרשמתי. מעכשיו אני עוקב." + loop_close
+                    await self._send(response, tid=tid, message=message)
+                return
+
+        # Fallback: use conversation_reply handler
+        await self._handle_conversation_reply(message, context, tid, profile, router_result)
+
+    # ------------------------------------------------------------------
     # Command handlers
     # ------------------------------------------------------------------
 
@@ -645,8 +952,32 @@ class HealthHandlers:
                 toggle_lines.append(f"- {label}: cancelled")
         toggle_state = "\n".join(toggle_lines) if toggle_lines else None
 
-        # Classifier is the SINGLE entry point for ALL messages.
+        # Classify the user message.
+        # USE_ROUTER_V2 switches between old classifier and new modular Router.
+        from constants import USE_ROUTER_V2
+
         self._debug_classification = None
+        self._debug_router_type = None
+
+        if USE_ROUTER_V2:
+            # New Router: slim classification + inline meal extraction
+            router_result = self.analyzer.route_message(
+                message.text, calendar_today, last_entry,
+                recent_messages=recent_messages[:-1],
+                toggle_state=toggle_state,
+                reply_context=reply_context,
+                day_name=day_name,
+            )
+            self._debug_router_type = router_result.type
+            self._debug_classification = router_result.type
+            await self._dispatch_v2(
+                message, context, tid, profile, router_result,
+                calendar_today, day_name, stats_date, time_str, within_window,
+                last_entry, recent_messages, toggle_state, reply_context,
+            )
+            return
+
+        # Old classifier path (fallback when USE_ROUTER_V2=False)
         classification = self.analyzer.classify_message(
             message.text, calendar_today, last_entry,
             recent_messages=recent_messages[:-1],

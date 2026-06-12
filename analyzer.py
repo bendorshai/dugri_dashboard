@@ -128,6 +128,23 @@ class MessageClassification(BaseModel):
     empathy_reflection: str | None = None
 
 
+class RouterClassification(BaseModel):
+    """Slim Router output - classifies message type and extracts meal data inline.
+
+    The Router's job is to classify AND extract food data for meals (80% of traffic).
+    For all non-meal types, only the type and optional toggle_name are populated.
+    No emotion detection, no habit extraction, no empathy generation.
+    """
+    type: Literal[
+        "meal", "opt_in", "correction",
+        "name_declaration", "sleep", "workout", "self_care", "emotional",
+        "feedback_request", "feedback_reaction", "conversational",
+        "inappropriate",
+    ]
+    meal: TimedFoodAnalysisResult | None = None  # populated only for type=meal
+    toggle_name: str | None = None  # for opt_in, when Router can identify which habit
+
+
 from prompts import (
     BULK_CORRECTION_SYSTEM_PROMPT,
     CLASSIFIER_SYSTEM_PROMPT,
@@ -143,6 +160,7 @@ from prompts import (
     MEAL_SUGGESTION_SYSTEM_PROMPT,
     PARSE_MESSAGE_SYSTEM_PROMPT,
     QA_SYSTEM_PROMPT,
+    ROUTER_SYSTEM_PROMPT,
     TARGET_SUGGESTION_SYSTEM_PROMPT,
     ENHANCED_WEEKLY_SUMMARY_PROMPT,
 )
@@ -301,6 +319,70 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT classifier failed for: %s", text[:80])
             return MessageClassification(type="none")
+
+    def route_message(
+        self, text: str, today_str: str, last_entry: dict | None = None,
+        recent_messages: list[dict] | None = None,
+        toggle_state: str | None = None,
+        reply_context: str | None = None,
+        day_name: str = "",
+        on_usage: TokenCallback | None = None,
+    ) -> RouterClassification:
+        """Route a message using the slim Router prompt.
+
+        Classifies message type and extracts meal data inline for type=meal.
+        For all other types, only type and optional toggle_name are returned.
+        """
+        system = ""
+
+        if reply_context:
+            system += f"ההודעה הנוכחית היא תגובה ישירה להודעת הבוט:\n\"{reply_context}\"\n\n"
+
+        if toggle_state:
+            system += f"מצב ההרגלים של המשתמש:\n{toggle_state}\n\n"
+
+        system += ROUTER_SYSTEM_PROMPT
+        date_line = f"\nהתאריך של היום: {today_str}"
+        if day_name:
+            date_line += f" (יום {day_name})"
+        system += date_line + "\n"
+
+        if last_entry:
+            system += (
+                f"\nהרשומה האחרונה שנרשמה:\n"
+                f"תיאור: {last_entry.get('description', '')}\n"
+                f"קלוריות: {last_entry.get('calories', 0)}\n"
+                f"חלבון: {last_entry.get('protein', 0)}\n"
+            )
+        else:
+            system += "\nאין רשומה קודמת. תיקון → food חדש.\n"
+
+        if recent_messages:
+            system += "\nהיסטוריית שיחה אחרונה (מהישנה לחדשה):\n"
+            for msg in recent_messages:
+                role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
+                system += f"[{role_label}]: {msg.get('text', '')}\n"
+            system += "\nההודעה הנוכחית של המשתמש מופיעה למטה. השתמש בהיסטוריה כדי להבין את ההקשר.\n"
+
+        try:
+            response = self._parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text},
+                ],
+                response_format=RouterClassification,
+                temperature=0,
+                on_usage=on_usage,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                logger.warning("GPT router returned None for: %s", text[:80])
+                return RouterClassification(type="conversational")
+            return result
+        except Exception:
+            logger.exception("GPT router failed for: %s", text[:80])
+            return RouterClassification(type="conversational")
 
     def analyze_correction(
         self,
@@ -625,6 +707,18 @@ class FoodAnalyzer:
             max_tokens=max_tokens,
             on_usage=on_usage,
         )
+
+    def converse(self, messages: list[dict], max_tokens: int = 1000,
+                 on_usage: TokenCallback | None = None) -> str:
+        """Free-form conversational response (plain text, no structured output)."""
+        response = self._create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.3,
+            max_tokens=max_tokens,
+            on_usage=on_usage,
+        )
+        return response.choices[0].message.content or ""
 
     def generate_target_change_message(self, prompt: str,
                                        on_usage: TokenCallback | None = None) -> str | None:
