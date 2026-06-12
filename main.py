@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "6.7.0"
-VERSION_NOTES = "fix clock bugs: separate calendar date from eating-day date in GPT prompts, add resolve_eating_day"
+VERSION = "6.8.0"
+VERSION_NOTES = "split LLM test file into focused modules, add spec headers to all test files, disable SUPER_DEBUG"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -1,3 +1,80 @@
+"""
+test_analyzer.py - TDD for the FoodAnalyzer class.
+
+Tests the OpenAI-backed analysis layer that powers all LLM interactions:
+food text analysis, photo analysis, corrections, weekly feedback, meal
+suggestions, question answering, target calculation, and message parsing.
+
+All tests mock the OpenAI client - no real API calls. Validates that
+correct prompts, models, and structured output formats are used.
+
+# ============================================================================
+# ANALYZER SPECIFICATION (Single Source of Truth)
+#
+# This comment defines what FoodAnalyzer is responsible for and how each
+# method must behave. When behavior changes, UPDATE THIS COMMENT FIRST,
+# then update/add tests, then fix code to pass.
+#
+# ============================================================================
+#
+# FOOD TEXT ANALYSIS (analyze_food_text)
+# ---------------------------------------
+# - System prompt must include Hebrew terms: קלוריות, חלבון, תזונתי
+# - Uses structured output (TimedFoodAnalysisResult) for reliable parsing
+# - Returns FoodAnalysisResult with calories and protein per item
+# - Returns None on GPT failure (no exceptions propagated to caller)
+#
+# FOOD PHOTO ANALYSIS (analyze_food_photo)
+# -----------------------------------------
+# - Sends image_url content block in user message
+# - Uses gpt-4o model (vision-capable)
+# - Uses FoodPhotoResult structured output format
+# - Returns photo_tips for image quality feedback
+#
+# WEEKLY FEEDBACK (generate_weekly_feedback)
+# -------------------------------------------
+# - Uses WeeklyFeedbackResult structured output format
+# - Uses gpt-4o model for complex analysis
+# - System prompt includes "כל המספרים כבר מחושבים" (all numbers pre-calculated)
+# - Includes food items and past feedback in prompt context
+# - Returns discovered_pattern and pattern_summary fields
+# - Returns None on failure
+#
+# MEAL SUGGESTIONS (suggest_meals)
+# ---------------------------------
+# - Prompt includes remaining_calories, remaining_protein, and today_entries
+#
+# QUESTION ANSWERING (answer_question)
+# -------------------------------------
+# - Sends question with week_csv and targets context
+#
+# MESSAGE PARSING (parse_message / classify_message)
+# ---------------------------------------------------
+# - Returns MessageParseResult with type="food" + FoodAnalysisResult
+#   or type="correction" + CorrectionResult
+# - Includes last_entry data in system message for correction context
+# - Returns type="unknown" on failure
+#
+# TARGET SUGGESTION (suggest_targets)
+# ------------------------------------
+# - Sends height_cm, weight_kg, age in user message
+#
+# CORRECTION ANALYSIS (analyze_correction)
+# -----------------------------------------
+# - Includes original_description and new_correction in user message
+# - Includes correction_history for multi-round corrections
+# - Uses CorrectionResult structured output format
+# - Returns None on failure
+#
+# BULK CORRECTION (bulk_correct)
+# -------------------------------
+# - Returns BulkCorrectionResult with corrected items
+# - Includes CSV entries in user message
+# - Returns empty list on failure
+#
+# ============================================================================
+"""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch

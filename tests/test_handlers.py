@@ -1,3 +1,81 @@
+"""
+test_handlers.py - TDD for HealthHandlers (Telegram bot message handlers).
+
+Tests the handler layer that processes classified messages and produces
+Telegram responses. All external dependencies (Telegram, MongoDB, OpenAI)
+are mocked - these are unit tests, not integration tests.
+
+# ============================================================================
+# HANDLERS SPECIFICATION (Single Source of Truth)
+#
+# This comment defines the expected behavior of each handler. When behavior
+# changes, UPDATE THIS COMMENT FIRST, then update/add tests, then fix code
+# to pass.
+#
+# ============================================================================
+#
+# DAILY STATUS FORMAT (format_daily_status)
+# ------------------------------------------
+# - Under calorie target: shows checkmark, remaining count
+# - Over calorie target: shows warning emoji, over amount
+# - Same logic for protein: checkmark when on track, warning when below
+#
+# CROSSING ALERTS (_check_crossing_alerts)
+# -----------------------------------------
+# - Protein target reached: congratulations message with "כל הכבוד" + "חלבון"
+# - Calorie target exceeded: warning message with "עברת" + "קלוריות"
+# - Both can fire simultaneously
+# - No alert when both metrics within range
+#
+# FOOD RESPONSE FORMAT (_build_food_response, _format_items_text)
+# ----------------------------------------------------------------
+# - Each food item on two lines: name, then grams/calories/protein
+# - Single item: no total line
+# - Multiple items: total line with "סה״כ"
+# - Items joined with ", " in one-row-per-message format
+# - Totals correctly summed across items
+#
+# DAILY SUMMARY CALLBACK (handle_daily_callback)
+# ------------------------------------------------
+# - Shows itemized entries with time and totals
+# - Empty day shows "אין רשומות" (no entries)
+#
+# CORRECTION FLOW (_handle_pending_correction, _format_correction_response)
+# --------------------------------------------------------------------------
+# - Calls analyzer.analyze_correction with original description + new text
+# - Correction history accumulates across multiple rounds
+# - Response shows three sections: "רשומה מקורית" (original), "עריכה"
+#   (edit), "חדש" (new), "רשומה מעודכנת" (updated)
+# - Removed items show "הוסר" marker, don't appear in updated section
+# - First correction saves original_description, original_calories,
+#   original_protein, correction_history, and edit_expires_at
+# - Second correction preserves the FIRST original values (not the
+#   already-corrected values)
+# - Photo corrections: photo_file_id is re-downloaded and passed as
+#   photo_base64 to analyzer
+#
+# FOOD AGAIN CALLBACK (handle_food_again_callback)
+# --------------------------------------------------
+# - Duplicates the entry with new date/time
+# - Response includes description and calories
+#
+# TOGGLE CANCEL HANDLER (_handle_toggle_cancel)
+# -----------------------------------------------
+# Context-aware refusal behavior based on toggle state and refusal tone:
+#
+#   - Sharp refusal during offer -> ask remind (don't activate the toggle)
+#   - Soft refusal during offer -> softer message + ask remind
+#   - Sharp refusal during goal-setting -> keep habit active, skip goal,
+#     ask remind
+#   - Soft refusal during goal-setting -> keep active, per-habit soft
+#     message ("סבבה, בלי יעד בינתיים..."), ask remind
+#   - Decline during remind_pending -> permanent decline
+#     (GOAL_DECLINED_FOREVER message, never asks again)
+#   - Cancel active habit (no flow) -> full cancel (EXIT_DOOR_CANCELLED)
+#
+# ============================================================================
+"""
+
 from __future__ import annotations
 
 import sys
