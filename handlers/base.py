@@ -713,8 +713,10 @@ class HealthHandlers:
             user_context_parts.append(f"גובה: {profile.height_cm} ס\"מ")
         if profile.weight_kg:
             user_context_parts.append(f"משקל: {profile.weight_kg} ק\"ג")
-        if profile.age:
-            user_context_parts.append(f"גיל: {profile.age}")
+        if profile.birth_year:
+            from datetime import datetime as dt
+            age = dt.now().year - profile.birth_year
+            user_context_parts.append(f"גיל: {age}")
         tc = self._target_cal(profile)
         tp = self._target_prot(profile)
         if tc:
