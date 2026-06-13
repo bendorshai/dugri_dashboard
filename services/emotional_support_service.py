@@ -1,9 +1,13 @@
 """
-emotional_support_service.py - empathy responses and ChatGPT handoff.
+emotional_support_service.py - empathy responses and emotional CTA.
 
 Dugri is not a therapist. When users share emotions, this service provides
-brief validation and optionally builds a personalized ChatGPT prompt with
-the user's detailed habit entries from the last 7 days.
+brief validation and a CTA based on the configured mode:
+
+- "creator" (default): refer user to Shai (Dugri's creator, a therapist)
+  via a Telegram deep link.
+- "chatgpt" (legacy, disabled by default): build a personalized ChatGPT
+  prompt with the user's habit data from the last 7 days.
 
 Depends on: repositories (food, sleep, workout, self_care, user), messages.
 Used by: handlers/base.py.
@@ -32,19 +36,27 @@ class EmotionalSupportService:
         workout_repo: WorkoutRepository,
         self_care_repo: SelfCareRepository,
         user_repo: UserRepository,
+        emotional_support_config: dict | None = None,
     ):
         self._food_repo = food_repo
         self._sleep_repo = sleep_repo
         self._workout_repo = workout_repo
         self._self_care_repo = self_care_repo
         self._user_repo = user_repo
+        cfg = emotional_support_config or {}
+        self.mode = cfg.get("mode", "creator")
+        self.creator_username = cfg.get("creator_telegram_username", "DoorCore")
 
     def get_empathy_response(self) -> str:
+        if self.mode == "creator":
+            return random.choice(M.EMOTIONAL_EMPATHY_STANDALONE_CREATOR)
         return random.choice(M.EMOTIONAL_EMPATHY_STANDALONE)
 
     def get_inline_empathy(self) -> str:
         return random.choice(M.EMOTIONAL_EMPATHY_INLINE)
 
+    # WARNING: This GPT prompt is horrible and must be thoroughly tested
+    # if this option (emotional_support.mode = "chatgpt") is ever re-enabled.
     def build_chatgpt_prompt(self, telegram_user_id: int, user_message: str) -> str:
         detailed_entries = self._build_detailed_entries(telegram_user_id)
         return M.EMOTIONAL_CHATGPT_PROMPT_TEMPLATE.format(

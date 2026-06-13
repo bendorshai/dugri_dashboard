@@ -11,5 +11,9 @@
         "db_name": "health_tracker"
     },
     "landing_page_url": "https://www.dugri.life",
-    "internal_secret": "YOUR_INTERNAL_SECRET"
+    "internal_secret": "YOUR_INTERNAL_SECRET",
+    "emotional_support": {
+        "mode": "creator",
+        "creator_telegram_username": "DoorCore"
+    }
 }

@@ -1,7 +1,8 @@
 """
 test_emotional_support.py - TDD tests for EmotionalSupportService.
 
-Unit tests for empathy pool selection, inline empathy, and ChatGPT prompt building.
+Unit tests for empathy pool selection, inline empathy, ChatGPT prompt building,
+and creator-mode referral.
 
 Note: Keyboard tests reload the keyboards module to avoid pollution from
 test files that stub sys.modules["telegram"] at module level (e.g.
@@ -28,7 +29,7 @@ if isinstance(sys.modules.get("telegram"), MagicMock):
     import telegram  # noqa: F811
     importlib.reload(importlib.import_module("keyboards"))
 
-from keyboards import make_emotional_support_keyboard
+from keyboards import make_emotional_support_keyboard, make_emotional_creator_keyboard
 
 
 @pytest.fixture
@@ -44,12 +45,26 @@ def repos():
 
 @pytest.fixture
 def service(repos):
+    """Default service - creator mode (no config = default)."""
     return EmotionalSupportService(
         food_repo=repos["food_repo"],
         sleep_repo=repos["sleep_repo"],
         workout_repo=repos["workout_repo"],
         self_care_repo=repos["self_care_repo"],
         user_repo=repos["user_repo"],
+    )
+
+
+@pytest.fixture
+def chatgpt_service(repos):
+    """Service configured for legacy chatgpt mode."""
+    return EmotionalSupportService(
+        food_repo=repos["food_repo"],
+        sleep_repo=repos["sleep_repo"],
+        workout_repo=repos["workout_repo"],
+        self_care_repo=repos["self_care_repo"],
+        user_repo=repos["user_repo"],
+        emotional_support_config={"mode": "chatgpt"},
     )
 
 
@@ -181,3 +196,56 @@ class TestEmotionalSupportKeyboard:
         button = keyboard.inline_keyboard[0][0]
         assert button.callback_data is not None
         assert button.url is None
+
+
+class TestCreatorMode:
+    def test_default_mode_is_creator(self, service):
+        assert service.mode == "creator"
+
+    def test_creator_username_default(self, service):
+        assert service.creator_username == "DoorCore"
+
+    def test_custom_creator_username(self, repos):
+        svc = EmotionalSupportService(
+            **repos,
+            emotional_support_config={
+                "mode": "creator",
+                "creator_telegram_username": "custom_user",
+            },
+        )
+        assert svc.creator_username == "custom_user"
+
+    def test_creator_empathy_mentions_shai(self, service):
+        results = {service.get_empathy_response() for _ in range(30)}
+        assert all("שי" in r for r in results)
+
+    def test_creator_empathy_mentions_therapist(self, service):
+        results = {service.get_empathy_response() for _ in range(30)}
+        assert all("מטפל" in r for r in results)
+
+    def test_chatgpt_mode_uses_old_pool(self, chatgpt_service):
+        results = {chatgpt_service.get_empathy_response() for _ in range(30)}
+        assert all("GPT" in r for r in results)
+
+    def test_chatgpt_mode_flag(self, chatgpt_service):
+        assert chatgpt_service.mode == "chatgpt"
+
+
+class TestCreatorKeyboard:
+    def test_single_url_button(self):
+        keyboard = make_emotional_creator_keyboard("DoorCore")
+        all_buttons = [btn for row in keyboard.inline_keyboard for btn in row]
+        assert len(all_buttons) == 1
+        button = all_buttons[0]
+        assert button.url == "https://t.me/DoorCore"
+        assert button.callback_data is None
+
+    def test_button_text_hebrew(self):
+        keyboard = make_emotional_creator_keyboard("DoorCore")
+        button = keyboard.inline_keyboard[0][0]
+        assert "שי" in button.text
+
+    def test_custom_username_in_url(self):
+        keyboard = make_emotional_creator_keyboard("custom_user")
+        button = keyboard.inline_keyboard[0][0]
+        assert button.url == "https://t.me/custom_user"
