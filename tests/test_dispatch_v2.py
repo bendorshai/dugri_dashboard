@@ -82,6 +82,7 @@ def _make_handler(**overrides):
     h.token_log_repo = None
     h.landing_page_url = "https://test.com"
     h.admin_chat_id = 0
+    h._debug_mode = False
     for k, v in overrides.items():
         setattr(h, k, v)
     return h
