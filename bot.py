@@ -98,6 +98,7 @@ def create_bot(
     feature_request_repo=None,
     admin_chat_id: int = 0,
     token_log_repo=None,
+    emotional_support_config: dict | None = None,
 ) -> Application:
     app = Application.builder().token(token).build()
 
@@ -120,7 +121,7 @@ def create_bot(
             habit_service, qa_service, help_service, feature_request_repo,
         )
 
-    # Emotional support (ChatGPT handoff)
+    # Emotional support (creator referral or ChatGPT handoff)
     emotional_support_service = None
     if sleep_repo and workout_repo and self_care_repo:
         emotional_support_service = EmotionalSupportService(
@@ -129,6 +130,7 @@ def create_bot(
             workout_repo=workout_repo,
             self_care_repo=self_care_repo,
             user_repo=user_repo,
+            emotional_support_config=emotional_support_config,
         )
 
     trial_service = TrialService(user_repo, landing_page_url)

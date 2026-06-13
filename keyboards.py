@@ -107,6 +107,12 @@ def make_emotional_support_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def make_emotional_creator_keyboard(username: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("רוצה לדבר עם שי?", url=f"https://t.me/{username}")],
+    ])
+
+
 def format_daily_status(
     total_cal: int,
     total_protein: int,

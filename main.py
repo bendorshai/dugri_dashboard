@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "7.0.0"
-VERSION_NOTES = "Modular LLM refactor: slim Router (12 types), Conversational module, Opt-in unification, Logger service. Eliminates false-unrelated classifications."
+VERSION = "7.1.0"
+VERSION_NOTES = "Emotional CTA: replace GPT referral with creator (therapist) deep link. GPT mode kept as disabled config option."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -126,6 +126,7 @@ def main():
         feature_request_repo=feature_request_repo,
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,
+        emotional_support_config=cfg.get("emotional_support"),
     )
 
     # Startup notification to admin

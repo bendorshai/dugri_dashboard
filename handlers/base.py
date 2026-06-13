@@ -35,7 +35,7 @@ from keyboards import (
     make_daily_summary_keyboard, make_main_menu_keyboard,
     make_profile_keyboard, make_settings_keyboard,
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
-    make_emotional_support_keyboard,
+    make_emotional_support_keyboard, make_emotional_creator_keyboard,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
     CB_FEEDBACK, CB_EMOTIONAL,
@@ -624,10 +624,19 @@ class HealthHandlers:
             reflection = empathy_result.empathy_reflection
             boundary = self.emotional_support_service.get_empathy_response()
             empathy = f"{reflection}\n\n{boundary}" if reflection else boundary
-            context.chat_data["emotional_message"] = message.text
+
+            emo_mode = self.emotional_support_service.mode
+            if emo_mode == "creator":
+                keyboard = make_emotional_creator_keyboard(
+                    self.emotional_support_service.creator_username,
+                )
+            else:
+                context.chat_data["emotional_message"] = message.text
+                keyboard = make_emotional_support_keyboard()
+
             await self._send(
                 empathy, tid=tid, message=message,
-                reply_markup=make_emotional_support_keyboard(),
+                reply_markup=keyboard,
             )
             return
 
