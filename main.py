@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "7.0.0"
-VERSION_NOTES = "Modular LLM refactor: slim Router (12 types), Conversational module, Opt-in unification, Logger service. Eliminates false-unrelated classifications."
+VERSION = "7.1.0"
+VERSION_NOTES = "Debug button: /debug toggle replaces SUPER_DEBUG constant, metadata shown via inline button instead of message text."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

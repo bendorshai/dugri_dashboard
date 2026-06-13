@@ -1,9 +1,9 @@
-"""Tests for super debug mode: predict_next_step, format_debug_metadata, _append_debug gating."""
+"""Tests for debug mode: predict_next_step, format_debug_metadata, debug button gating."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
@@ -133,17 +133,17 @@ class TestFormatDebugMetadata:
         profile = _make_profile()
         svc = _make_toggle_service()
         result = format_debug_metadata("meal", profile, svc)
-        assert "--- SUPER DEBUG (day" in result
-        assert "[Source] handler" in result
-        assert "[Classification] meal" in result
-        assert "[Toggles]" in result
-        assert "[Next]" in result
+        assert "🔍 Debug - Day" in result
+        assert "handler" in result
+        assert "📋 Classification: meal" in result
+        assert "🎚 Toggles:" in result
+        assert "🔮 Next:" in result
 
     def test_scheduled_classification(self):
         profile = _make_profile()
         svc = _make_toggle_service()
         result = format_debug_metadata(None, profile, svc, source="scheduler")
-        assert "[Source] scheduler" in result
+        assert "scheduler" in result
         assert "N/A (scheduled)" in result
 
     def test_toggle_states_shown(self):
@@ -154,17 +154,20 @@ class TestFormatDebugMetadata:
         profile.toggles.sleep.status = "cancelled"
         svc = _make_toggle_service()
         result = format_debug_metadata("meal", profile, svc)
-        assert "nutrition (day 0): active" in result
+        assert "✅" in result
+        assert "nutrition (day 0)" in result
+        assert "active" in result
         assert "goal=set" in result
-        assert "sleep (day 1):" in result
+        assert "❌" in result
+        assert "sleep (day 1)" in result
         assert "cancelled" in result
 
 
 # ---------------------------------------------------------------------------
-# _append_debug gating
+# Debug button gating
 # ---------------------------------------------------------------------------
 
-class TestAppendDebugGating:
+class TestDebugButton:
     def _make_handlers(self, admin_chat_id=999):
         from handlers.base import HealthHandlers
         h = HealthHandlers(
@@ -176,26 +179,88 @@ class TestAppendDebugGating:
             toggle_service=_make_toggle_service(),
             admin_chat_id=admin_chat_id,
         )
-        h._debug_classification = "meal"
         return h
 
-    @patch("constants.SUPER_DEBUG", True)
-    def test_debug_appended_for_admin(self):
+    def test_debug_button_injected_when_mode_on(self):
         h = self._make_handlers(admin_chat_id=999)
+        h._debug_mode = True
+        h._debug_classification = "meal"
         profile = _make_profile(telegram_user_id=999)
         h.user_repo.get.return_value = profile
-        result = h._append_debug(999, "hello")
-        assert "--- SUPER DEBUG (day" in result
-        assert result.startswith("hello\n\n")
+        text, markup = h._prepare_debug(999, "hello")
+        assert text == "hello"
+        assert markup is not None
+        buttons = [btn for row in markup.inline_keyboard for btn in row]
+        debug_buttons = [b for b in buttons if b.callback_data.startswith("dbg_")]
+        assert len(debug_buttons) == 1
+        assert debug_buttons[0].text == "🔍"
 
-    @patch("constants.SUPER_DEBUG", True)
-    def test_debug_not_appended_for_non_admin(self):
+    def test_debug_button_not_injected_when_mode_off(self):
         h = self._make_handlers(admin_chat_id=999)
-        result = h._append_debug(123, "hello")
-        assert result == "hello"
+        h._debug_mode = False
+        text, markup = h._prepare_debug(999, "hello")
+        assert text == "hello"
+        assert markup is None
 
-    @patch("constants.SUPER_DEBUG", False)
-    def test_debug_not_appended_when_disabled(self):
+    def test_debug_button_not_injected_for_non_admin(self):
         h = self._make_handlers(admin_chat_id=999)
-        result = h._append_debug(999, "hello")
-        assert result == "hello"
+        h._debug_mode = True
+        text, markup = h._prepare_debug(123, "hello")
+        assert text == "hello"
+        assert markup is None
+
+    def test_debug_button_coexists_with_existing_keyboard(self):
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        h = self._make_handlers(admin_chat_id=999)
+        h._debug_mode = True
+        h._debug_classification = "meal"
+        profile = _make_profile(telegram_user_id=999)
+        h.user_repo.get.return_value = profile
+        existing = InlineKeyboardMarkup([[InlineKeyboardButton("Test", callback_data="test")]])
+        text, markup = h._prepare_debug(999, "hello", existing)
+        assert len(markup.inline_keyboard) == 2
+        assert markup.inline_keyboard[0][0].text == "Test"
+        assert markup.inline_keyboard[1][0].callback_data.startswith("dbg_")
+
+    def test_debug_store_eviction(self):
+        h = self._make_handlers(admin_chat_id=999)
+        h._debug_mode = True
+        h._debug_classification = "meal"
+        profile = _make_profile(telegram_user_id=999)
+        h.user_repo.get.return_value = profile
+        for i in range(201):
+            h._prepare_debug(999, f"msg {i}")
+        assert len(h._debug_store) == 200
+
+    @pytest.mark.asyncio
+    async def test_debug_toggle_command(self):
+        h = self._make_handlers(admin_chat_id=999)
+        assert h._debug_mode is False
+        update = MagicMock()
+        update.effective_user.id = 999
+        update.message.reply_text = AsyncMock()
+        await h.handle_debug_command(update, MagicMock())
+        assert h._debug_mode is True
+        await h.handle_debug_command(update, MagicMock())
+        assert h._debug_mode is False
+
+    @pytest.mark.asyncio
+    async def test_debug_callback_returns_metadata(self):
+        h = self._make_handlers(admin_chat_id=999)
+        h._debug_store["abc12345"] = "test metadata"
+        update = MagicMock()
+        update.callback_query.data = "dbg_abc12345"
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.message.reply_text = AsyncMock()
+        await h.handle_debug_callback(update, MagicMock())
+        update.callback_query.message.reply_text.assert_called_once_with("test metadata")
+
+    @pytest.mark.asyncio
+    async def test_debug_callback_expired_key(self):
+        h = self._make_handlers(admin_chat_id=999)
+        update = MagicMock()
+        update.callback_query.data = "dbg_nonexistent"
+        update.callback_query.answer = AsyncMock()
+        update.callback_query.message.reply_text = AsyncMock()
+        await h.handle_debug_callback(update, MagicMock())
+        update.callback_query.message.reply_text.assert_called_once_with("Debug info expired.")

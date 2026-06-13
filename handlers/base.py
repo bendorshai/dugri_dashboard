@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import base64
 import logging
+import secrets
 import time
+from collections import OrderedDict
 from datetime import datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -91,6 +93,8 @@ class HealthHandlers:
         self.admin_chat_id = admin_chat_id
         self.token_log_repo = token_log_repo
         self._debug_classification = None
+        self._debug_mode = False
+        self._debug_store: OrderedDict = OrderedDict()
 
     # ------------------------------------------------------------------
     # Token tracking
@@ -141,27 +145,53 @@ class HealthHandlers:
         if save:
             self._save_bot_message(tid, text)
 
-        send_text = self._append_debug(tid, text)
+        send_text, final_markup = self._prepare_debug(tid, text, reply_markup)
 
         if message:
-            await send_long_text(message, send_text, reply_markup=reply_markup)
+            await send_long_text(message, send_text, reply_markup=final_markup)
         elif context:
-            await send_long_bot(context.bot, tid, send_text, reply_markup=reply_markup)
+            await send_long_bot(context.bot, tid, send_text, reply_markup=final_markup)
 
-    def _append_debug(self, tid: int, text: str) -> str:
-        """Append debug metadata for admin. Returns text unchanged for non-admin."""
-        from constants import SUPER_DEBUG
-        admin_id = getattr(self, "admin_chat_id", 0)
-        if not SUPER_DEBUG or tid != admin_id or not getattr(self, "toggle_service", None):
-            return text
+    def _prepare_debug(self, tid: int, text: str, reply_markup=None):
+        """Inject debug button for admin when debug mode is active."""
+        if not self._debug_mode or tid != getattr(self, "admin_chat_id", 0):
+            return text, reply_markup
         profile = self._get_profile(tid)
         if not profile:
-            return text
+            return text, reply_markup
         from handlers.utils import format_debug_metadata
-        debug = format_debug_metadata(
+        from keyboards import inject_debug_button
+        metadata = format_debug_metadata(
             getattr(self, "_debug_classification", None), profile, self.toggle_service,
         )
-        return text + "\n\n" + debug
+        key = secrets.token_hex(4)
+        self._debug_store[key] = metadata
+        while len(self._debug_store) > 200:
+            self._debug_store.popitem(last=False)
+        return text, inject_debug_button(reply_markup, key)
+
+    async def handle_debug_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Toggle debug mode (admin only)."""
+        tid = update.effective_user.id
+        if tid != self.admin_chat_id:
+            return
+        self._debug_mode = not self._debug_mode
+        status = "ON 🔍" if self._debug_mode else "OFF"
+        await update.message.reply_text(f"Debug mode: {status}")
+
+    async def handle_debug_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show debug metadata when admin taps the 🔍 button."""
+        from handlers.utils import safe_answer
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+        debug_key = query.data.removeprefix("dbg_")
+        metadata = self._debug_store.get(debug_key)
+        if metadata is None:
+            await query.message.reply_text("Debug info expired.")
+            return
+        await query.message.reply_text(metadata)
 
     # ------------------------------------------------------------------
     # Profile helpers

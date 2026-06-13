@@ -393,7 +393,6 @@ async def _send_and_save(context, tid: int, text: str, user_repo,
                          profile=None, toggle_service=None, admin_chat_id: int = 0) -> None:
     """Send a message and save to conversation history."""
     try:
-        # Save original text to history (before debug append)
         msg = {
             "role": "bot",
             "text": text[:500],
@@ -401,14 +400,6 @@ async def _send_and_save(context, tid: int, text: str, user_repo,
         }
         user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
 
-        # Append debug metadata for admin
-        send_text = text
-        from constants import SUPER_DEBUG
-        if SUPER_DEBUG and tid == admin_chat_id and profile and toggle_service:
-            from handlers.utils import format_debug_metadata
-            debug = format_debug_metadata(None, profile, toggle_service, source="scheduler")
-            send_text = text + "\n\n" + debug
-
-        await context.bot.send_message(chat_id=tid, text=send_text)
+        await context.bot.send_message(chat_id=tid, text=text)
     except Exception:
         logger.exception("Failed to send scheduled message to user %d", tid)

@@ -59,14 +59,18 @@ def format_debug_metadata(
     toggle_service: ToggleService,
     source: str = "handler",
 ) -> str:
-    """Format debug metadata block for super debug mode."""
+    """Format debug metadata block for debug button display."""
     day_number = toggle_service.get_day_number(profile)
+    status_emoji = {"active": "✅", "dormant": "⏳", "cancelled": "❌"}
 
-    lines = [f"--- SUPER DEBUG (day {day_number}) ---"]
-    lines.append(f"[Source] {source}")
-    lines.append(f"[Classification] {classification_type or 'N/A (scheduled)'}")
+    lines = [
+        f"🔍 Debug - Day {day_number} | {source}",
+        "━━━━━━━━━━━━━━━━━━━━━━━",
+        f"📋 Classification: {classification_type or 'N/A (scheduled)'}",
+        "",
+        "🎚 Toggles:",
+    ]
 
-    lines.append("[Toggles]")
     toggle_names = ["nutrition", "sleep", "eating_window", "workouts", "self_care", "weekly_summary"]
     for name in toggle_names:
         toggle = getattr(profile.toggles, name, None)
@@ -80,7 +84,8 @@ def format_debug_metadata(
             label = f"{name} (day {gate})"
         else:
             label = name
-        parts = [f"{label}: {toggle.status}"]
+        emoji = status_emoji.get(toggle.status, "?")
+        parts = [f"  {emoji} {label} - {toggle.status}"]
         if toggle.status == "active":
             if toggle.goal_status == "set" and toggle.goal_value:
                 parts.append(f"goal=set {toggle.goal_value}")
@@ -103,7 +108,7 @@ def format_debug_metadata(
         lines.append(", ".join(parts))
 
     next_step = toggle_service.predict_next_step(profile)
-    lines.append(f"[Next] {next_step}")
+    lines.append(f"\n🔮 Next: {next_step}")
 
     return "\n".join(lines)
 

@@ -20,6 +20,7 @@ CB_DAILY = "daily_"
 CB_BACK = "back_"
 CB_FEEDBACK = "feedback_"
 CB_EMOTIONAL = "emo_"
+CB_DEBUG = "dbg_"
 
 
 def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
@@ -99,6 +100,14 @@ def make_food_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📋 תפריט", callback_data=f"{CB_BACK}main"),
         ],
     ])
+
+
+def inject_debug_button(reply_markup: InlineKeyboardMarkup | None, debug_key: str) -> InlineKeyboardMarkup:
+    """Append a debug button row to an existing keyboard or create a new one."""
+    debug_row = [InlineKeyboardButton("🔍", callback_data=f"{CB_DEBUG}{debug_key}")]
+    if reply_markup is None:
+        return InlineKeyboardMarkup([debug_row])
+    return InlineKeyboardMarkup(list(reply_markup.inline_keyboard) + [debug_row])
 
 
 def make_emotional_support_keyboard() -> InlineKeyboardMarkup:

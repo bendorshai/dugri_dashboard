@@ -41,7 +41,7 @@ from handlers.start_handler import StartHandler
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
-    CB_FEEDBACK, CB_EMOTIONAL,
+    CB_FEEDBACK, CB_EMOTIONAL, CB_DEBUG,
 )
 from handlers import HealthHandlers
 from scheduler import schedule_global_poller
@@ -163,6 +163,7 @@ def create_bot(
 
     # Command handlers
     app.add_handler(CommandHandler("menu", h.handle_menu_command))
+    app.add_handler(CommandHandler("debug", h.handle_debug_command))
 
     # Message handlers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, h.handle_message))
@@ -183,6 +184,7 @@ def create_bot(
     app.add_handler(CallbackQueryHandler(h.handle_feedback_callback, pattern=f"^{CB_FEEDBACK}"))
     app.add_handler(CallbackQueryHandler(h.handle_emotional_callback, pattern=f"^{CB_EMOTIONAL}"))
     app.add_handler(CallbackQueryHandler(h.handle_back_callback, pattern=f"^{CB_BACK}"))
+    app.add_handler(CallbackQueryHandler(h.handle_debug_callback, pattern=f"^{CB_DEBUG}"))
 
     # Error handler
     app.add_error_handler(_make_error_handler(error_repo))
