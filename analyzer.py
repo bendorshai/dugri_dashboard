@@ -88,6 +88,11 @@ class WeeklyFeedbackResult(BaseModel):
     pattern_summary: str | None = None
 
 
+class NormalizedActivity(BaseModel):
+    """GPT output for self-care activity normalization."""
+    activity_name: str
+
+
 class HabitEntry(BaseModel):
     """A single habit log entry with temporal context.
 
@@ -163,6 +168,7 @@ from prompts import (
     ROUTER_SYSTEM_PROMPT,
     TARGET_SUGGESTION_SYSTEM_PROMPT,
     ENHANCED_WEEKLY_SUMMARY_PROMPT,
+    NORMALIZE_SELF_CARE_PROMPT,
 )
 
 _EXTRACTION_PROMPTS = {
@@ -193,6 +199,28 @@ class FoodAnalyzer:
         if cb and response.usage:
             cb(kwargs["model"], response.usage.prompt_tokens, response.usage.completion_tokens)
         return response
+
+    def normalize_self_care_activity(self, raw_description: str,
+                                     on_usage: TokenCallback | None = None) -> str | None:
+        """Normalize a free-text self-care description to a canonical activity name.
+
+        Returns a noun-form Hebrew string (e.g. "הליכה לים"), or None on failure.
+        """
+        try:
+            response = self._parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": NORMALIZE_SELF_CARE_PROMPT},
+                    {"role": "user", "content": raw_description},
+                ],
+                response_format=NormalizedActivity,
+                temperature=0,
+                on_usage=on_usage,
+            )
+            return response.choices[0].message.parsed.activity_name
+        except Exception:
+            logger.warning("Failed to normalize self-care activity", exc_info=True)
+            return None
 
     def analyze_food_text(self, text: str, today_str: str, day_name: str = "",
                           on_usage: TokenCallback | None = None) -> TimedFoodAnalysisResult | None:

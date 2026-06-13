@@ -166,6 +166,9 @@ class User(BaseModel):
     # Token usage tracking: {"gpt-4o": {"prompt": N, "completion": M}, ...}
     tokens_used: dict[str, dict[str, int]] = Field(default_factory=dict)
 
+    # Self-care activity histogram: {"הליכה לים": 2, "נגינה בגיטרה": 5, ...}
+    self_care_activities: dict[str, int] = Field(default_factory=dict)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

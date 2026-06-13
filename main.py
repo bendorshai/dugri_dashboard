@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "7.3.0"
-VERSION_NOTES = "Emotional CTA: replace GPT referral with creator (therapist) deep link. GPT mode kept as disabled config option."
+VERSION = "7.4.0"
+VERSION_NOTES = "Self-care histogram: normalize activities via GPT, personalize Friday hook prompts based on past activity frequency."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -33,11 +33,15 @@ class MessageRouterService:
         qa_service: QaService,
         help_service: HelpService,
         feature_request_repo=None,
+        analyzer=None,
+        user_repo=None,
     ):
         self._habit = habit_service
         self._qa = qa_service
         self._help = help_service
         self._feature_request_repo = feature_request_repo
+        self._analyzer = analyzer
+        self._user_repo = user_repo
 
     def route_sleep(
         self, telegram_user_id: int, sleep_time: str, date: str,
@@ -61,6 +65,12 @@ class MessageRouterService:
         self, telegram_user_id: int, description: str, week_id: str,
     ) -> RouteResult:
         self._habit.log_self_care(telegram_user_id, description, week_id)
+
+        if self._analyzer and self._user_repo:
+            normalized = self._analyzer.normalize_self_care_activity(description)
+            if normalized:
+                self._user_repo.increment_activity(telegram_user_id, normalized)
+
         return RouteResult(
             response_text="יפה. רשמתי 'משהו לעצמי' השבוע.",
             light_confirmation=True,

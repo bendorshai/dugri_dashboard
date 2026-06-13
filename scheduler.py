@@ -230,7 +230,13 @@ async def _check_user_hooks(
             pool = prompt_pools.get(toggle_name, [])
             if not pool:
                 continue
-            text = random.choice(pool)
+            if toggle_name == "self_care":
+                from services.hook_prompt_service import HookPromptService
+                text = HookPromptService.pick_self_care_prompt(
+                    profile.self_care_activities, pool,
+                )
+            else:
+                text = random.choice(pool)
 
         if toggle_service.should_show_exit_door(profile, toggle_name):
             habit_names = {

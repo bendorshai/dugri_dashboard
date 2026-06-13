@@ -76,6 +76,14 @@ class UserRepository(BaseRepository[User]):
             }},
         )
 
+    def increment_activity(self, telegram_user_id: int, activity_name: str) -> None:
+        """Atomically increment a self-care activity counter in the histogram."""
+        sanitized = activity_name.replace(".", " ")
+        self._collection.update_one(
+            {"telegram_user_id": telegram_user_id},
+            {"$inc": {f"self_care_activities.{sanitized}": 1}},
+        )
+
     def push_to_list(self, telegram_user_id: int, field: str, item: dict) -> None:
         """Atomically append an item to a list field."""
         self._collection.update_one(

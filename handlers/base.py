@@ -1395,7 +1395,13 @@ class HealthHandlers:
             if not (window[0] <= now.hour < window[1]):
                 continue
             if should_fire_inline(profile, toggle_name, clock):
-                text = random.choice(pool)
+                if toggle_name == "self_care":
+                    from services.hook_prompt_service import HookPromptService
+                    text = HookPromptService.pick_self_care_prompt(
+                        profile.self_care_activities, pool,
+                    )
+                else:
+                    text = random.choice(pool)
                 if self.toggle_service.should_show_exit_door(profile, toggle_name):
                     habit_names = {
                         "sleep": "שינה", "eating_window": "חלון אכילה",

@@ -119,6 +119,7 @@ def create_bot(
         conversational_service = ConversationalService(analyzer, knowledge_path=knowledge_path)
         message_router = MessageRouterService(
             habit_service, qa_service, help_service, feature_request_repo,
+            analyzer=analyzer, user_repo=user_repo,
         )
 
     # Emotional support (creator referral or ChatGPT handoff)
