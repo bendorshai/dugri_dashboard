@@ -493,6 +493,30 @@ class TestOtherRouting:
         result = _route(analyzer, "שלח לי סיכום שבועי")
         assert result.type == "feedback_request"
 
+    def test_data_question_not_feedback_request(self):
+        """Data questions about habits = conversational, NOT feedback_request."""
+        analyzer = _make_analyzer()
+        result = _route(analyzer, "מה היום הכי גבוה בקלוריות השבוע?")
+        assert result.type == "conversational", (
+            f"Data question should be conversational, got {result.type}"
+        )
+
+    def test_improvement_question_not_feedback_request(self):
+        """'Do you see improvement?' = conversational, NOT feedback_request."""
+        analyzer = _make_analyzer()
+        result = _route(analyzer, "רואה שיפור בהרגלים שלי?")
+        assert result.type == "conversational", (
+            f"Improvement question should be conversational, got {result.type}"
+        )
+
+    def test_specific_food_question_not_feedback_request(self):
+        """'Did I eat ice cream yesterday?' = conversational, NOT feedback_request."""
+        analyzer = _make_analyzer()
+        result = _route(analyzer, "אכלתי גלידה אתמול?")
+        assert result.type == "conversational", (
+            f"Specific food question should be conversational, got {result.type}"
+        )
+
     def test_feedback_reaction(self):
         """Reaction to weekly feedback = feedback_reaction."""
         analyzer = _make_analyzer()

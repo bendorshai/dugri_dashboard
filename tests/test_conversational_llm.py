@@ -13,13 +13,16 @@ test_conversational_llm.py - TDD tests for the Conversational module (Module 2).
 # 1. READ-ONLY: never returns action instructions, never mutates state.
 # 2. Hebrew, dugri tone: concise, eye-level, no preaching.
 # 3. Self-knowledge: knows how Dugri works, what it tracks, formulas.
-# 4. Data-aware: can answer questions about user's entries (30-day scope).
-# 5. Negotiation driver: during goal flows, explains reasoning and drives
+# 4. Data-aware via on-demand tool: uses function calling to fetch history
+#    only when user asks data questions. Casual chat = no data fetch.
+# 5. Date-aware: knows today's date and day of week.
+# 6. Negotiation driver: during goal flows, explains reasoning and drives
 #    toward a clear determination ("want me to set X?").
-# 6. Multi-intent: identifies tasks, confirms first, asks about rest.
-# 7. Empathy: brief empathy before substantive response when emotional.
+# 7. Multi-intent: identifies tasks, confirms first, asks about rest.
+# 8. Empathy: brief empathy before substantive response when emotional.
 #
-# INPUT: user message + user profile + data summary + toggle state + history
+# INPUT: user message + user profile + toggle state + today_date + history
+#        + fetch_history callback (called on demand by LLM)
 # OUTPUT: plain text response in Hebrew
 #
 # ============================================================================
@@ -39,6 +42,7 @@ from _lazy_optin_helpers import (
     _make_analyzer, _build_toggle_state, _build_history,
     NUTRITION_SUGGESTION,
 )
+from unittest.mock import MagicMock
 from services.conversational_service import ConversationalService
 
 pytestmark = pytest.mark.integration
@@ -52,11 +56,15 @@ USER_CONTEXT_EXAMPLE = (
     "מטרה: ירידה במשקל"
 )
 
-DATA_SUMMARY_EXAMPLE = (
-    "ארוחות (7 ימים אחרונים):\n"
-    "ממוצע יומי: 1850 קלוריות, 120 גרם חלבון\n"
-    "ימים שנרשמו: 5/7\n"
-    "שינה (7 ימים): ממוצע 23:15"
+TODAY_DATE_EXAMPLE = "13/06/2026 (יום שבת)"
+
+FOOD_HISTORY_CSV = (
+    "תאריך,שעה,תיאור,קלוריות,חלבון\n"
+    "13/06/2026,08:00,ביצים ולחם,400,25\n"
+    "13/06/2026,13:00,סלט עם חזה עוף,550,45\n"
+    "12/06/2026,09:00,גרנולה עם יוגורט,350,15\n"
+    "12/06/2026,14:00,פיצה,700,20\n"
+    "12/06/2026,20:00,גלידה בן אנד ג'ריס,450,8"
 )
 
 
@@ -65,14 +73,21 @@ def _make_service():
     return ConversationalService(analyzer, knowledge_path=KNOWLEDGE_PATH)
 
 
+def _make_history_fetcher(csv=FOOD_HISTORY_CSV):
+    """Create a mock history fetcher that returns CSV data and tracks calls."""
+    fetcher = MagicMock(return_value=csv)
+    return fetcher
+
+
 def _respond(service, text, toggle_state=None, history=None,
-             user_context=None, data_summary=None):
+             user_context=None, today_date=None, fetch_history=None):
     return service.respond(
         user_text=text,
         user_context=user_context or USER_CONTEXT_EXAMPLE,
-        data_summary=data_summary or DATA_SUMMARY_EXAMPLE,
         toggle_state=toggle_state or _build_toggle_state(),
+        today_date=today_date or TODAY_DATE_EXAMPLE,
         recent_messages=history,
+        fetch_history=fetch_history,
     )
 
 
@@ -107,19 +122,38 @@ class TestSelfKnowledge:
 
 
 # ============================================================================
-# DATA QUESTIONS
+# DATA QUESTIONS (on-demand via function calling)
 # ============================================================================
 
 class TestDataQuestions:
-    """Conversational answers questions about user's actual data."""
+    """Conversational fetches history via tool only when user asks data questions."""
 
-    def test_weekly_eating_summary(self):
-        """Answers how much user ate this week using data context."""
+    def test_data_question_triggers_tool_call(self):
+        """When user asks about food data, GPT calls the history tool."""
         service = _make_service()
-        response = _respond(service, "כמה אכלתי השבוע?")
+        fetcher = _make_history_fetcher()
+        response = _respond(service, "אכלתי גלידה אתמול?", fetch_history=fetcher)
+        assert fetcher.called, "Expected history tool to be called for data question"
+        assert len(response) > 10
+        # Should reference the ice cream from the CSV
+        assert any(w in response for w in ["גלידה", "בן אנד ג'ריס", "כן", "450"])
+
+    def test_casual_chat_no_tool_call(self):
+        """Simple chat does not trigger the history tool."""
+        service = _make_service()
+        fetcher = _make_history_fetcher()
+        response = _respond(service, "מה נשמע?", fetch_history=fetcher)
+        assert not fetcher.called, "History tool should NOT be called for casual chat"
+        assert len(response) > 5
+
+    def test_weekly_eating_question_triggers_tool(self):
+        """Weekly questions trigger the tool and get data-based answers."""
+        service = _make_service()
+        fetcher = _make_history_fetcher()
+        response = _respond(service, "כמה אכלתי השבוע?", fetch_history=fetcher)
+        assert fetcher.called, "Expected history tool for weekly data question"
         assert len(response) > 20
-        # Should reference actual data numbers
-        assert any(w in response for w in ["1850", "קלוריות", "חלבון", "ממוצע"])
+        assert any(w in response for w in ["קלוריות", "חלבון"])
 
 
 # ============================================================================
@@ -199,3 +233,29 @@ class TestReadOnly:
         # Should not contain action-like language
         assert "נרשם" not in response  # "logged" - would indicate action
         assert "הפעלתי" not in response  # "activated"
+
+
+# ============================================================================
+# DATE AWARENESS
+# ============================================================================
+
+class TestDateAwareness:
+    """Conversational knows today's date and day of week."""
+
+    def test_knows_today_date(self):
+        """When asked what day it is, knows the answer."""
+        service = _make_service()
+        response = _respond(service, "מה התאריך היום?", today_date="13/06/2026 (יום שבת)")
+        assert any(w in response for w in ["13", "שבת", "יוני", "שישי"])
+
+    def test_uses_date_for_temporal_questions(self):
+        """Uses date context for 'yesterday' type questions."""
+        service = _make_service()
+        fetcher = _make_history_fetcher()
+        response = _respond(
+            service, "מה אכלתי אתמול?",
+            today_date="13/06/2026 (יום שבת)",
+            fetch_history=fetcher,
+        )
+        assert fetcher.called
+        assert len(response) > 10

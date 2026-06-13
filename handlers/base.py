@@ -534,6 +534,7 @@ class HealthHandlers:
         if rtype == "conversational":
             await self._handle_conversational(
                 message, tid, profile, toggle_state, recent_messages,
+                calendar_today, day_name,
             )
             return
 
@@ -699,7 +700,10 @@ class HealthHandlers:
         await self._recompute_eating_window(context, tid, profile)
         await self._check_inline_hooks(message, tid, profile)
 
-    async def _handle_conversational(self, message, tid, profile, toggle_state, recent_messages):
+    async def _handle_conversational(
+        self, message, tid, profile, toggle_state, recent_messages,
+        calendar_today="", day_name="",
+    ):
         """Handle conversational type via ConversationalService."""
         if not self.conversational_service:
             await self._send("מה נשמע?", tid=tid, message=message)
@@ -725,18 +729,31 @@ class HealthHandlers:
             user_context_parts.append(f"יעד חלבון: {tp}")
         user_context = "\n".join(user_context_parts) if user_context_parts else "לא זמין"
 
-        # Build data summary (lightweight - just daily totals)
-        now = get_user_now(profile.timezone)
-        stats_date = self.eating_day_svc.resolve_eating_day(profile, now)
-        total_cal, total_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
-        data_summary = f"היום: {total_cal} קלוריות, {total_prot} גרם חלבון"
+        # Build today_date string
+        today_date = calendar_today
+        if day_name:
+            today_date += f" (יום {day_name})"
+
+        # History fetcher callback - called only if the LLM requests data
+        def fetch_history(days: int) -> str:
+            from datetime import datetime, timedelta
+            today = datetime.strptime(calendar_today, "%d/%m/%Y").date()
+            dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(days)]
+            entries = self.food_repo.get_by_user_and_dates(tid, dates)
+            if not entries:
+                return "אין נתונים לתקופה המבוקשת."
+            lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
+            for e in entries:
+                lines.append(f"{e.date},{e.time},{e.description},{e.calories},{e.protein}")
+            return "\n".join(lines)
 
         response = self.conversational_service.respond(
             user_text=message.text,
             user_context=user_context,
-            data_summary=data_summary,
             toggle_state=toggle_state or "",
+            today_date=today_date or "לא זמין",
             recent_messages=recent_messages[:-1] if recent_messages else None,
+            fetch_history=fetch_history,
         )
         await self._send(response, tid=tid, message=message)
 
