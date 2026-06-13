@@ -10,5 +10,6 @@
         "uri": "mongodb://user:password@host:27017",
         "db_name": "health_tracker"
     },
-    "landing_page_url": "https://www.dugri.life"
+    "landing_page_url": "https://www.dugri.life",
+    "internal_secret": "YOUR_INTERNAL_SECRET"
 }
