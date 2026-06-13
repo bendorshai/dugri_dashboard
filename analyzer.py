@@ -709,16 +709,29 @@ class FoodAnalyzer:
         )
 
     def converse(self, messages: list[dict], max_tokens: int = 1000,
-                 on_usage: TokenCallback | None = None) -> str:
-        """Free-form conversational response (plain text, no structured output)."""
-        response = self._create(
+                 on_usage: TokenCallback | None = None,
+                 tools: list[dict] | None = None):
+        """Free-form conversational response.
+
+        When *tools* is provided, returns the raw ChatCompletionMessage so the
+        caller can inspect tool_calls.  Without tools, returns a plain string
+        (backward-compatible with existing callers).
+        """
+        kwargs: dict = dict(
             model="gpt-4o-mini",
             messages=messages,
             temperature=0.3,
             max_tokens=max_tokens,
-            on_usage=on_usage,
         )
-        return response.choices[0].message.content or ""
+        if tools:
+            kwargs["tools"] = tools
+
+        response = self._create(on_usage=on_usage, **kwargs)
+        msg = response.choices[0].message
+
+        if tools:
+            return msg  # caller handles tool_calls / .content
+        return msg.content or ""
 
     def generate_target_change_message(self, prompt: str,
                                        on_usage: TokenCallback | None = None) -> str | None:
