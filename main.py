@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "7.4.0"
-VERSION_NOTES = "Self-care histogram: normalize activities via GPT, personalize Friday hook prompts based on past activity frequency."
+VERSION = "7.5.0"
+VERSION_NOTES = "Re-engagement system: food nudge for inactive loggers, 3-day silence pipeline with GPT messages, welcome-back on return."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

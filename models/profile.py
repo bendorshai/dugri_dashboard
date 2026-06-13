@@ -151,6 +151,14 @@ class User(BaseModel):
     discovered_patterns: list[DiscoveredPattern] = Field(default_factory=list)
     strikes: list[Strike] = Field(default_factory=list)
 
+    # Re-engagement tracking
+    last_user_message_at: datetime | None = None
+    re_engagement_stage: Literal[
+        "none", "food_nudge_pending",
+        "silence_day1", "silence_day2", "silence_day3", "silenced",
+    ] = "none"
+    re_engagement_last_sent_at: datetime | None = None
+
     subscription_status: str = "trial_pending"
     trial_started_at: datetime | None = None
 

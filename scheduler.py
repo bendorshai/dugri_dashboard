@@ -31,6 +31,7 @@ from constants import (
 )
 from models.profile import User, ToggleState
 from parsing import parse_time_window
+from services.re_engagement_service import SuppressionLevel
 from user_clock import UserClock
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ def schedule_global_poller(
     goal_service=None, eating_day_service=None,
     hook_schedule_store=None,
     food_repo=None,
+    re_engagement_service=None,
     admin_chat_id: int = 0,
 ):
     """Schedule the single unified polling loop.
@@ -104,6 +106,7 @@ def schedule_global_poller(
     - Habit hook messages (sleep, workouts, self_care, weekly_summary)
     - Eating window warnings and close summaries
     - Goal reminders
+    - Re-engagement nudges (food nudge, silence pipeline)
     All data is read fresh from MongoDB each tick.
     """
     job_name = "global_poller"
@@ -122,6 +125,7 @@ def schedule_global_poller(
             "eating_day_service": eating_day_service,
             "hook_schedule_store": hook_schedule_store,
             "food_repo": food_repo,
+            "re_engagement_service": re_engagement_service,
             "admin_chat_id": admin_chat_id,
         },
     )
@@ -191,6 +195,30 @@ async def _check_user_hooks(
             await _send_and_save(context, tid, text, user_repo, profile, toggle_service, admin_chat_id)
             return
 
+    # --- Re-engagement (before habit hooks) ---
+    re_engagement_svc = context.job.data.get("re_engagement_service")
+    suppression = SuppressionLevel.NONE
+    if re_engagement_svc:
+        suppression = re_engagement_svc.get_suppression_level(profile)
+
+        if suppression == SuppressionLevel.TOTAL:
+            return
+
+        action = re_engagement_svc.check_re_engagement(profile, clock)
+        if action:
+            re_engagement_svc.transition_stage(tid, action.new_stage)
+            if action.message:
+                await _send_and_save(context, tid, action.message, user_repo, profile, toggle_service, admin_chat_id)
+            return
+
+        if suppression == SuppressionLevel.ALLOW_WEEKLY_ONLY:
+            if should_fire_inline(profile, "weekly_summary", clock):
+                text = M.WEEKLY_SUMMARY_OFFER
+                toggle_service.record_asked(tid, "weekly_summary")
+                toggle_service.increment_unanswered(tid, profile, "weekly_summary")
+                await _send_and_save(context, tid, text, user_repo, profile, toggle_service, admin_chat_id)
+            return
+
     # --- Habit hooks (sleep, workouts, self_care, weekly_summary) ---
     hooks = get_hooks_to_schedule(profile)
 
@@ -198,6 +226,10 @@ async def _check_user_hooks(
         toggle_name = hook["toggle_name"]
         schedule_type = hook["schedule_type"]
         window = hook["window"]
+
+        # Food nudge blocks sleep hooks
+        if toggle_name == "sleep" and suppression == SuppressionLevel.BLOCK_SLEEP:
+            continue
 
         if schedule_type == "weekly" and today_weekday != hook["anchor_day"]:
             continue

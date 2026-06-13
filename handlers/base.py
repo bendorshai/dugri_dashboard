@@ -72,6 +72,7 @@ class HealthHandlers:
         goal_service=None,
         emotional_support_service=None,
         conversational_service=None,
+        re_engagement_service=None,
         landing_page_url: str = "https://www.dugri.life",
         admin_chat_id: int = 0,
         token_log_repo=None,
@@ -90,6 +91,7 @@ class HealthHandlers:
         self.goal_service = goal_service
         self.emotional_support_service = emotional_support_service
         self.conversational_service = conversational_service
+        self.re_engagement_service = re_engagement_service
         self.admin_chat_id = admin_chat_id
         self.token_log_repo = token_log_repo
         self._debug_classification = None
@@ -983,6 +985,16 @@ class HealthHandlers:
         if reply_context:
             user_msg["replying_to"] = reply_context
         self.user_repo.push_messages(tid, [user_msg], MAX_RECENT_MESSAGES)
+
+        # Track last user message and handle re-engagement return
+        self.user_repo.update_fields(tid, {
+            "last_user_message_at": datetime.now(tz.utc).isoformat(),
+        })
+        if self.re_engagement_service and profile.re_engagement_stage != "none":
+            welcome_back_msg = self.re_engagement_service.handle_return(profile, tid)
+            if welcome_back_msg:
+                await self._send(welcome_back_msg, tid=tid, context=context)
+
         recent_messages = self.user_repo.get_recent_messages(tid, MAX_RECENT_MESSAGES)
 
         # Build toggle state summary (always present - gives classifier the full picture)

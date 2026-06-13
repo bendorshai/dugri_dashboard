@@ -118,6 +118,12 @@ INLINE_HOOK_DELAY_SECONDS = 5
 """Seconds to wait before sending an inline hook after a meal response.
 Makes the bot feel less robotic - like it's thinking before bringing up a new topic."""
 
+FOOD_NUDGE_WINDOW = (8, 10)
+"""Morning window for food nudge messages (same as sleep)."""
+
+RE_ENGAGEMENT_WINDOW = (8, 10)
+"""Morning window for silence pipeline messages."""
+
 USE_ROUTER_V2 = True
 """When True, use the new slim Router for message classification instead of the old classifier.
 The new Router uses modular dispatch (opt_in, conversational, etc.) instead of the old

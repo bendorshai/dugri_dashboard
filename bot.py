@@ -37,6 +37,7 @@ from services.feedback_service import FeedbackService
 from services.toggle_service import ToggleService
 from services.goal_service import GoalService
 from services.emotional_support_service import EmotionalSupportService
+from services.re_engagement_service import ReEngagementService
 from handlers.start_handler import StartHandler
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
@@ -139,6 +140,7 @@ def create_bot(
         analyzer, food_repo, user_repo, feedback_repo,
         sleep_repo, workout_repo, self_care_repo,
     )
+    re_engagement_service = ReEngagementService(user_repo, food_repo, analyzer)
 
     h = HealthHandlers(
         analyzer=analyzer,
@@ -154,6 +156,7 @@ def create_bot(
         goal_service=goal_service,
         emotional_support_service=emotional_support_service,
         conversational_service=conversational_service,
+        re_engagement_service=re_engagement_service,
         landing_page_url=landing_page_url,
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,
@@ -199,6 +202,7 @@ def create_bot(
         eating_day_service=eating_day_service,
         hook_schedule_store=hook_schedule_store,
         food_repo=food_repo,
+        re_engagement_service=re_engagement_service,
         admin_chat_id=admin_chat_id,
     )
 
