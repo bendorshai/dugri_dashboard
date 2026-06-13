@@ -14,13 +14,15 @@ for mod in [
     sys.modules.setdefault(mod, MagicMock())
 
 mock_telegram = sys.modules["telegram"]
-mock_telegram.Update = MagicMock
-mock_telegram.InlineKeyboardButton = MagicMock
-mock_telegram.InlineKeyboardMarkup = MagicMock
+if isinstance(mock_telegram, MagicMock):
+    mock_telegram.Update = MagicMock
+    mock_telegram.InlineKeyboardButton = MagicMock
+    mock_telegram.InlineKeyboardMarkup = MagicMock
 
 mock_ext = sys.modules["telegram.ext"]
-mock_ext.ContextTypes = MagicMock()
-mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
+if isinstance(mock_ext, MagicMock):
+    mock_ext.ContextTypes = MagicMock()
+    mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
 from analyzer import FoodItem, FoodAnalysisResult, RouterClassification
 from models.profile import UserProfile, EatingWindow, Targets
@@ -128,6 +130,7 @@ class TestFormatGroupedItemsText:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         return h
 
     def test_single_group_today_no_label(self):
@@ -218,6 +221,7 @@ class TestHandleMessageRetroactive:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         h.user_repo = MagicMock()
         h.food_repo = MagicMock()
         h.feedback_repo = MagicMock()

@@ -566,21 +566,19 @@ class TestHandleConversational:
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)
-    async def test_data_summary_includes_daily_totals(self, mock_send):
+    async def test_fetch_history_passed_as_callable(self, mock_send):
         h = _make_handler()
         h.conversational_service.respond.return_value = "תשובה"
-        h.eating_day_svc.resolve_eating_day.return_value = "13/06/2026"
-        h.eating_day_svc.get_eating_day_totals.return_value = (1500, 95)
         profile = _make_profile()
 
         await h._handle_conversational(
             _make_message("כמה אכלתי?"), 123, profile, "", [],
+            calendar_today="13/06/2026",
         )
 
         call_kwargs = h.conversational_service.respond.call_args
-        data_summary = call_kwargs.kwargs.get("data_summary") or call_kwargs[1].get("data_summary")
-        assert "1500" in data_summary
-        assert "95" in data_summary
+        fetch_history = call_kwargs.kwargs.get("fetch_history") or call_kwargs[1].get("fetch_history")
+        assert callable(fetch_history)
 
 
 # ---------------------------------------------------------------------------
@@ -774,8 +772,8 @@ class TestConversationalService:
         result = svc.respond(
             user_text="שאלה",
             user_context="שם: דני",
-            data_summary="היום: 500 קל",
             toggle_state="",
+            today_date="13/06/2026",
         )
         assert result == "תשובה חכמה"
         analyzer.converse.assert_called_once()
@@ -789,8 +787,8 @@ class TestConversationalService:
         result = svc.respond(
             user_text="שאלה",
             user_context="",
-            data_summary="",
             toggle_state="",
+            today_date="13/06/2026",
         )
         assert "לא הצלחתי" in result
 
@@ -803,8 +801,8 @@ class TestConversationalService:
         svc.respond(
             user_text="שאלה",
             user_context="",
-            data_summary="",
             toggle_state="",
+            today_date="13/06/2026",
             recent_messages=[
                 {"role": "bot", "text": "הי"},
                 {"role": "user", "text": "שלום"},
@@ -829,14 +827,13 @@ class TestConversationalService:
         svc.respond(
             user_text="test",
             user_context="שם: דני, גיל: 30",
-            data_summary="היום: 1000 קל",
             toggle_state="שינה: active",
+            today_date="13/06/2026",
         )
 
         messages = analyzer.converse.call_args[0][0]
         system_prompt = messages[0]["content"]
         assert "שם: דני, גיל: 30" in system_prompt
-        assert "היום: 1000 קל" in system_prompt
         assert "שינה: active" in system_prompt
 
 

@@ -91,13 +91,15 @@ for mod in [
     sys.modules.setdefault(mod, MagicMock())
 
 mock_telegram = sys.modules["telegram"]
-mock_telegram.Update = MagicMock
-mock_telegram.InlineKeyboardButton = MagicMock
-mock_telegram.InlineKeyboardMarkup = MagicMock
+if isinstance(mock_telegram, MagicMock):
+    mock_telegram.Update = MagicMock
+    mock_telegram.InlineKeyboardButton = MagicMock
+    mock_telegram.InlineKeyboardMarkup = MagicMock
 
 mock_ext = sys.modules["telegram.ext"]
-mock_ext.ContextTypes = MagicMock()
-mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
+if isinstance(mock_ext, MagicMock):
+    mock_ext.ContextTypes = MagicMock()
+    mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
 from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult, CorrectionFoodItem, MessageClassification
 from keyboards import format_daily_status
@@ -145,6 +147,7 @@ class TestCrossingAlerts:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         return h
 
     def test_no_alert_when_both_within_range(self):
@@ -179,6 +182,7 @@ class TestBuildFoodResponse:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         return h
 
     def test_includes_items_and_status(self):
@@ -194,6 +198,7 @@ class TestFormatItemsText:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         return h
 
     def test_single_item_shows_grams(self):
@@ -250,6 +255,7 @@ class TestDailySummaryCallback:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         h.user_repo = MagicMock()
         h.food_repo = MagicMock()
         h.feedback_repo = MagicMock()
@@ -329,6 +335,7 @@ class TestCorrectionHistory:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         h.user_repo = MagicMock()
         h.food_repo = MagicMock()
         h.feedback_repo = MagicMock()
@@ -448,6 +455,7 @@ class TestCorrectionResponseFormat:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         h.user_repo = MagicMock()
         h.food_repo = MagicMock()
         h.feedback_repo = MagicMock()
@@ -659,6 +667,7 @@ class TestFoodAgainCallback:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         h.user_repo = MagicMock()
         h.food_repo = MagicMock()
         h.feedback_repo = MagicMock()
@@ -747,6 +756,7 @@ class TestToggleCancelHandler:
     def _make_handler(self):
         from handlers.base import HealthHandlers
         h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
         h.user_repo = MagicMock()
         h.toggle_service = MagicMock()
         h.goal_service = MagicMock()
