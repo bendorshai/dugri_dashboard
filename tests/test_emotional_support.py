@@ -2,13 +2,32 @@
 test_emotional_support.py - TDD tests for EmotionalSupportService.
 
 Unit tests for empathy pool selection, inline empathy, and ChatGPT prompt building.
+
+Note: Keyboard tests reload the keyboards module to avoid pollution from
+test files that stub sys.modules["telegram"] at module level (e.g.
+test_handlers.py, test_dispatch_v2.py). Without the reload, the
+InlineKeyboardMarkup import in keyboards.py picks up a MagicMock
+when those files are collected first (alphabetical ordering).
 """
 
+import importlib
+import sys
 import pytest
 from unittest.mock import MagicMock
 from datetime import datetime, timedelta
 
 from services.emotional_support_service import EmotionalSupportService
+
+# Other test files (test_handlers.py, test_dispatch_v2.py) replace
+# sys.modules["telegram"] with a MagicMock at module level. When pytest
+# collects them first (alphabetical order), keyboards.py ends up importing
+# MagicMock instead of InlineKeyboardMarkup. Fix: force-reimport the real
+# telegram module, then reload keyboards so it picks up the real classes.
+if isinstance(sys.modules.get("telegram"), MagicMock):
+    del sys.modules["telegram"]
+    import telegram  # noqa: F811
+    importlib.reload(importlib.import_module("keyboards"))
+
 from keyboards import make_emotional_support_keyboard
 
 
