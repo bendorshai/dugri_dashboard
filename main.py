@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "7.1.0"
-VERSION_NOTES = "Debug button: /debug toggle replaces SUPER_DEBUG constant, metadata shown via inline button instead of message text."
+VERSION = "7.2.0"
+VERSION_NOTES = "Conversational: on-demand history via function calling, date awareness, strict feedback_request routing."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
