@@ -30,15 +30,21 @@ HISTORY_TOOL = {
         "name": "get_food_history",
         "description": (
             "Fetch the user's food and habit log history. "
-            "Choose the number of days based on the question: "
-            "1-2 for yesterday/today, 7 for this week, 30 for this month or trend questions."
+            "For 'yesterday' questions use days=2. "
+            "For 'today' questions use days=1. "
+            "For specific day names (e.g. 'Monday') use days=7. "
+            "For 'this week' use days=7. "
+            "For trends, 'this month', or '10 days' use days=10-30."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "days": {
                     "type": "integer",
-                    "description": "Number of days to look back (1-30).",
+                    "description": (
+                        "How many days to include counting back from today. "
+                        "1=today only, 2=today+yesterday, 7=last week."
+                    ),
                 },
             },
             "required": ["days"],
@@ -128,7 +134,9 @@ class ConversationalService:
         """Execute tool call and make a second LLM call with the result."""
         tool_call = assistant_response.tool_calls[0]
         args = json.loads(tool_call.function.arguments)
-        days = min(max(args.get("days", 7), 1), 30)
+        # Minimum 7 days: LLMs often under-request for day-name queries
+        # ("Monday" needs 7 days back). The extra CSV lines are cheap.
+        days = min(max(args.get("days", 7), 7), 30)
 
         history_text = fetch_history(days)
 

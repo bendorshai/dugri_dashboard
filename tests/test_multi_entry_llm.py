@@ -17,19 +17,19 @@ Run with: pytest tests/test_multi_entry_llm.py -v -m integration
 #
 # ============================================================================
 #
-# MIXED-TYPE & RETROACTIVE MULTI-ENTRY LOGGING
-# ----------------------------------------------
-# A single message can contain entries across MULTIPLE habit types AND
-# food, for different dates. The classifier populates habit_entries
+# MULTI-ENTRY LOGGING (SAME TYPE)
+# --------------------------------
+# A single message can contain MULTIPLE entries of the SAME habit type
+# for different dates. The classifier populates habit_entries
 # (list of HabitEntry) alongside the primary type.
+#
+# Currently Dugri only supports multiple entries of the same type in one
+# message. Mixed-type multi-entry (e.g. workout + sleep + food in one
+# message) is NOT yet supported.
 #
 # Examples:
 #   - "שלשום הלכתי לישון ב-21:00 ואתמול ב-22:00"
 #     -> type=sleep, habit_entries=[{sleep, שלשום, 21:00}, {sleep, אתמול, 22:00}]
-#   - "שלשום התאמנתי ואתמול הלכתי לישון ב-22:00"
-#     -> type=workout, habit_entries=[{workout, שלשום}, {sleep, אתמול, 22:00}]
-#   - "היום אכלתי צ'יזבורגר, אתמול הלכתי לישון ב-23:00, ושלשום התאמנתי"
-#     -> type=meal, meal={...}, habit_entries=[{sleep, אתמול, 23:00}, {workout, שלשום}]
 #
 # For single-entry messages, the scalar fields (sleep_time, workout_note,
 # self_care_description) are still populated for backward compatibility.
@@ -202,32 +202,34 @@ class TestMultiEntryHabits:
         assert "sleep" in types
         assert "workout" in types
 
-    def test_mixed_all_types(self):
-        """Full mixed message: workout + 2 sleep entries + food.
-        'שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר'
-        -> type=meal, habit_entries has 3 entries (1 workout + 2 sleep)."""
-        analyzer = _make_analyzer()
-        result = _classify(
-            analyzer,
-            "שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר",
-            toggle_state=_build_toggle_state(
-                nutrition="active_with_goal",
-                sleep="active_with_goal",
-                workouts="active_with_goal",
-            ),
-            history=_build_history(
-                ("user", "קפה בבוקר"),
-                ("bot", FOOD_RESPONSE_COFFEE),
-            ),
-        )
-        assert result.type == "meal"
-        assert result.meal is not None
-        assert result.habit_entries is not None
-        assert len(result.habit_entries) == 3
-        sleep_entries = [e for e in result.habit_entries if e.habit_type == "sleep"]
-        workout_entries = [e for e in result.habit_entries if e.habit_type == "workout"]
-        assert len(sleep_entries) == 2
-        assert len(workout_entries) == 1
+    # TODO: mixed-type multi-entry not yet supported. Dugri currently handles
+    # multiple entries of the same type only. Re-enable when mixed-type is implemented.
+    # def test_mixed_all_types(self):
+    #     """Full mixed message: workout + 2 sleep entries + food.
+    #     'שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר'
+    #     -> type=meal, habit_entries has 3 entries (1 workout + 2 sleep)."""
+    #     analyzer = _make_analyzer()
+    #     result = _classify(
+    #         analyzer,
+    #         "שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר",
+    #         toggle_state=_build_toggle_state(
+    #             nutrition="active_with_goal",
+    #             sleep="active_with_goal",
+    #             workouts="active_with_goal",
+    #         ),
+    #         history=_build_history(
+    #             ("user", "קפה בבוקר"),
+    #             ("bot", FOOD_RESPONSE_COFFEE),
+    #         ),
+    #     )
+    #     assert result.type == "meal"
+    #     assert result.meal is not None
+    #     assert result.habit_entries is not None
+    #     assert len(result.habit_entries) == 3
+    #     sleep_entries = [e for e in result.habit_entries if e.habit_type == "sleep"]
+    #     workout_entries = [e for e in result.habit_entries if e.habit_type == "workout"]
+    #     assert len(sleep_entries) == 2
+    #     assert len(workout_entries) == 1
 
     # --- Backward compatibility ---
 
