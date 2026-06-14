@@ -113,7 +113,7 @@ class MessageClassification(BaseModel):
         "help", "answer_question", "feedback_request",
         "feedback_reaction",
         "toggle_cancel", "toggle_activate",
-        "conversation_reply", "name_declaration",
+        "conversation_reply", "name_declaration", "gender_declaration",
         "emotional",
         "unrelated",
         "none",  # internal only: error/timeout fallback, never returned by LLM
@@ -127,6 +127,7 @@ class MessageClassification(BaseModel):
     question_text: str | None = None
     toggle_name: str | None = None
     declared_name: str | None = None
+    declared_gender: Literal["male", "female"] | None = None
     freeform_response: str | None = None
     refusal_tone: Literal["sharp", "soft"] | None = None
     emotional_context: bool = False
@@ -142,7 +143,7 @@ class RouterClassification(BaseModel):
     """
     type: Literal[
         "meal", "opt_in", "correction",
-        "name_declaration", "sleep", "workout", "self_care", "emotional",
+        "name_declaration", "gender_declaration", "sleep", "workout", "self_care", "emotional",
         "feedback_request", "feedback_reaction", "conversational",
         "inappropriate",
     ]

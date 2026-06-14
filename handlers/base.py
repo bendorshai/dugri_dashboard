@@ -632,6 +632,21 @@ class HealthHandlers:
                 await self._send(response, tid=tid, message=message)
             return
 
+        if rtype == "gender_declaration" and self.onboarding_service:
+            gender = classification.declared_gender if hasattr(classification, "declared_gender") and classification.declared_gender else None
+            if not gender:
+                # Fallback: extract from text
+                text_lower = message.text.strip()
+                if "בת" in text_lower:
+                    gender = "female"
+                elif "בן" in text_lower:
+                    gender = "male"
+            if gender:
+                response = self.onboarding_service.handle_gender_response(tid, gender)
+                if response:
+                    await self._send(response, tid=tid, message=message)
+            return
+
         if rtype == "feedback_request":
             if self.feedback_service:
                 is_first = self.feedback_service.is_first_feedback(tid)
@@ -1170,6 +1185,20 @@ class HealthHandlers:
             response = self.onboarding_service.handle_name_response(tid, name, late=late)
             if response:
                 await self._send(response, tid=tid, message=message)
+            return
+
+        if classification.type == "gender_declaration" and self.onboarding_service:
+            gender = classification.declared_gender if classification.declared_gender else None
+            if not gender:
+                text_lower = message.text.strip()
+                if "בת" in text_lower:
+                    gender = "female"
+                elif "בן" in text_lower:
+                    gender = "male"
+            if gender:
+                response = self.onboarding_service.handle_gender_response(tid, gender)
+                if response:
+                    await self._send(response, tid=tid, message=message)
             return
 
         if classification.type == "feedback_request":

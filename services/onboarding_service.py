@@ -29,7 +29,7 @@ class OnboardingService:
     def handle_name_response(self, telegram_user_id: int, name: str, late: bool = False) -> str:
         """Process the user's name response.
 
-        late=False: direct reply to greeting (full intro + 'מה אכלת?')
+        late=False: direct reply to greeting (asks 'בן או בת?')
         late=True: declared name later ('אחלה, {name}')
         """
         self._user_repo.update_fields(telegram_user_id, {
@@ -39,3 +39,8 @@ class OnboardingService:
         if late:
             return M.ONBOARDING_NAME_LATE.format(name=name)
         return M.ONBOARDING_NAME_RESPONSE.format(name=name)
+
+    def handle_gender_response(self, telegram_user_id: int, gender: str) -> str:
+        """Process the user's gender response (male/female)."""
+        self._user_repo.update_fields(telegram_user_id, {"gender": gender})
+        return M.ONBOARDING_GENDER_RESPONSE

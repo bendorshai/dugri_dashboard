@@ -12,6 +12,7 @@ Used by: handlers/base.py.
 
 from __future__ import annotations
 
+import random
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -162,7 +163,14 @@ class FeedbackService:
         else:
             closing = "\n\nעבד לך? משהו שהיית רוצה שאתמקד בו יותר או פחות?"
 
-        return f"💬 {feedback_text}{closing}"
+        greeting = ""
+        if profile.name and profile.gender:
+            import messages as M
+            pool = (M.FEEDBACK_GREETING_MALE if profile.gender == "male"
+                    else M.FEEDBACK_GREETING_FEMALE)
+            greeting = random.choice(pool).format(name=profile.name) + "\n\n"
+
+        return f"💬 {greeting}{feedback_text}{closing}"
 
     def process_reaction(
         self, telegram_user_id: int, reaction_text: str, current_steering: str | None,
