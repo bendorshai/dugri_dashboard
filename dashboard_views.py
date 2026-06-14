@@ -277,11 +277,17 @@ def profile_post():
     weight_kg = request.form.get("weight_kg", "").strip()
     height_cm = request.form.get("height_cm", "").strip()
 
+    gender = request.form.get("gender", "").strip()
+
     if name:
         profile_data["name"] = name
         profile_data["onboarding.name_collected"] = True
     else:
         profile_data["name"] = None
+    if gender in ("male", "female"):
+        profile_data["gender"] = gender
+    else:
+        profile_data["gender"] = None
     if birth_year:
         profile_data["birth_year"] = int(birth_year)
     else:

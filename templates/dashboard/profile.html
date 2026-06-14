@@ -10,6 +10,29 @@
         </p>
 
         <div class="form-group">
+            <label class="form-label" for="name">שם</label>
+            <input class="form-input" type="text" id="name" name="name"
+                   placeholder="איך לקרוא לך?"
+                   value="{{ user.get('name', '') or '' }}">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">מגדר</label>
+            <div style="display: flex; gap: 1.5rem; margin-top: 0.25rem;">
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                    <input type="radio" name="gender" value="male"
+                           {{ 'checked' if user.get('gender') == 'male' else '' }}>
+                    בן
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                    <input type="radio" name="gender" value="female"
+                           {{ 'checked' if user.get('gender') == 'female' else '' }}>
+                    בת
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
             <label class="form-label" for="birth_year">שנת לידה</label>
             <input class="form-input" type="number" id="birth_year" name="birth_year"
                    placeholder="לדוגמה: 1990"
