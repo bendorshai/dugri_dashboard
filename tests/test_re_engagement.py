@@ -2,12 +2,13 @@
 test_re_engagement.py - TDD tests for the re-engagement system.
 
 Two pipelines:
-- Pipeline A (Food Nudge): user is active but not logging food.
-  Daily morning nudge in (8,10) window. Blocks sleep hooks until answered.
-  Resets when food is logged.
+- Pipeline A (Food Nudge): no food yesterday (calendar day), morning nudge.
+  Blocks sleep hooks until answered. Resets when food is logged.
+  Purely calendar-based - no "is user active" gate.
 - Pipeline B (Complete Silence): user stops communicating entirely.
-  Day 1: nudge. Day 2: GPT smart question. Day 3: GPT context message.
-  After day 3: total silence (no messages at all).
+  Uses elapsed hours (not calendar days) to avoid false triggers:
+  48h -> day1 nudge, 72h -> GPT smart question, 96h -> GPT context message,
+  120h -> permanent silence.
   During days 1-3: only weekly feedback allowed, all other hooks suppressed.
   Any user message resets to normal.
 
@@ -204,14 +205,28 @@ class TestFoodNudge:
         assert level != SuppressionLevel.ALLOW_WEEKLY_ONLY
 
     def test_daily_forever_without_food(self):
-        """User active (messages within 24h), no food -> nudge keeps firing daily."""
+        """No food yesterday -> nudge fires daily regardless of last message time."""
         svc, _, _ = _make_service()
-        # User messaged 2 hours ago but no food yesterday
         user = _make_user(
             re_engagement_stage="none",
             last_user_message_at=datetime(2026, 6, 15, 4, 0, tzinfo=timezone.utc),
         )
         clock = _morning_clock()
+        action = svc.check_re_engagement(user, clock)
+
+        assert action is not None
+        assert action.new_stage == "food_nudge_pending"
+
+    def test_food_nudge_fires_even_if_user_inactive_30h(self):
+        """Food nudge fires even if user hasn't messaged in 30h (no _is_user_active gate)."""
+        svc, _, _ = _make_service()
+        # User last messaged 30h ago - would have been blocked by old _is_user_active
+        # But 30h < 48h so silence pipeline doesn't fire either
+        user = _make_user(
+            re_engagement_stage="none",
+            last_user_message_at=datetime(2026, 6, 14, 0, 0, tzinfo=timezone.utc),
+        )
+        clock = _morning_clock()  # 06:00 UTC = 09:00 Israel
         action = svc.check_re_engagement(user, clock)
 
         assert action is not None
@@ -247,70 +262,113 @@ class TestFoodNudge:
 # ---------------------------------------------------------------------------
 
 class TestSilencePipeline:
-    def test_day1_after_1_day_silence(self):
-        """User silent for 1 day, morning window -> silence day 1 nudge."""
+    def test_day1_after_48h_silence(self):
+        """User silent for 49h, morning window -> silence day 1 nudge."""
         svc, _, _ = _make_service()
+        # 49 hours before 06:00 UTC June 15 = June 12 at 05:00 UTC
         user = _make_user(
-            last_user_message_at=datetime(2026, 6, 13, 20, 0, tzinfo=timezone.utc),
+            last_user_message_at=datetime(2026, 6, 13, 5, 0, tzinfo=timezone.utc),
         )
-        # 2 days later morning
-        clock = _clock(datetime(2026, 6, 15, 6, 0))
+        clock = _clock(datetime(2026, 6, 15, 6, 0))  # 09:00 Israel
         action = svc.check_re_engagement(user, clock)
 
         assert action is not None
         assert action.new_stage == "silence_day1"
         assert action.message  # non-empty
 
+    def test_day1_skipped_before_48h(self):
+        """User silent for 47h -> no silence pipeline (needs 48h)."""
+        svc, _, _ = _make_service()
+        # 47 hours before 06:00 UTC June 15 = June 13 at 07:00 UTC
+        user = _make_user(
+            last_user_message_at=datetime(2026, 6, 13, 7, 0, tzinfo=timezone.utc),
+        )
+        clock = _clock(datetime(2026, 6, 15, 6, 0))  # 09:00 Israel
+        action = svc.check_re_engagement(user, clock)
+
+        # Should NOT enter silence pipeline - only 47h elapsed
+        assert action is None or action.new_stage != "silence_day1"
+
+    def test_11h_ago_no_silence(self):
+        """Bug repro: user messaged 11h ago (21:25 -> 08:10 next day) -> no silence."""
+        svc, _, _ = _make_service()
+        # User messaged at 21:25 UTC, now is 08:10 UTC next day (~11h)
+        user = _make_user(
+            last_user_message_at=datetime(2026, 6, 14, 18, 25, tzinfo=timezone.utc),
+        )
+        clock = _clock(datetime(2026, 6, 15, 5, 10))  # 08:10 Israel (05:10 UTC)
+        action = svc.check_re_engagement(user, clock)
+
+        # Must NOT trigger silence pipeline - only 11h elapsed
+        assert action is None or action.new_stage != "silence_day1"
+
     def test_day1_skipped_outside_window(self):
-        """User silent 1+ days but it's afternoon -> no message."""
+        """User silent 48h+ but it's afternoon -> no message."""
         svc, _, _ = _make_service()
         user = _make_user(
-            last_user_message_at=datetime(2026, 6, 13, 20, 0, tzinfo=timezone.utc),
+            last_user_message_at=datetime(2026, 6, 13, 5, 0, tzinfo=timezone.utc),
         )
         clock = _afternoon_clock()
         action = svc.check_re_engagement(user, clock)
 
         assert action is None
 
-    def test_day2_generates_smart_question(self):
-        """Silence day 1 + 2 days silent -> GPT smart question."""
+    def test_day2_after_72h(self):
+        """Silence day 1 + 72h elapsed -> GPT smart question."""
         svc, _, _ = _make_service()
+        # 73h before 06:00 UTC June 16 = June 13 at 05:00 UTC
         user = _make_user(
             re_engagement_stage="silence_day1",
             re_engagement_last_sent_at=datetime(2026, 6, 14, 6, 0, tzinfo=timezone.utc),
-            last_user_message_at=datetime(2026, 6, 13, 10, 0, tzinfo=timezone.utc),
+            last_user_message_at=datetime(2026, 6, 13, 5, 0, tzinfo=timezone.utc),
         )
-        clock = _clock(datetime(2026, 6, 15, 6, 0))
+        clock = _clock(datetime(2026, 6, 16, 6, 0))  # 73h since last message
         action = svc.check_re_engagement(user, clock)
 
         assert action is not None
         assert action.new_stage == "silence_day2"
         assert action.message  # GPT-generated
 
-    def test_day3_generates_context_message(self):
-        """Silence day 2 + 3 days silent -> GPT context message."""
+    def test_day2_skipped_before_72h(self):
+        """Silence day 1 + only 71h elapsed -> no progression."""
         svc, _, _ = _make_service()
+        user = _make_user(
+            re_engagement_stage="silence_day1",
+            re_engagement_last_sent_at=datetime(2026, 6, 14, 6, 0, tzinfo=timezone.utc),
+            last_user_message_at=datetime(2026, 6, 13, 7, 0, tzinfo=timezone.utc),
+        )
+        # 71h since last message
+        clock = _clock(datetime(2026, 6, 16, 6, 0))
+        action = svc.check_re_engagement(user, clock)
+
+        assert action is None
+
+    def test_day3_after_96h(self):
+        """Silence day 2 + 96h elapsed -> GPT context message."""
+        svc, _, _ = _make_service()
+        # last message 97h before clock, last sent on previous day
         user = _make_user(
             re_engagement_stage="silence_day2",
             re_engagement_last_sent_at=datetime(2026, 6, 15, 6, 0, tzinfo=timezone.utc),
-            last_user_message_at=datetime(2026, 6, 12, 10, 0, tzinfo=timezone.utc),
+            last_user_message_at=datetime(2026, 6, 12, 5, 0, tzinfo=timezone.utc),
         )
-        clock = _clock(datetime(2026, 6, 16, 6, 0))
+        clock = _clock(datetime(2026, 6, 16, 6, 0))  # 97h since message
         action = svc.check_re_engagement(user, clock)
 
         assert action is not None
         assert action.new_stage == "silence_day3"
         assert action.message  # GPT-generated
 
-    def test_silenced_after_day3(self):
-        """Silence day 3 + 4 days silent -> transition to silenced, no message."""
+    def test_silenced_after_120h(self):
+        """Silence day 3 + 120h elapsed -> transition to silenced, no message."""
         svc, _, _ = _make_service()
+        # 121h since last message
         user = _make_user(
             re_engagement_stage="silence_day3",
             re_engagement_last_sent_at=datetime(2026, 6, 16, 6, 0, tzinfo=timezone.utc),
-            last_user_message_at=datetime(2026, 6, 12, 10, 0, tzinfo=timezone.utc),
+            last_user_message_at=datetime(2026, 6, 11, 5, 0, tzinfo=timezone.utc),
         )
-        clock = _clock(datetime(2026, 6, 17, 6, 0))
+        clock = _clock(datetime(2026, 6, 16, 6, 0))  # 120h+ since message
         action = svc.check_re_engagement(user, clock)
 
         assert action is not None
@@ -348,15 +406,16 @@ class TestSilencePipeline:
 # ---------------------------------------------------------------------------
 
 class TestTransitions:
-    def test_pipeline_a_transitions_to_b_when_silent(self):
-        """food_nudge_pending + 1 day silence -> silence_day1 (B overrides A)."""
+    def test_pipeline_a_transitions_to_b_when_silent_48h(self):
+        """food_nudge_pending + 48h+ silence -> silence_day1 (B overrides A)."""
         svc, _, _ = _make_service()
+        # 49h since last message
         user = _make_user(
             re_engagement_stage="food_nudge_pending",
             re_engagement_last_sent_at=datetime(2026, 6, 13, 6, 0, tzinfo=timezone.utc),
             last_user_message_at=datetime(2026, 6, 13, 5, 0, tzinfo=timezone.utc),
         )
-        clock = _clock(datetime(2026, 6, 15, 6, 0))
+        clock = _clock(datetime(2026, 6, 15, 6, 0))  # 49h since last message
         action = svc.check_re_engagement(user, clock)
 
         assert action is not None
@@ -487,15 +546,16 @@ class TestEdgeCases:
         action = svc.check_re_engagement(user, clock)
         assert action is None
 
-    def test_silence_day_progression_requires_actual_days(self):
-        """Can't jump from day1 to day2 on the same day."""
+    def test_silence_day_progression_requires_elapsed_hours(self):
+        """Can't jump from day1 to day2 before 72h total elapsed."""
         svc, _, _ = _make_service()
+        # Last message 50h ago (past 48h threshold for day1)
+        # but not yet 72h for day2
         user = _make_user(
             re_engagement_stage="silence_day1",
             re_engagement_last_sent_at=datetime(2026, 6, 15, 6, 0, tzinfo=timezone.utc),
-            last_user_message_at=datetime(2026, 6, 14, 10, 0, tzinfo=timezone.utc),
+            last_user_message_at=datetime(2026, 6, 13, 4, 0, tzinfo=timezone.utc),
         )
-        # Same day as last sent
-        clock = _clock(datetime(2026, 6, 15, 7, 0))
+        clock = _clock(datetime(2026, 6, 15, 6, 0))  # 50h since message
         action = svc.check_re_engagement(user, clock)
-        assert action is None  # Can't advance on same day
+        assert action is None  # Not yet 72h

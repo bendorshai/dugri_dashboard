@@ -124,6 +124,18 @@ FOOD_NUDGE_WINDOW = (8, 10)
 RE_ENGAGEMENT_WINDOW = (8, 10)
 """Morning window for silence pipeline messages."""
 
+SILENCE_ENTRY_HOURS = 48
+"""Elapsed hours of silence before entering silence pipeline (day 1)."""
+
+SILENCE_DAY2_HOURS = 72
+"""Elapsed hours of silence before day 2 (GPT smart question)."""
+
+SILENCE_DAY3_HOURS = 96
+"""Elapsed hours of silence before day 3 (GPT context message)."""
+
+SILENCE_PERMANENT_HOURS = 120
+"""Elapsed hours of silence before permanent silencing."""
+
 USE_ROUTER_V2 = True
 """When True, use the new slim Router for message classification instead of the old classifier.
 The new Router uses modular dispatch (opt_in, conversational, etc.) instead of the old

@@ -6,6 +6,10 @@ This directory contains screenshots of bugs/issues from the Telegram bot or dash
 
 Screenshot filenames contain the date they were taken, e.g. `Screenshot_20260528_120010_Telegram.jpg` means the screenshot was taken on **2026-05-28**.
 
+## After fixing an issue
+
+When a plan is executed to fix an issue from a screenshot, **rename the screenshot** to append the plan/branch name with a `--` separator. Example: `why-no-history.jpg` becomes `why-no-history--fix-conversational-history.jpg`. This links the issue to its fix for future reference.
+
 ## Before investigating a screenshot
 
 1. **Extract the date** from the filename (format: `YYYYMMDD`).

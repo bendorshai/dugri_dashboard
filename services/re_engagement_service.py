@@ -22,7 +22,14 @@ from enum import Enum
 
 import messages as M
 import prompts as P
-from constants import FOOD_NUDGE_WINDOW, RE_ENGAGEMENT_WINDOW
+from constants import (
+    FOOD_NUDGE_WINDOW,
+    RE_ENGAGEMENT_WINDOW,
+    SILENCE_ENTRY_HOURS,
+    SILENCE_DAY2_HOURS,
+    SILENCE_DAY3_HOURS,
+    SILENCE_PERMANENT_HOURS,
+)
 from models.profile import User, Toggles
 from user_clock import UserClock
 
@@ -129,9 +136,9 @@ class ReEngagementService:
     def _check_silence_pipeline(
         self, profile: User, clock: UserClock, stage: str,
     ) -> ReEngagementAction | None:
-        """Check if silence pipeline should fire."""
-        days_silent = self._days_since_last_message(profile, clock)
-        if days_silent is None or days_silent < 1:
+        """Check if silence pipeline should fire (elapsed hours, not calendar days)."""
+        hours_silent = self._hours_since_last_message(profile, clock)
+        if hours_silent is None or hours_silent < SILENCE_ENTRY_HOURS:
             return None
 
         now = clock.now()
@@ -149,7 +156,7 @@ class ReEngagementService:
             )
 
         # Progression within silence pipeline
-        if stage == "silence_day1" and days_silent >= 2:
+        if stage == "silence_day1" and hours_silent >= SILENCE_DAY2_HOURS:
             if self._already_sent_today(profile, clock):
                 return None
             return ReEngagementAction(
@@ -157,7 +164,7 @@ class ReEngagementService:
                 message=self._generate_smart_question(profile),
             )
 
-        if stage == "silence_day2" and days_silent >= 3:
+        if stage == "silence_day2" and hours_silent >= SILENCE_DAY3_HOURS:
             if self._already_sent_today(profile, clock):
                 return None
             return ReEngagementAction(
@@ -165,7 +172,7 @@ class ReEngagementService:
                 message=self._generate_context_message(profile),
             )
 
-        if stage == "silence_day3" and days_silent >= 4:
+        if stage == "silence_day3" and hours_silent >= SILENCE_PERMANENT_HOURS:
             return ReEngagementAction(
                 new_stage="silenced",
                 message=None,  # Silent transition
@@ -200,10 +207,6 @@ class ReEngagementService:
             return None
 
         if self._already_sent_today(profile, clock):
-            return None
-
-        # User must be active (messaged within 24h) but no food yesterday
-        if not self._is_user_active(profile, clock):
             return None
 
         if self._has_food_yesterday(profile, clock):
@@ -282,26 +285,21 @@ class ReEngagementService:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _days_since_last_message(self, profile: User, clock: UserClock) -> int | None:
-        """Days since user's last message, using local dates."""
+    def _hours_since_last_message(self, profile: User, clock: UserClock) -> float | None:
+        """Elapsed hours since user's last message."""
         if profile.last_user_message_at is None:
             return None
-        last_local = clock.local_date(profile.last_user_message_at)
-        today = clock.today()
-        return (today - last_local).days
+        last = profile.last_user_message_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        elapsed = clock.now() - last
+        return elapsed.total_seconds() / 3600
 
     def _already_sent_today(self, profile: User, clock: UserClock) -> bool:
         """Check if a re-engagement message was already sent today."""
         if profile.re_engagement_last_sent_at is None:
             return False
         return clock.is_same_local_day(profile.re_engagement_last_sent_at)
-
-    def _is_user_active(self, profile: User, clock: UserClock) -> bool:
-        """User is considered active if they messaged within the last 24h."""
-        if profile.last_user_message_at is None:
-            return False
-        now_utc = datetime.now(timezone.utc)
-        return (now_utc - profile.last_user_message_at) < timedelta(hours=24)
 
     def _has_food_yesterday(self, profile: User, clock: UserClock) -> bool:
         """Check if user logged any food entries yesterday (calendar day)."""
