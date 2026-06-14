@@ -236,6 +236,7 @@ class TestHandleMessageRetroactive:
         h.emotional_support_service = None
         h.conversational_service = None
         h.token_log_repo = None
+        h.re_engagement_service = None
         h.landing_page_url = "https://test.com"
         h.admin_chat_id = 0
         return h

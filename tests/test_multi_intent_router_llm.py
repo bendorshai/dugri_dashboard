@@ -69,8 +69,8 @@ def _converse(analyzer, text, toggle_state=None, history=None):
     return service.respond(
         user_text=text,
         user_context=USER_CONTEXT,
-        data_summary=DATA_SUMMARY,
         toggle_state=toggle_state or _build_toggle_state(),
+        today_date=datetime.now().strftime("%d/%m/%Y"),
         recent_messages=history,
     )
 
