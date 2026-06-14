@@ -779,13 +779,29 @@ class HealthHandlers:
         def fetch_history(days: int) -> str:
             from datetime import datetime, timedelta
             today = datetime.strptime(calendar_today, "%d/%m/%Y").date()
-            dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(days)]
+            # +1 buffer: LLMs often interpret days=1 as "1 day back" (yesterday)
+            # rather than "1 day window starting today". The extra day is harmless
+            # (the LLM filters by relevance) but prevents off-by-one misses.
+            dates = [(today - timedelta(days=i)).strftime("%d/%m/%Y") for i in range(days + 1)]
             entries = self.food_repo.get_by_user_and_dates(tid, dates)
             if not entries:
                 return "אין נתונים לתקופה המבוקשת."
-            lines = ["תאריך,שעה,תיאור,קלוריות,חלבון"]
+            # Label dates so the LLM doesn't need date arithmetic
+            heb_days = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
+            day_labels = {}
+            for offset in range(days + 1):
+                d = today - timedelta(days=offset)
+                ds = d.strftime("%d/%m/%Y")
+                if offset == 0:
+                    day_labels[ds] = "היום"
+                elif offset == 1:
+                    day_labels[ds] = "אתמול"
+                else:
+                    day_labels[ds] = f"יום {heb_days[d.weekday()]}"
+            lines = ["תאריך,יום,שעה,תיאור,קלוריות,חלבון"]
             for e in entries:
-                lines.append(f"{e.date},{e.time},{e.description},{e.calories},{e.protein}")
+                label = day_labels.get(e.date, e.date)
+                lines.append(f"{e.date},{label},{e.time},{e.description},{e.calories},{e.protein}")
             return "\n".join(lines)
 
         response = self.conversational_service.respond(
