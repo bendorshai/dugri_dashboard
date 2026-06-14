@@ -89,6 +89,48 @@ class TestFeedbackServiceNoData:
         assert "אין נתונים" in result
 
 
+class TestFeedbackGreeting:
+    """Greeting is prepended to feedback when user has both name and gender."""
+
+    def _run_feedback(self, name=None, gender=None):
+        svc, analyzer, food_repo, _, feedback_repo = _make_feedback_service()
+        from models.food import FoodEntry
+        food_repo.get_by_user_and_dates.return_value = [
+            FoodEntry(telegram_user_id=123, date="05/06/2026", time="08:00",
+                      description="ביצים", calories=300, protein=25),
+        ]
+        feedback_repo.get_recent.return_value = []
+        analyzer.generate_weekly_feedback.return_value = {
+            "feedback_text": "הכל טוב", "discovered_pattern": None, "pattern_summary": None,
+        }
+        profile = _make_profile(name=name, gender=gender)
+        return svc.give_feedback(123, "05/06/2026", profile, False)
+
+    def test_greeting_with_name_and_male(self):
+        result = self._run_feedback(name="שי", gender="male")
+        # Should have greeting before the feedback text
+        import messages as M
+        assert any(g.format(name="שי") in result for g in M.FEEDBACK_GREETING_MALE)
+
+    def test_greeting_with_name_and_female(self):
+        result = self._run_feedback(name="דנה", gender="female")
+        import messages as M
+        assert any(g.format(name="דנה") in result for g in M.FEEDBACK_GREETING_FEMALE)
+
+    def test_no_greeting_without_name(self):
+        result = self._run_feedback(name=None, gender="male")
+        # Should start with 💬 directly into feedback text
+        assert result.startswith("💬 הכל טוב")
+
+    def test_no_greeting_without_gender(self):
+        result = self._run_feedback(name="שי", gender=None)
+        assert result.startswith("💬 הכל טוב")
+
+    def test_no_greeting_without_both(self):
+        result = self._run_feedback(name=None, gender=None)
+        assert result.startswith("💬 הכל טוב")
+
+
 class TestFeedbackPreComputation:
     """Verify that give_feedback pre-computes stats in Python
     and passes them (not raw CSV) to the analyzer."""

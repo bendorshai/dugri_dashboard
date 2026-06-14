@@ -48,10 +48,10 @@ class TestHandleNameResponse:
         assert fields["name"] == "שי"
         assert fields["onboarding.name_collected"] is True
 
-    def test_invites_first_meal(self):
+    def test_asks_gender_after_name(self):
         svc, _, _ = _make_service()
         response = svc.handle_name_response(123, "דנה")
-        assert "אכלת" in response or "אוכל" in response
+        assert "בן או בת" in response
 
 
 class TestNoLongerOffersHabits:

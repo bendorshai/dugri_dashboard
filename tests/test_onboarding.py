@@ -43,12 +43,12 @@ class TestHandleNameResponse:
         assert call_fields["name"] == "שי"
         assert call_fields["onboarding.name_collected"] is True
 
-    def test_direct_response_includes_invite(self):
-        """Direct name response (after greeting) includes meal invite."""
+    def test_direct_response_asks_gender(self):
+        """Direct name response (after greeting) asks בן או בת."""
         svc, _ = _make_service()
         response = svc.handle_name_response(123, "שי", late=False)
         assert "שי" in response
-        assert "ארוחה" in response
+        assert "בן או בת" in response
 
     def test_late_declaration_short_ack(self):
         """Late name declaration gets a short acknowledgment, no 'מה אכלת?'."""
@@ -57,6 +57,26 @@ class TestHandleNameResponse:
         assert "דני" in response
         assert "ארוחה" not in response
         assert "נתחיל" not in response
+
+
+class TestHandleGenderResponse:
+    def test_saves_gender_male(self):
+        svc, user_repo = _make_service()
+        response = svc.handle_gender_response(123, "male")
+        user_repo.update_fields.assert_called_once_with(123, {"gender": "male"})
+        assert len(response) > 0
+
+    def test_saves_gender_female(self):
+        svc, user_repo = _make_service()
+        response = svc.handle_gender_response(123, "female")
+        user_repo.update_fields.assert_called_once_with(123, {"gender": "female"})
+        assert len(response) > 0
+
+    def test_response_includes_meal_invite(self):
+        """After gender is collected, the intro continues with meal invite."""
+        svc, _ = _make_service()
+        response = svc.handle_gender_response(123, "male")
+        assert "ארוחה" in response
 
 
 class TestBackwardCompatConstructor:
