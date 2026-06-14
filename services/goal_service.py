@@ -177,7 +177,10 @@ class GoalService:
             pool = self._get_goal_value_ask_pool(toggle_name)
             return random.choice(pool)
 
-        parsed = self._analyzer.extract_goal_value(raw_value, goal_type)
+        recent = self._user_repo.get_recent_messages(tid, 5)
+        parsed = self._analyzer.extract_goal_value(
+            raw_value, goal_type, recent_messages=recent,
+        )
         if parsed is None:
             pool = self._get_goal_value_ask_pool(toggle_name)
             return random.choice(pool)

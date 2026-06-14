@@ -657,11 +657,14 @@ class FoodAnalyzer:
         return None
 
     def extract_goal_value(self, text: str, goal_type: str,
+                           recent_messages: list[dict] | None = None,
                            on_usage: TokenCallback | None = None) -> dict | None:
         """Extract structured goal data from natural Hebrew text using GPT.
 
         goal_type: "body_stats", "sleep_time", "workout_count",
                    "eating_window", "nutrition_targets"
+        recent_messages: optional conversation history for context-aware
+            extraction (e.g. resolving "כן!" from a bot-proposed value).
         Returns parsed dict or None on failure.
         """
         prompt = _EXTRACTION_PROMPTS.get(goal_type)
@@ -669,12 +672,23 @@ class FoodAnalyzer:
             logger.warning("Unknown goal_type for extraction: %s", goal_type)
             return None
 
+        # Build context-aware user content when history is available
+        if recent_messages:
+            lines = []
+            for msg in recent_messages[-4:]:
+                role = "בוט" if msg.get("role") == "bot" else "משתמש"
+                lines.append(f"{role}: {msg.get('text', '')}")
+            lines.append(f"משתמש: {text}")
+            user_content = "\n".join(lines)
+        else:
+            user_content = text
+
         try:
             response = self._create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": text},
+                    {"role": "user", "content": user_content},
                 ],
                 temperature=0,
                 max_tokens=100,

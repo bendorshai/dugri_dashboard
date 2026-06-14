@@ -312,3 +312,89 @@ class TestGoalUpdate:
         result = svc.handle_goal_update(123, "self_care", "שנה", user)
 
         assert result is None
+
+
+# ============================================================================
+# Context-aware goal value extraction (confirmation recovery)
+# ============================================================================
+
+
+class TestHandleGoalValueWithHistory:
+    """When user confirms a bot-proposed goal (e.g. 'כן!' after bot said
+    '5 אימונים בשבוע, רוצה שאקבע?'), handle_goal_value should pass
+    conversation history to extract_goal_value so the extraction GPT
+    can resolve the value from context."""
+
+    def test_confirmation_resolves_from_history(self):
+        """'כן!' with bot history containing '5 אימונים' -> sets goal."""
+        analyzer = MagicMock()
+        analyzer.extract_goal_value.return_value = {"weekly_target": 5}
+
+        svc, user_repo, toggle_svc = _make_service(analyzer)
+        user_repo.get_recent_messages.return_value = [
+            {"role": "bot", "text": "5 אימונים של 15 דקות כל שבוע. רוצה שאקבע?"},
+            {"role": "user", "text": "כן!"},
+        ]
+
+        result = svc.handle_goal_value(123, "workouts", "כן!")
+
+        # Should pass recent_messages to extraction
+        call_args = analyzer.extract_goal_value.call_args
+        assert call_args[1].get("recent_messages") is not None
+        # Should set the goal
+        toggle_svc.set_goal_value.assert_called_once_with(
+            123, "workouts", {"weekly_target": 5},
+        )
+        assert result  # confirmation text
+
+    def test_direct_value_still_works(self):
+        """'5' with history context -> still extracts directly."""
+        analyzer = MagicMock()
+        analyzer.extract_goal_value.return_value = {"weekly_target": 5}
+
+        svc, user_repo, toggle_svc = _make_service(analyzer)
+        user_repo.get_recent_messages.return_value = [
+            {"role": "bot", "text": "כמה אימונים בשבוע?"},
+            {"role": "user", "text": "5"},
+        ]
+
+        result = svc.handle_goal_value(123, "workouts", "5")
+
+        toggle_svc.set_goal_value.assert_called_once_with(
+            123, "workouts", {"weekly_target": 5},
+        )
+        assert result
+
+    def test_no_value_anywhere_reasks(self):
+        """'כן!' with no number in bot history -> re-asks."""
+        analyzer = MagicMock()
+        analyzer.extract_goal_value.return_value = None
+
+        svc, user_repo, toggle_svc = _make_service(analyzer)
+        user_repo.get_recent_messages.return_value = [
+            {"role": "bot", "text": "מה נשמע?"},
+            {"role": "user", "text": "כן!"},
+        ]
+
+        result = svc.handle_goal_value(123, "workouts", "כן!")
+
+        toggle_svc.set_goal_value.assert_not_called()
+        assert result  # re-ask text
+
+    def test_sleep_confirmation_resolves(self):
+        """Sleep goal confirmation from history works too."""
+        analyzer = MagicMock()
+        analyzer.extract_goal_value.return_value = {"sleep_time": "23:00"}
+
+        svc, user_repo, toggle_svc = _make_service(analyzer)
+        user_repo.get_recent_messages.return_value = [
+            {"role": "bot", "text": "אז נקבע יעד שינה ל-23:00? רוצה?"},
+            {"role": "user", "text": "סבבה"},
+        ]
+
+        result = svc.handle_goal_value(123, "sleep", "סבבה")
+
+        toggle_svc.set_goal_value.assert_called_once_with(
+            123, "sleep", {"sleep_time": "23:00"},
+        )
+        assert result
