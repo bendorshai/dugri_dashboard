@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "7.5.0"
-VERSION_NOTES = "Re-engagement system: food nudge for inactive loggers, 3-day silence pipeline with GPT messages, welcome-back on return."
+VERSION = "7.5.1"
+VERSION_NOTES = "Fix reply-to-food-entry misrouted as new meal: structural detection + router prompt rule."
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

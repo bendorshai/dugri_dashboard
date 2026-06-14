@@ -364,7 +364,14 @@ class FoodAnalyzer:
         system = ""
 
         if reply_context:
-            system += f"ההודעה הנוכחית היא תגובה ישירה להודעת הבוט:\n\"{reply_context}\"\n\n"
+            if "קל׳" in reply_context and "חלבון" in reply_context:
+                system += (
+                    "ההודעה הנוכחית היא תגובה לאישור רישום אוכל קודם של הבוט:\n"
+                    f"\"{reply_context}\"\n"
+                    "המשתמש מגיב על רשומה קיימת - זה אף פעם לא רישום חוזר של אותה ארוחה.\n\n"
+                )
+            else:
+                system += f"ההודעה הנוכחית היא תגובה ישירה להודעת הבוט:\n\"{reply_context}\"\n\n"
 
         if toggle_state:
             system += f"מצב ההרגלים של המשתמש:\n{toggle_state}\n\n"
