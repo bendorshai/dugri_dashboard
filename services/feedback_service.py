@@ -166,8 +166,8 @@ class FeedbackService:
         greeting = ""
         if profile.name and profile.gender:
             import messages as M
-            pool = (M.FEEDBACK_GREETING_MALE if profile.gender == "male"
-                    else M.FEEDBACK_GREETING_FEMALE)
+            pool = (M.FEEDBACK_GREETING_FEMALE if profile.gender == "female"
+                    else M.FEEDBACK_GREETING_MALE)
             greeting = random.choice(pool).format(name=profile.name) + "\n\n"
 
         return f"💬 {greeting}{feedback_text}{closing}"

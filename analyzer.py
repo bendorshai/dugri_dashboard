@@ -127,7 +127,7 @@ class MessageClassification(BaseModel):
     question_text: str | None = None
     toggle_name: str | None = None
     declared_name: str | None = None
-    declared_gender: Literal["male", "female"] | None = None
+    declared_gender: Literal["male", "female", "other"] | None = None
     freeform_response: str | None = None
     refusal_tone: Literal["sharp", "soft"] | None = None
     emotional_context: bool = False
@@ -149,6 +149,7 @@ class RouterClassification(BaseModel):
     ]
     meal: TimedFoodAnalysisResult | None = None  # populated only for type=meal
     toggle_name: str | None = None  # for opt_in, when Router can identify which habit
+    declared_gender: Literal["male", "female", "other"] | None = None  # for gender_declaration
 
 
 from prompts import (

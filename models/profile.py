@@ -130,7 +130,7 @@ class User(BaseModel):
     email: str
     telegram_user_id: int | None = None
     name: str | None = None
-    gender: Literal["male", "female"] | None = None
+    gender: Literal["male", "female", "other"] | None = None
     photo_url: str | None = None
 
     targets: Targets = Field(default_factory=Targets)

@@ -633,14 +633,7 @@ class HealthHandlers:
             return
 
         if rtype == "gender_declaration" and self.onboarding_service:
-            gender = classification.declared_gender if hasattr(classification, "declared_gender") and classification.declared_gender else None
-            if not gender:
-                # Fallback: extract from text
-                text_lower = message.text.strip()
-                if "בת" in text_lower:
-                    gender = "female"
-                elif "בן" in text_lower:
-                    gender = "male"
+            gender = router_result.declared_gender if router_result.declared_gender else None
             if gender:
                 response = self.onboarding_service.handle_gender_response(tid, gender)
                 if response:

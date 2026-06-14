@@ -82,7 +82,7 @@ inappropriate = הודעות פוגעניות, אלימות, טרולינג.
 - "opt_in" - כל מה שקשור ל-toggle: הסכמה, סירוב, ערכי יעד, בקשה יזומה. מלא toggle_name (באנגלית: sleep, nutrition, workouts, eating_window, self_care, weekly_summary) כשניתן לזהות.
 - "correction" - תיקון לרשומה האחרונה.
 - "name_declaration" - המשתמש מצהיר על שמו.
-- "gender_declaration" - המשתמש מצהיר על המגדר שלו. ההודעה האחרונה של הבוט שאלה 'בן או בת?' והמשתמש עונה 'בן', 'בת', 'אני בן', 'אני בת' וכו'.
+- "gender_declaration" - המשתמש מצהיר על המגדר שלו. ההודעה האחרונה של הבוט שאלה 'בן או בת?' והמשתמש עונה 'בן', 'בת', 'אני בן', 'אני בת' וכו'. חלץ את המגדר לשדה declared_gender: "male" עבור בן/גבר/זכר, "female" עבור בת/נקבה, "other" עבור כל תשובה שלא מציינת מגדר ברור (למשל: 'לא משנה', 'סתם בנאדם', 'אחר').
 - "sleep" - דיווח שעת שינה: 'הלכתי לישון ב-23:00', 'ישנתי ב-22'. סווג כ-sleep כשsleep במצב active/active_with_goal. חריג: אם sleep במצב active_goal_pending = opt_in (יעד, לא דיווח).
 - "workout" - דיווח אימון: 'התאמנתי היום', 'רצתי הבוקר', 'עשיתי יוגה'. סווג כ-workout כשworkouts במצב active/active_with_goal.
 - "self_care" - דיווח פעילות לעצמי: 'הלכתי לים', 'קראתי ספר', 'לקחתי אמבטיה'. סווג כ-self_care כשself_care במצב active.
