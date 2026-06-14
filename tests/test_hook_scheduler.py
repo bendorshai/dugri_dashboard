@@ -246,3 +246,112 @@ class TestInlineHookWindowGuard:
         assert clock.weekday() == SELF_CARE_ANCHOR_DAY
         start, end = SELF_CARE_HOOK_WINDOW
         assert start <= clock.now().hour < end
+
+
+class TestProactiveReveals:
+    """Proactive reveals via the 28-min poller.
+
+    The poller is a fallback for users who haven't logged food. But:
+    - Nutrition is STRICTLY inline-only (after first food entry). The poller
+      must never reveal nutrition.
+    - Eating window requires at least 1 food entry in history, even via poller.
+    """
+
+    @pytest.fixture
+    def context(self):
+        ctx = MagicMock()
+        ctx.bot.send_message = AsyncMock()
+        return ctx
+
+    @pytest.fixture
+    def toggle_service(self):
+        svc = MagicMock()
+        svc.reveal_toggle = MagicMock()
+        return svc
+
+    @pytest.fixture
+    def user_repo(self):
+        return MagicMock()
+
+    @pytest.fixture
+    def food_repo(self):
+        return MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_poller_does_not_reveal_nutrition(
+        self, context, toggle_service, user_repo, food_repo,
+    ):
+        """Nutrition reveal is strictly inline. Poller must never offer it."""
+        from scheduler import _check_proactive_reveals
+
+        user = _make_user(
+            toggles=Toggles(nutrition=ToggleState(status="dormant")),
+        )
+        user.onboarding = MagicMock(name_collected=True)
+
+        toggle_service.should_reveal_nutrition.return_value = True
+        toggle_service.should_reveal_sleep.return_value = False
+        toggle_service.should_reveal_eating_window.return_value = False
+        toggle_service.should_reveal_workouts.return_value = False
+        toggle_service.should_reveal_self_care.return_value = False
+
+        now = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+        await _check_proactive_reveals(
+            context, user, user_repo, toggle_service, now, 4,
+            food_repo=food_repo,
+        )
+
+        toggle_service.reveal_toggle.assert_not_called()
+        context.bot.send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_poller_does_not_reveal_eating_window_without_food(
+        self, context, toggle_service, user_repo, food_repo,
+    ):
+        """Eating window should not be offered if user has zero food entries."""
+        from scheduler import _check_proactive_reveals
+
+        user = _make_user(
+            toggles=Toggles(eating_window=ToggleState(status="dormant")),
+        )
+
+        toggle_service.should_reveal_sleep.return_value = False
+        toggle_service.should_reveal_eating_window.return_value = True
+        toggle_service.should_reveal_workouts.return_value = False
+        toggle_service.should_reveal_self_care.return_value = False
+
+        food_repo.get_all_for_user.return_value = []
+
+        now = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+        await _check_proactive_reveals(
+            context, user, user_repo, toggle_service, now, 4,
+            food_repo=food_repo,
+        )
+
+        toggle_service.reveal_toggle.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_poller_reveals_eating_window_with_food(
+        self, context, toggle_service, user_repo, food_repo,
+    ):
+        """Eating window should be offered when user has food history."""
+        from scheduler import _check_proactive_reveals
+
+        user = _make_user(
+            toggles=Toggles(eating_window=ToggleState(status="dormant")),
+        )
+
+        toggle_service.should_reveal_sleep.return_value = False
+        toggle_service.should_reveal_eating_window.return_value = True
+        toggle_service.should_reveal_workouts.return_value = False
+        toggle_service.should_reveal_self_care.return_value = False
+
+        food_repo.get_all_for_user.return_value = [{"entry": "fake"}]
+
+        now = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+        await _check_proactive_reveals(
+            context, user, user_repo, toggle_service, now, 4,
+            food_repo=food_repo,
+        )
+
+        toggle_service.reveal_toggle.assert_called_once_with(user.telegram_user_id, "eating_window")

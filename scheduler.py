@@ -164,7 +164,7 @@ async def _global_tick(context):
             await _check_user_hooks(
                 context, profile, user_repo, toggle_service,
                 goal_service, eating_day_svc, hook_schedule_store,
-                admin_chat_id=admin_chat_id,
+                admin_chat_id=admin_chat_id, food_repo=food_repo,
             )
         except Exception:
             logger.exception("Poller tick failed for user %d", profile.telegram_user_id)
@@ -177,7 +177,7 @@ async def _global_tick(context):
 async def _check_user_hooks(
     context, profile, user_repo, toggle_service,
     goal_service=None, eating_day_svc=None, hook_schedule_store=None,
-    admin_chat_id: int = 0,
+    admin_chat_id: int = 0, food_repo=None,
 ):
     """Check and fire all due messages for a single user."""
     import messages as M
@@ -291,7 +291,7 @@ async def _check_user_hooks(
     if toggle_service:
         await _check_proactive_reveals(
             context, profile, user_repo, toggle_service, now, today_weekday,
-            admin_chat_id=admin_chat_id,
+            admin_chat_id=admin_chat_id, food_repo=food_repo,
         )
 
     # --- Ghosting detection (goal flows that went unanswered) ---
@@ -302,19 +302,21 @@ async def _check_user_hooks(
 
 async def _check_proactive_reveals(
     context, profile, user_repo, toggle_service, now, weekday,
-    admin_chat_id: int = 0,
+    admin_chat_id: int = 0, food_repo=None,
 ):
     """Proactive reveals: offer dormant habits via poller if not yet offered.
 
     This is the fallback for users who haven't logged food (inline hooks
     didn't fire). Checks gate days, anchor days, and time windows.
+
+    NOTE: nutrition is excluded - it is strictly inline (after first food entry).
+    Eating window requires at least 1 food entry in history.
     """
     import messages as M
 
     tid = profile.telegram_user_id
 
     reveal_checks = [
-        ("nutrition", toggle_service.should_reveal_nutrition(profile), M.REVEAL_NUTRITION, None),
         ("sleep", toggle_service.should_reveal_sleep(profile), M.REVEAL_SLEEP, HOOK_CONFIG["sleep"].get("window")),
         ("eating_window", toggle_service.should_reveal_eating_window(profile), M.REVEAL_EATING_WINDOW, None),
         ("workouts", toggle_service.should_reveal_workouts(profile, weekday), M.REVEAL_WORKOUTS, HOOK_CONFIG["workouts"].get("window")),
@@ -327,6 +329,10 @@ async def _check_proactive_reveals(
         # Check time window if the habit has one
         if window and not (window[0] <= now.hour < window[1]):
             continue
+        # Eating window requires at least 1 food entry
+        if name == "eating_window" and food_repo:
+            if not food_repo.get_all_for_user(tid):
+                continue
         # Reveal and offer (toggle state tells classifier what to do)
         toggle_service.reveal_toggle(tid, name)
         await _send_and_save(context, tid, reveal_msg, user_repo, profile, toggle_service, admin_chat_id)

@@ -107,7 +107,7 @@ def reset_user(email: str) -> None:
     }
 
     now = datetime.now(timezone.utc).isoformat()
-    trial_start = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+    trial_start = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
 
     reset_fields = {
         "toggles": fresh_toggles,

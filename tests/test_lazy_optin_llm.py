@@ -64,7 +64,8 @@ Skip in CI: pytest -m "not integration"
 # ----------------------------------------
 # 1. NUTRITION
 #    - Gate: HOOK_CONFIG["nutrition"]["gate_days"] (0 = after first meal)
-#    - Trigger: inline conversation hook after first food entry (5s delay)
+#    - Trigger: inline conversation hook after first food entry (5s delay).
+#      STRICTLY INLINE - the 28-min poller must never reveal nutrition.
 #    - Goal: calorie + protein daily targets
 #    - Flow: offer tracking -> collect body stats (height, weight, age in
 #      one message, any format) -> ask weight goal (lose/keep/gain) ->
@@ -89,7 +90,8 @@ Skip in CI: pytest -m "not integration"
 #
 # 3. EATING WINDOW
 #    - Gate: HOOK_CONFIG["eating_window"]["gate_days"] (4)
-#    - Trigger: inline conversation hook after food entry
+#    - Trigger: inline conversation hook after food entry.
+#      Poller reveal requires at least 1 food entry in history.
 #    - Goal: the window itself (start-end times). Dugri measures daily
 #      compliance (did user eat within the window?).
 #      Weekly summary reports how many days window was kept.
