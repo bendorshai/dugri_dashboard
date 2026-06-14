@@ -43,7 +43,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _lazy_optin_helpers import (
     _make_analyzer, _build_toggle_state, _build_history,
-    NUTRITION_SUGGESTION,
+    NUTRITION_SUGGESTION, llm_judge,
 )
 from unittest.mock import MagicMock
 from services.conversational_service import ConversationalService
@@ -107,8 +107,10 @@ class TestSelfKnowledge:
         service = _make_service()
         response = _respond(service, "איך אתה מחשב קלוריות?")
         assert len(response) > 20
-        # Should mention estimation/approximation, not claim precision
-        assert any(w in response for w in ["הערכה", "מעריך", "לא מדויק", "מגמה", "בינה"])
+        assert llm_judge(
+            "Does this text explain how calories are calculated or estimated?",
+            response,
+        ), f"Expected explanation about calorie calculation, got: {response}"
 
     def test_why_only_five_habits(self):
         """Answers meta-question about Dugri's design."""
@@ -139,8 +141,10 @@ class TestDataQuestions:
         response = _respond(service, "אכלתי גלידה אתמול?", fetch_history=fetcher)
         assert fetcher.called, "Expected history tool to be called for data question"
         assert len(response) > 10
-        # Should reference the ice cream from the CSV
-        assert any(w in response for w in ["גלידה", "בן אנד ג'ריס", "כן", "450"])
+        assert llm_judge(
+            "Does this text confirm or discuss eating ice cream (גלידה)?",
+            response,
+        ), f"Expected ice cream reference, got: {response}"
 
     def test_casual_chat_no_tool_call(self):
         """Simple chat does not trigger the history tool."""
@@ -157,7 +161,10 @@ class TestDataQuestions:
         response = _respond(service, "כמה אכלתי השבוע?", fetch_history=fetcher)
         assert fetcher.called, "Expected history tool for weekly data question"
         assert len(response) > 20
-        assert any(w in response for w in ["קלוריות", "חלבון"])
+        assert llm_judge(
+            "Does this text discuss weekly food intake, calories, or protein?",
+            response,
+        ), f"Expected weekly eating summary, got: {response}"
 
 
 # ============================================================================
@@ -191,8 +198,10 @@ class TestGoalNegotiation:
             ),
         )
         assert len(response) > 20
-        # Should ask for confirmation - "want me to set?" or similar
-        assert any(w in response for w in ["רוצה", "לקבוע", "אקבע", "נקבע", "שאקבע"])
+        assert llm_judge(
+            "Does this text ask the user to confirm or set a specific calorie/nutrition goal?",
+            response,
+        ), f"Expected goal confirmation question, got: {response}"
 
 
 # ============================================================================
@@ -412,8 +421,10 @@ class TestDataAccuracy:
             today_date=DATA_TODAY_DISPLAY,
             fetch_history=self.fetcher,
         )
-        assert any(w in response for w in ["גלידה", "בן אנד ג'ריס", "כן", "ממתקים", "450"]), \
-            f"Expected ice cream mention. Response: {response}"
+        assert llm_judge(
+            "Does this text confirm or discuss eating sweets or ice cream?",
+            response,
+        ), f"Expected ice cream mention. Response: {response}"
 
     def test_specific_day_name(self):
         """Asking 'what did I eat on Monday' resolves to the correct date.
@@ -426,8 +437,10 @@ class TestDataAccuracy:
             today_date=DATA_TODAY_DISPLAY,
             fetch_history=self.fetcher,
         )
-        assert any(w in response for w in ["שווארמה", "שוורמה", "חומוס", "800", "300"]), \
-            f"Expected Monday's foods. Response: {response}"
+        assert llm_judge(
+            "Does this text mention shawarma, hummus, or foods eaten on Monday?",
+            response,
+        ), f"Expected Monday's foods. Response: {response}"
 
     def test_highest_calorie_meal(self):
         """Asking for highest calorie meal in past 10 days finds shawarma (800cal).
@@ -440,8 +453,10 @@ class TestDataAccuracy:
             today_date=DATA_TODAY_DISPLAY,
             fetch_history=self.fetcher,
         )
-        assert any(w in response for w in ["שווארמה", "שוורמה", "800"]), \
-            f"Expected shawarma/800cal. Response: {response}"
+        assert llm_judge(
+            "Does this text identify shawarma or an 800-calorie meal as the highest calorie item?",
+            response,
+        ), f"Expected shawarma/800cal. Response: {response}"
 
     def test_weekly_protein(self):
         """Asking about weekly protein returns a plausible total.
@@ -454,8 +469,10 @@ class TestDataAccuracy:
             today_date=DATA_TODAY_DISPLAY,
             fetch_history=self.fetcher,
         )
-        assert any(w in response for w in ["חלבון", "גרם"]), \
-            f"Expected protein mention. Response: {response}"
+        assert llm_judge(
+            "Does this text discuss protein intake amounts in grams?",
+            response,
+        ), f"Expected protein mention. Response: {response}"
         # Check that some reasonable number appears (100-250 range)
         import re
         numbers = [int(n) for n in re.findall(r'\d+', response) if 50 < int(n) < 500]
@@ -472,5 +489,7 @@ class TestDataAccuracy:
             today_date=DATA_TODAY_DISPLAY,
             fetch_history=empty_fetcher,
         )
-        assert any(w in response for w in ["אין", "לא נמצא", "לא מצאתי", "אין לי", "לא היו", "לא רשמת", "לא תיעדת", "לא דיווחת", "נתונים"]), \
-            f"Expected 'no data' indication. Response: {response}"
+        assert llm_judge(
+            "Does this text indicate there is no food data or no entries found?",
+            response,
+        ), f"Expected 'no data' indication. Response: {response}"

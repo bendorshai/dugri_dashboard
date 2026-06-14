@@ -79,6 +79,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _lazy_optin_helpers import (
     _make_analyzer, _build_toggle_state, _build_history, _classify,
+    llm_judge,
 )
 
 pytestmark = pytest.mark.integration
@@ -248,7 +249,10 @@ class TestEmotionalClassification:
         assert result.empathy_reflection
         assert len(result.empathy_reflection) > 5
         # Should NOT be generic - should reflect the specific feeling
-        assert "רע" in result.empathy_reflection or "קשה" in result.empathy_reflection or "לא פשוט" in result.empathy_reflection or "מרגיש" in result.empathy_reflection
+        assert llm_judge(
+            "Does this text specifically reflect or acknowledge feeling bad, having a hard time, or emotional distress?",
+            result.empathy_reflection,
+        ), f"Expected specific empathy reflection, got: {result.empathy_reflection}"
 
     def test_empathy_reflection_on_emotional_context_meal(self):
         """Meal with emotional context -> empathy_reflection filled."""

@@ -28,6 +28,8 @@ from unittest.mock import MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from constants import HOOK_CONFIG, MAX_RECENT_MESSAGES
+from openai import OpenAI
+
 from analyzer import FoodAnalyzer
 import messages as M
 
@@ -208,3 +210,27 @@ def _classify(analyzer, text, toggle_state=None,
         toggle_state=toggle_state or _build_toggle_state(),
         reply_context=reply_context,
     )
+
+
+def llm_judge(question: str, text: str) -> bool:
+    """Use a separate LLM call to judge whether text answers a yes/no question.
+
+    Replaces brittle keyword matching in LLM integration tests.
+    Returns True if the judge answers 'yes'.
+    """
+    client = OpenAI(api_key=_API_KEY)
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        max_tokens=10,
+        messages=[
+            {"role": "system", "content": (
+                "You are a strict yes/no judge. Answer ONLY 'yes' or 'no'. "
+                "You will be given a piece of text (possibly in Hebrew) "
+                "and a question about it."
+            )},
+            {"role": "user", "content": f"Text: {text}\n\nQuestion: {question}"},
+        ],
+    )
+    answer = response.choices[0].message.content.strip().lower()
+    return answer.startswith("yes") or answer == "כן"

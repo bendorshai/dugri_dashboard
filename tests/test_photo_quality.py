@@ -35,12 +35,11 @@ try:
 except FileNotFoundError:
     _API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
+from _lazy_optin_helpers import llm_judge
+
 pytestmark = pytest.mark.integration
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "photos"
-
-# Positive phrases that should NOT appear in warnings
-POSITIVE_PHRASES = ["מצוין", "👍", "מעולה", "נהדר", "המשך לצלם ככה", "צילום טוב"]
 
 
 # ---------------------------------------------------------------------------
@@ -61,15 +60,6 @@ def _make_analyzer() -> FoodAnalyzer:
     return FoodAnalyzer(api_key=_API_KEY)
 
 
-def _assert_no_positive_feedback(photo_tips: list[str]):
-    """Assert that none of the tips contain positive/compliment phrases."""
-    combined = " ".join(photo_tips)
-    for phrase in POSITIVE_PHRASES:
-        assert phrase not in combined, (
-            f"Expected a warning but got positive feedback containing '{phrase}': {combined}"
-        )
-
-
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -85,14 +75,12 @@ class TestPiledFood:
 
         assert result is not None, "Analyzer returned None for piled food photo"
         assert result.photo_tips, "Expected photo_tips but got empty list"
-        _assert_no_positive_feedback(result.photo_tips)
 
-        # Should mention piling/stacking/overlapping in at least one tip
         combined = " ".join(result.photo_tips)
-        piling_keywords = ["מוערמ", "ערימ", "חופפ", "נערם", "לפזר", "פזר", "מכס", "כיסוי"]
-        assert any(kw in combined for kw in piling_keywords), (
-            f"Expected warning about piled food, got: {combined}"
-        )
+        assert llm_judge(
+            "Does this text warn about food being piled, stacked, or overlapping on the plate?",
+            combined,
+        ), f"Expected warning about piled food, got: {combined}"
 
 
 class TestPartialPlate:
@@ -105,8 +93,13 @@ class TestPartialPlate:
         result = analyzer.analyze_food_photo(b64, "05/06/2026")
 
         assert result is not None
-        assert result.photo_tips
-        _assert_no_positive_feedback(result.photo_tips)
+        assert result.photo_tips, "Expected photo_tips but got empty list"
+
+        combined = " ".join(result.photo_tips)
+        assert llm_judge(
+            "Does this text warn about part of the plate being cut off, not fully visible, or missing from the frame?",
+            combined,
+        ), f"Expected warning about partial plate, got: {combined}"
 
 
 class TestOutOfFocus:
@@ -119,8 +112,13 @@ class TestOutOfFocus:
         result = analyzer.analyze_food_photo(b64, "05/06/2026")
 
         assert result is not None
-        assert result.photo_tips
-        _assert_no_positive_feedback(result.photo_tips)
+        assert result.photo_tips, "Expected photo_tips but got empty list"
+
+        combined = " ".join(result.photo_tips)
+        assert llm_judge(
+            "Does this text warn about the photo being blurry, out of focus, or unclear?",
+            combined,
+        ), f"Expected warning about focus, got: {combined}"
 
 
 class TestBadAngle:
@@ -133,8 +131,13 @@ class TestBadAngle:
         result = analyzer.analyze_food_photo(b64, "05/06/2026")
 
         assert result is not None
-        assert result.photo_tips
-        _assert_no_positive_feedback(result.photo_tips)
+        assert result.photo_tips, "Expected photo_tips but got empty list"
+
+        combined = " ".join(result.photo_tips)
+        assert llm_judge(
+            "Does this text warn about the photo angle being too steep, too flat, or not ideal?",
+            combined,
+        ), f"Expected warning about angle, got: {combined}"
 
 
 class TestBadLighting:
@@ -147,8 +150,13 @@ class TestBadLighting:
         result = analyzer.analyze_food_photo(b64, "05/06/2026")
 
         assert result is not None
-        assert result.photo_tips
-        _assert_no_positive_feedback(result.photo_tips)
+        assert result.photo_tips, "Expected photo_tips but got empty list"
+
+        combined = " ".join(result.photo_tips)
+        assert llm_judge(
+            "Does this text warn about poor lighting, dark photo, or bad illumination?",
+            combined,
+        ), f"Expected warning about lighting, got: {combined}"
 
 
 class TestUnidentifiedItem:

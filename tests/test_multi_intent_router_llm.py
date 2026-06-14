@@ -42,7 +42,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _lazy_optin_helpers import (
     _make_analyzer, _build_toggle_state, _build_history,
-    FOOD_RESPONSE_SCHNITZEL,
+    FOOD_RESPONSE_SCHNITZEL, llm_judge,
 )
 from services.conversational_service import ConversationalService
 
@@ -172,10 +172,10 @@ class TestMultiIntentResponse:
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
         )
         assert len(response) > 20
-        # Should mention at least one of: hamburger, sleep, or one-at-a-time
-        has_food_ref = any(w in response for w in ["המבורגר", "אוכל", "ארוחה", "אכלת"])
-        has_sleep_ref = any(w in response for w in ["שינה", "לישון", "ישנת"])
-        assert has_food_ref or has_sleep_ref
+        assert llm_judge(
+            "Does this text acknowledge or discuss both eating (hamburger/food) and sleeping?",
+            response,
+        ), f"Expected mention of food and/or sleep, got: {response}"
 
     def test_response_acknowledges_multiple_items(self):
         """Response acknowledges there are multiple things to handle."""
@@ -185,10 +185,10 @@ class TestMultiIntentResponse:
             toggle_state=_build_toggle_state(workouts="active_with_goal"),
         )
         assert len(response) > 20
-        # Should reference at least one of the tasks
-        has_food = any(w in response for w in ["סלט", "טונה", "אוכל", "ארוחה", "אכלת"])
-        has_workout = any(w in response for w in ["אימון", "התאמנ", "ריצה", "רצת", "קילומטר"])
-        assert has_food or has_workout
+        assert llm_judge(
+            "Does this text acknowledge or discuss both eating (salad/tuna/food) and exercising (workout/running)?",
+            response,
+        ), f"Expected mention of food and/or workout, got: {response}"
 
 
 # ============================================================================
