@@ -1140,3 +1140,215 @@ class TestEditFlowIntegration:
         h.analyzer.route_message.assert_called_once()
         # analyze_correction was NOT called
         h.analyzer.analyze_correction.assert_not_called()
+
+
+# ============================================================================
+# KEYBOARD PRESERVATION
+# ============================================================================
+# Food entry messages must always preserve their inline keyboard (edit/delete/
+# duplicate buttons). The menu is the user's only way to interact with an entry.
+#
+# EDIT FLOW KEYBOARD RESTORATION
+# --------------------------------
+# - handle_food_edit_callback stores edit_message_id + edit_chat_id in
+#   pending_correction so the original message can be found later
+# - After correction completes, the original "edit prompt" message gets
+#   its keyboard restored via edit_message_reply_markup
+# - If correction fails or pending state expires, the keyboard is still
+#   restored on the original message
+#
+# SILENT EXCEPTION HANDLERS
+# ---------------------------
+# - handle_food_delete_callback exception: must send error + keyboard
+# - handle_food_edit_callback exception: must send error + keyboard
+# - handle_food_again_callback exception: must send error + keyboard
+# ============================================================================
+
+
+class TestKeyboardPreservation:
+    """Tests that food entry keyboards are never permanently lost."""
+
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
+        h.user_repo = MagicMock()
+        h.food_repo = MagicMock()
+        h.feedback_repo = MagicMock()
+        h.eating_day_svc = MagicMock()
+        h.analyzer = MagicMock()
+        return h
+
+    # -- Edit flow stores message coordinates for later restoration --
+
+    @pytest.mark.asyncio
+    @patch("handlers.callback_handler.safe_answer", new_callable=AsyncMock)
+    async def test_edit_callback_stores_message_id(self, mock_answer):
+        """handle_food_edit_callback must store the original message_id and
+        chat_id in pending_correction so the keyboard can be restored later."""
+        from bson import ObjectId
+
+        h = self._make_handler()
+        entry_id = str(ObjectId())
+        h.food_repo.get.return_value = FoodEntry(
+            id=entry_id, telegram_user_id=123, date="15/06/2026",
+            time="15:00", description="בשר ושקדים", calories=500,
+            protein=40, within_window=True,
+        )
+
+        query = AsyncMock()
+        query.data = f"fedit_{entry_id}"
+        query.message.message_id = 42
+        query.message.chat_id = 12345
+        update = MagicMock()
+        update.callback_query = query
+        update.effective_user.id = 123
+        context = MagicMock()
+        context.chat_data = {}
+
+        await h.handle_food_edit_callback(update, context)
+
+        pending = context.chat_data["pending_correction"]
+        assert pending["edit_message_id"] == 42
+        assert pending["edit_chat_id"] == 12345
+
+    # -- After correction completes, original message keyboard is restored --
+
+    @pytest.mark.asyncio
+    @patch("handlers.pending_handler.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.pending_handler.get_user_now")
+    @patch("handlers.pending_handler.safe_react", new_callable=AsyncMock)
+    async def test_correction_restores_keyboard_on_original_message(self, mock_react, mock_now, mock_kb):
+        """After pending_correction completes, the original edit-prompt message
+        should get its keyboard restored via edit_message_reply_markup."""
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult, CorrectionFoodItem as CFI
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 6, 15, 15, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.eating_day_svc.get_stats_date.return_value = "15/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (500, 40)
+
+        entry_id = "abc123def456abc123def456"
+        correction_result = CorrectionResult(
+            items=[CFI(description="בשר 200 גרם", estimated_grams=200, calories=500, protein=40, change_type="modified")],
+            corrected_description="בשר 200 גרם",
+            corrected_calories=500,
+            corrected_protein=40,
+        )
+        h.analyzer.analyze_correction.return_value = correction_result
+
+        message = AsyncMock()
+        message.text = "הבשר היה 200 גרם"
+        context = MagicMock()
+        context.bot.edit_message_reply_markup = AsyncMock()
+        context.chat_data = {
+            "pending_correction": {
+                "entry": {
+                    "description": "בשר ושקדים",
+                    "calories": 500,
+                    "protein": 40,
+                    "entry_id": entry_id,
+                },
+                "correction_history": [],
+                "timestamp": __import__("time").time(),
+                "edit_message_id": 42,
+                "edit_chat_id": 12345,
+            }
+        }
+
+        from handlers.pending_handler import PendingHandler
+        ph = PendingHandler(h)
+        result = await ph.handle_pending_correction(message, context, 123, profile)
+
+        assert result is True
+        # Keyboard restored on original message
+        context.bot.edit_message_reply_markup.assert_called_once_with(
+            chat_id=12345,
+            message_id=42,
+            reply_markup=mock_kb.return_value,
+        )
+
+    # -- Exception handlers must send error + keyboard, not fail silently --
+
+    @pytest.mark.asyncio
+    @patch("handlers.callback_handler.safe_answer", new_callable=AsyncMock)
+    async def test_food_delete_exception_sends_error_with_keyboard(self, mock_answer):
+        """When food deletion throws, user must see an error message (not silence)."""
+        h = self._make_handler()
+        h.food_repo.delete.side_effect = Exception("DB error")
+
+        query = AsyncMock()
+        query.data = "fdel_some_entry_id"
+        update = MagicMock()
+        update.callback_query = query
+        update.effective_user.id = 123
+        context = MagicMock()
+
+        await h.handle_food_delete_callback(update, context)
+
+        # Must edit message with error text + keyboard (not silent)
+        query.edit_message_text.assert_called_once()
+        call_kwargs = query.edit_message_text.call_args
+        assert call_kwargs[1].get("reply_markup") is not None
+
+    @pytest.mark.asyncio
+    @patch("handlers.callback_handler.safe_answer", new_callable=AsyncMock)
+    async def test_food_edit_exception_sends_error_with_keyboard(self, mock_answer):
+        """When food edit read throws, user must see an error message (not silence)."""
+        h = self._make_handler()
+        h.food_repo.get.side_effect = Exception("DB error")
+
+        query = AsyncMock()
+        query.data = "fedit_some_entry_id"
+        update = MagicMock()
+        update.callback_query = query
+        update.effective_user.id = 123
+        context = MagicMock()
+        context.chat_data = {}
+
+        await h.handle_food_edit_callback(update, context)
+
+        query.edit_message_text.assert_called_once()
+        call_kwargs = query.edit_message_text.call_args
+        assert call_kwargs[1].get("reply_markup") is not None
+
+    @pytest.mark.asyncio
+    @patch("handlers.callback_handler.get_user_now")
+    @patch("handlers.callback_handler.safe_answer", new_callable=AsyncMock)
+    async def test_food_again_exception_sends_error_with_keyboard(self, mock_answer, mock_now):
+        """When food duplication throws, user must see an error message (not silence)."""
+        from datetime import datetime as dt
+        import pytz
+        mock_now.return_value = dt(2026, 6, 15, 15, 0, tzinfo=pytz.timezone("Asia/Jerusalem"))
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h.food_repo.get.return_value = FoodEntry(
+            id="orig_id", telegram_user_id=123, date="15/06/2026",
+            time="12:00", description="חזה עוף", calories=350,
+            protein=45, within_window=True,
+        )
+        h.food_repo.add.side_effect = Exception("DB error")
+
+        query = AsyncMock()
+        query.data = "fagain_orig_id"
+        query.message.chat_id = 12345
+        update = MagicMock()
+        update.callback_query = query
+        update.effective_user.id = 123
+        context = MagicMock()
+        context.bot.send_message = AsyncMock()
+        context.chat_data = {}
+
+        await h.handle_food_again_callback(update, context)
+
+        # Must send error to user (not silent)
+        context.bot.send_message.assert_called_once()
+        call_kwargs = context.bot.send_message.call_args[1]
+        assert call_kwargs.get("reply_markup") is not None

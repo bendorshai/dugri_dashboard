@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "8.1.0"
-VERSION_NOTES = "Feature request system: bug reports, suggestions, habit requests via menu + router"
+VERSION = "8.1.1"
+VERSION_NOTES = "Fix: preserve food entry keyboard after edit flow + error handling"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

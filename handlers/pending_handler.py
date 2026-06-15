@@ -14,6 +14,7 @@ from parsing import get_user_now
 from keyboards import (
     THUMBS_UP, OK_HAND,
     make_daily_summary_keyboard, make_main_menu_keyboard,
+    make_food_entry_keyboard,
 )
 from handlers.utils import PENDING_STATE_TTL, safe_react
 from handlers.context import HandlerContext, FIELD_LABELS
@@ -176,7 +177,28 @@ class PendingHandler:
         else:
             await self.ctx._send("לא הצלחתי להבין את התיקון. נסה שוב.", tid=tid, message=message, save=False)
 
+        # Restore keyboard on the original edit-prompt message.
+        # Menu must be preserved on every food entry message - it's the
+        # user's only way to edit/delete/duplicate that entry.
+        await self._restore_edit_message_keyboard(context, pending, entry_id)
+
         return True
+
+    @staticmethod
+    async def _restore_edit_message_keyboard(context, pending: dict, entry_id: str) -> None:
+        """Restore the food entry keyboard on the original edit-prompt message."""
+        msg_id = pending.get("edit_message_id")
+        chat_id = pending.get("edit_chat_id")
+        if not msg_id or not chat_id:
+            return
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=msg_id,
+                reply_markup=make_food_entry_keyboard(entry_id),
+            )
+        except Exception:
+            logger.debug("Could not restore keyboard on message %s", msg_id)
 
     async def handle_pending_bulk_fix(self, message, context, tid: int, profile: UserProfile) -> bool:
         pending = context.chat_data.get("pending_bulk_fix")

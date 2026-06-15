@@ -246,6 +246,11 @@ class CallbackHandler:
             await query.edit_message_text(random.choice(M.FOOD_DELETED), reply_markup=make_daily_summary_keyboard())
         except Exception:
             logger.exception("Failed to delete food entry %s", entry_id)
+            # Menu must be preserved - send error with keyboard so user can retry
+            await query.edit_message_text(
+                "❌ לא הצלחתי למחוק את הרשומה.",
+                reply_markup=make_daily_summary_keyboard(),
+            )
 
     async def handle_food_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -262,6 +267,9 @@ class CallbackHandler:
 
             existing_history = food_entry.correction_history or \
                 context.chat_data.get("correction_histories", {}).get(entry_id, [])
+            # Store message coordinates so the keyboard can be restored
+            # after correction completes. Menu must be preserved on every
+            # food entry message - it's the user's only way to interact.
             context.chat_data["pending_correction"] = {
                 "entry": {
                     "description": food_entry.description,
@@ -275,6 +283,8 @@ class CallbackHandler:
                 },
                 "correction_history": existing_history,
                 "timestamp": time.time(),
+                "edit_message_id": query.message.message_id,
+                "edit_chat_id": query.message.chat_id,
             }
 
             await query.edit_message_text(
@@ -284,6 +294,11 @@ class CallbackHandler:
             )
         except Exception:
             logger.exception("Failed to read entry for edit, id %s", entry_id)
+            # Menu must be preserved - send error with keyboard so user can retry
+            await query.edit_message_text(
+                "❌ לא הצלחתי לטעון את הרשומה.",
+                reply_markup=make_daily_summary_keyboard(),
+            )
 
     async def handle_food_again_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -326,6 +341,13 @@ class CallbackHandler:
             await self.ctx._send(response, tid=tid, context=context, reply_markup=make_food_entry_keyboard(saved.id))
         except Exception:
             logger.exception("Failed to duplicate food entry %s", entry_id)
+            # Menu must be preserved - send error with keyboard so user can retry
+            await self.ctx._send(
+                "❌ לא הצלחתי לשכפל את הרשומה.",
+                tid=tid, context=context,
+                reply_markup=make_daily_summary_keyboard(),
+                save=False,
+            )
 
     async def handle_bulk_fix_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
