@@ -291,6 +291,10 @@
     font-size: 1.1rem;
 }
 
+.section-title-add {
+    margin-right: auto;
+}
+
 /* Meals table */
 .meals-table {
     width: 100%;
@@ -343,6 +347,41 @@
     font-weight: 700;
     color: var(--accent-dark);
     text-align: center;
+}
+
+/* Out-of-window meal indicator */
+.meal-out-of-window {
+    border-right: 3px solid var(--error);
+}
+
+.meal-out-of-window td:first-child {
+    border-right: 3px solid var(--error);
+}
+
+.meal-mobile-card.meal-out-of-window {
+    border-right-color: var(--error);
+}
+
+/* Sleep status indicator */
+.sleep-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-right: 0.5rem;
+}
+
+.sleep-status--good {
+    background: rgba(40, 167, 69, 0.12);
+    color: #28a745;
+}
+
+.sleep-status--late {
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
 }
 
 /* Meals total */
@@ -663,13 +702,9 @@
     font-size: 0.75rem;
 }
 
-/* Add workout form */
-.add-workout-form {
+/* Add form */
+.add-inline-form {
     padding: 0.5rem 0;
-}
-
-.add-workout-form .edit-input {
-    margin-bottom: 0.5rem;
 }
 
 .btn--small {
@@ -755,7 +790,7 @@
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
             <div>
                 <h1>📋 היסטוריית פעילות</h1>
-                <p class="history-subtitle">כל מה שרשמת — ארוחות, אימונים, שינה ומשהו לעצמך</p>
+                <p class="history-subtitle">כל מה שרשמת - ארוחות, אימונים, שינה ומשהו לעצמך</p>
             </div>
             <button class="btn btn--secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem; min-height: 36px;"
                     @click="downloadCsv()" :disabled="loading || days.length === 0"
@@ -767,15 +802,12 @@
 
     <!-- Date Navigation -->
     <div class="history-date-nav">
-        <!-- Single day nav -->
         <div class="date-nav-row">
             <button class="date-nav-btn" @click="navigateDay(1)" title="יום קודם">→</button>
             <span class="date-nav-current" x-text="currentDateDisplay"></span>
             <button class="date-nav-btn" @click="navigateDay(-1)" title="יום הבא"
                     :disabled="isToday" :style="isToday ? 'opacity:0.3;cursor:default' : ''">←</button>
         </div>
-
-        <!-- Quick filters -->
         <div class="quick-filters">
             <button class="quick-filter-btn" :class="{ active: activeFilter === 'today' }"
                     @click="quickFilter('today')">היום</button>
@@ -786,8 +818,6 @@
             <button class="quick-filter-btn" :class="{ active: activeFilter === 'month' }"
                     @click="quickFilter('month')">חודש</button>
         </div>
-
-        <!-- Date range -->
         <div class="date-filters" style="margin-top: 0.5rem;">
             <span class="date-filter-label">מ:</span>
             <input type="date" class="date-filter-input" x-model="startDate" @change="fetchRange()">
@@ -806,7 +836,7 @@
     <div class="history-empty" x-show="!loading && days.length === 0 && !hasAnyData" x-transition>
         <div class="history-empty-icon">📭</div>
         <p>אין נתונים לתקופה הזו.</p>
-        <p style="font-size: 0.85rem; margin-top: 0.5rem;">רשמו ארוחות, אימונים ושינה דרך הבוט בטלגרם — הכל יופיע כאן.</p>
+        <p style="font-size: 0.85rem; margin-top: 0.5rem;">רשמו ארוחות, אימונים ושינה דרך הבוט בטלגרם - הכל יופיע כאן.</p>
     </div>
 
     <!-- Weekly Summary (shown for multi-day ranges) -->
@@ -856,132 +886,156 @@
             <div class="day-card-body" x-show="openDays[index]" x-transition.duration.200ms>
 
                 <!-- Meals -->
-                <div class="history-section" x-show="day.meals.length > 0">
+                <div class="history-section">
                     <div class="history-section-title history-section-title--meals">
                         <span class="history-section-emoji">🍽️</span>
                         <span>ארוחות</span>
+                        <button class="btn--small btn--outline section-title-add"
+                                @click.stop="addingMeal = { dayDate: day.date, description: '', calories: 0, protein: 0, time: '' }"
+                                x-show="!addingMeal || addingMeal.dayDate !== day.date">
+                            ➕
+                        </button>
                     </div>
 
-                    <!-- Desktop table -->
-                    <div class="meals-table-wrap">
-                        <table class="meals-table">
-                            <thead>
-                                <tr>
-                                    <th>שעה</th>
-                                    <th>תיאור</th>
-                                    <th>קלוריות</th>
-                                    <th>חלבון</th>
-                                    <th style="width: 60px;"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <!-- Add meal form -->
+                    <div x-show="addingMeal && addingMeal.dayDate === day.date" class="add-inline-form" style="margin-bottom: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                            <input type="time" class="edit-input" x-model="addingMeal.time" style="width: 100px; direction: ltr;" placeholder="שעה">
+                            <input type="text" class="edit-input" x-model="addingMeal.description" placeholder="תיאור הארוחה" style="flex: 1; min-width: 120px;"
+                                   @keydown.enter="submitNewMeal()">
+                            <input type="number" class="edit-input edit-input--narrow" x-model.number="addingMeal.calories" placeholder="קל'">
+                            <input type="number" class="edit-input edit-input--narrow" x-model.number="addingMeal.protein" placeholder="g">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn--small btn--primary" @click="submitNewMeal()">שמור</button>
+                            <button class="btn--small btn--secondary" @click="addingMeal = null">ביטול</button>
+                        </div>
+                    </div>
+
+                    <template x-if="day.meals.length > 0">
+                        <div>
+                            <!-- Desktop table -->
+                            <div class="meals-table-wrap">
+                                <table class="meals-table">
+                                    <thead>
+                                        <tr>
+                                            <th>שעה</th>
+                                            <th>תיאור</th>
+                                            <th>קלוריות</th>
+                                            <th>חלבון</th>
+                                            <th style="width: 60px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="meal in day.meals" :key="meal.id">
+                                            <tr :class="{ 'meal-out-of-window': !meal.within_window }">
+                                                <template x-if="editingEntry && editingEntry.id === meal.id">
+                                                    <td colspan="5" style="padding: 0.5rem;">
+                                                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                                            <span class="meal-time" x-text="meal.time" style="min-width: 45px;"></span>
+                                                            <input type="text" class="edit-input" x-model="editingEntry.description" style="flex: 1; min-width: 120px;">
+                                                            <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.calories" placeholder="קל'">
+                                                            <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.protein" placeholder="g">
+                                                            <div class="actions-cell">
+                                                                <button class="action-btn action-btn--save" @click="saveEdit()" title="שמור">✓</button>
+                                                                <button class="action-btn action-btn--cancel" @click="cancelEdit()" title="ביטול">✕</button>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </template>
+                                                <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                                    <td class="meal-time" x-text="meal.time"></td>
+                                                </template>
+                                                <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                                    <td class="meal-desc" x-text="meal.description"></td>
+                                                </template>
+                                                <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                                    <td class="meal-cal" x-text="formatNumber(meal.calories)"></td>
+                                                </template>
+                                                <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                                    <td class="meal-prot" x-text="meal.protein + 'g'"></td>
+                                                </template>
+                                                <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                                    <td>
+                                                        <div class="actions-cell">
+                                                            <button class="action-btn" @click.stop="startEdit('food', meal)" title="ערוך">✏️</button>
+                                                            <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'food', id: meal.id, description: meal.description }" title="מחק">🗑️</button>
+                                                        </div>
+                                                    </td>
+                                                </template>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Mobile cards -->
+                            <div class="meals-mobile">
                                 <template x-for="meal in day.meals" :key="meal.id">
-                                    <tr>
+                                    <div class="meal-mobile-card" :class="{ 'meal-out-of-window': !meal.within_window }">
                                         <template x-if="editingEntry && editingEntry.id === meal.id">
-                                            <td colspan="5" style="padding: 0.5rem;">
-                                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                                    <span class="meal-time" x-text="meal.time" style="min-width: 45px;"></span>
-                                                    <input type="text" class="edit-input" x-model="editingEntry.description" style="flex: 1; min-width: 120px;">
+                                            <div>
+                                                <input type="text" class="edit-input" x-model="editingEntry.description" style="margin-bottom: 0.4rem;">
+                                                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
                                                     <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.calories" placeholder="קל'">
                                                     <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.protein" placeholder="g">
-                                                    <div class="actions-cell">
-                                                        <button class="action-btn action-btn--save" @click="saveEdit()" title="שמור">✓</button>
-                                                        <button class="action-btn action-btn--cancel" @click="cancelEdit()" title="ביטול">✕</button>
+                                                </div>
+                                                <div style="display: flex; gap: 0.5rem;">
+                                                    <button class="btn--small btn--primary" @click="saveEdit()">שמור</button>
+                                                    <button class="btn--small btn--secondary" @click="cancelEdit()">ביטול</button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                            <div>
+                                                <div class="meal-mobile-top">
+                                                    <span class="meal-mobile-desc" x-text="meal.description"></span>
+                                                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                                        <span class="meal-mobile-time" x-text="meal.time"></span>
+                                                        <button class="action-btn" @click.stop="startEdit('food', meal)" title="ערוך">✏️</button>
+                                                        <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'food', id: meal.id, description: meal.description }" title="מחק">🗑️</button>
                                                     </div>
                                                 </div>
-                                            </td>
-                                        </template>
-                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
-                                            <td class="meal-time" x-text="meal.time"></td>
-                                        </template>
-                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
-                                            <td class="meal-desc" x-text="meal.description"></td>
-                                        </template>
-                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
-                                            <td class="meal-cal" x-text="formatNumber(meal.calories)"></td>
-                                        </template>
-                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
-                                            <td class="meal-prot" x-text="meal.protein + 'g'"></td>
-                                        </template>
-                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
-                                            <td>
-                                                <div class="actions-cell">
-                                                    <button class="action-btn" @click.stop="startEdit('food', meal)" title="ערוך">✏️</button>
-                                                    <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'food', id: meal.id, description: meal.description }" title="מחק">🗑️</button>
+                                                <div class="meal-mobile-stats">
+                                                    <span class="meal-mobile-cal">⚡ <span x-text="formatNumber(meal.calories)"></span> קל'</span>
+                                                    <span class="meal-mobile-prot">💪 <span x-text="meal.protein"></span>g</span>
                                                 </div>
-                                            </td>
-                                        </template>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Mobile cards -->
-                    <div class="meals-mobile">
-                        <template x-for="meal in day.meals" :key="meal.id">
-                            <div class="meal-mobile-card">
-                                <template x-if="editingEntry && editingEntry.id === meal.id">
-                                    <div>
-                                        <input type="text" class="edit-input" x-model="editingEntry.description" style="margin-bottom: 0.4rem;">
-                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
-                                            <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.calories" placeholder="קל'">
-                                            <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.protein" placeholder="g">
-                                        </div>
-                                        <div style="display: flex; gap: 0.5rem;">
-                                            <button class="btn--small btn--primary" @click="saveEdit()">שמור</button>
-                                            <button class="btn--small btn--secondary" @click="cancelEdit()">ביטול</button>
-                                        </div>
-                                    </div>
-                                </template>
-                                <template x-if="!editingEntry || editingEntry.id !== meal.id">
-                                    <div>
-                                        <div class="meal-mobile-top">
-                                            <span class="meal-mobile-desc" x-text="meal.description"></span>
-                                            <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                                <span class="meal-mobile-time" x-text="meal.time"></span>
-                                                <button class="action-btn" @click.stop="startEdit('food', meal)" title="ערוך">✏️</button>
-                                                <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'food', id: meal.id, description: meal.description }" title="מחק">🗑️</button>
                                             </div>
-                                        </div>
-                                        <div class="meal-mobile-stats">
-                                            <span class="meal-mobile-cal">⚡ <span x-text="formatNumber(meal.calories)"></span> קל'</span>
-                                            <span class="meal-mobile-prot">💪 <span x-text="meal.protein"></span>g</span>
-                                        </div>
+                                        </template>
                                     </div>
                                 </template>
                             </div>
-                        </template>
-                    </div>
 
-                    <!-- Totals -->
-                    <div class="meals-total">
-                        <span class="meals-total-label">סה"כ:</span>
-                        <span class="meals-total-cal">⚡ <span x-text="formatNumber(day.meals_total.calories)"></span> קלוריות</span>
-                        <span class="meals-total-prot">💪 <span x-text="day.meals_total.protein"></span>g חלבון</span>
-                    </div>
+                            <!-- Totals -->
+                            <div class="meals-total">
+                                <span class="meals-total-label">סה"כ:</span>
+                                <span class="meals-total-cal">⚡ <span x-text="formatNumber(day.meals_total.calories)"></span> קלוריות</span>
+                                <span class="meals-total-prot">💪 <span x-text="day.meals_total.protein"></span>g חלבון</span>
+                            </div>
 
-                    <!-- Progress vs target -->
-                    <template x-if="targets.calories">
-                        <div class="progress-mini">
-                            <span class="progress-mini-text">קלוריות:</span>
-                            <div class="progress-mini-bar">
-                                <div class="progress-mini-fill"
-                                     :class="getProgressClass(day.meals_total.calories, targets.calories)"
-                                     :style="'width:' + Math.min(100, Math.round(day.meals_total.calories / targets.calories * 100)) + '%'"></div>
-                            </div>
-                            <span class="progress-mini-text" x-text="Math.round(day.meals_total.calories / targets.calories * 100) + '%'"></span>
-                        </div>
-                    </template>
-                    <template x-if="targets.protein">
-                        <div class="progress-mini">
-                            <span class="progress-mini-text">חלבון:</span>
-                            <div class="progress-mini-bar">
-                                <div class="progress-mini-fill"
-                                     :class="getProgressClass(day.meals_total.protein, targets.protein)"
-                                     :style="'width:' + Math.min(100, Math.round(day.meals_total.protein / targets.protein * 100)) + '%'"></div>
-                            </div>
-                            <span class="progress-mini-text" x-text="Math.round(day.meals_total.protein / targets.protein * 100) + '%'"></span>
+                            <!-- Progress vs target -->
+                            <template x-if="targets.calories">
+                                <div class="progress-mini">
+                                    <span class="progress-mini-text">קלוריות:</span>
+                                    <div class="progress-mini-bar">
+                                        <div class="progress-mini-fill"
+                                             :class="getProgressClass(day.meals_total.calories, targets.calories)"
+                                             :style="'width:' + Math.min(100, Math.round(day.meals_total.calories / targets.calories * 100)) + '%'"></div>
+                                    </div>
+                                    <span class="progress-mini-text" x-text="Math.round(day.meals_total.calories / targets.calories * 100) + '%'"></span>
+                                </div>
+                            </template>
+                            <template x-if="targets.protein">
+                                <div class="progress-mini">
+                                    <span class="progress-mini-text">חלבון:</span>
+                                    <div class="progress-mini-bar">
+                                        <div class="progress-mini-fill"
+                                             :class="getProgressClass(day.meals_total.protein, targets.protein)"
+                                             :style="'width:' + Math.min(100, Math.round(day.meals_total.protein / targets.protein * 100)) + '%'"></div>
+                                    </div>
+                                    <span class="progress-mini-text" x-text="Math.round(day.meals_total.protein / targets.protein * 100) + '%'"></span>
+                                </div>
+                            </template>
                         </div>
                     </template>
                 </div>
@@ -991,6 +1045,11 @@
                     <div class="history-section-title history-section-title--workout">
                         <span class="history-section-emoji">🏋️</span>
                         <span>אימון</span>
+                        <button class="btn--small btn--outline section-title-add"
+                                @click.stop="addingWorkout = { dayDate: day.date, note: '' }"
+                                x-show="!addingWorkout || addingWorkout.dayDate !== day.date">
+                            ➕
+                        </button>
                     </div>
                     <template x-if="day.workouts.length > 0">
                         <div>
@@ -1017,24 +1076,18 @@
                     </template>
                     <template x-if="day.workouts.length === 0 && !(addingWorkout && addingWorkout.dayDate === day.date)">
                         <div class="habit-item habit-item--empty">
-                            <span>—</span>
+                            <span>-</span>
                             <span>לא נרשם אימון</span>
                         </div>
                     </template>
-                    <!-- Add workout -->
-                    <div x-show="addingWorkout && addingWorkout.dayDate === day.date" class="add-workout-form">
+                    <div x-show="addingWorkout && addingWorkout.dayDate === day.date" class="add-inline-form">
                         <input type="text" class="edit-input" x-model="addingWorkout.note" placeholder="תיאור האימון (אופציונלי)"
                                @keydown.enter="submitNewWorkout()">
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                             <button class="btn--small btn--primary" @click="submitNewWorkout()">שמור</button>
                             <button class="btn--small btn--secondary" @click="addingWorkout = null">ביטול</button>
                         </div>
                     </div>
-                    <button class="btn--small btn--outline" style="margin-top: 0.5rem;"
-                            @click.stop="addingWorkout = { dayDate: day.date, note: '' }"
-                            x-show="!addingWorkout || addingWorkout.dayDate !== day.date">
-                        ➕ הוסף אימון
-                    </button>
                 </div>
 
                 <!-- Sleep -->
@@ -1042,36 +1095,44 @@
                     <div class="history-section-title history-section-title--sleep">
                         <span class="history-section-emoji">😴</span>
                         <span>שינה</span>
+                        <button class="btn--small btn--outline section-title-add"
+                                @click.stop="addingSleep = { dayDate: day.date, sleep_time: '' }"
+                                x-show="!day.sleep && (!addingSleep || addingSleep.dayDate !== day.date)">
+                            ➕
+                        </button>
                     </div>
                     <template x-if="day.sleep">
                         <div class="habit-item">
                             <span>🌙</span>
-                            <span style="flex: 1;">שעת שינה: <strong x-text="day.sleep.sleep_time"></strong></span>
+                            <span style="flex: 1;">
+                                שעת שינה: <strong x-text="day.sleep.sleep_time"></strong>
+                                <template x-if="targets.sleep_time">
+                                    <span class="sleep-status"
+                                          :class="sleepOnTime(day.sleep.sleep_time) ? 'sleep-status--good' : 'sleep-status--late'"
+                                          x-text="sleepOnTime(day.sleep.sleep_time) ? 'בזמן' : 'מאוחר'">
+                                    </span>
+                                </template>
+                            </span>
                             <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'sleep', id: day.sleep.id, description: 'שינה ' + day.sleep.sleep_time }" title="מחק">🗑️</button>
                         </div>
                     </template>
                     <template x-if="!day.sleep && !(addingSleep && addingSleep.dayDate === day.date)">
                         <div class="habit-item habit-item--empty">
-                            <span>—</span>
+                            <span>-</span>
                             <span>לא נרשמה שינה</span>
                         </div>
                     </template>
-                    <!-- Add sleep -->
-                    <div x-show="addingSleep && addingSleep.dayDate === day.date" class="add-workout-form">
+                    <div x-show="addingSleep && addingSleep.dayDate === day.date" class="add-inline-form">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="font-size: 0.9rem; font-weight: 600; white-space: nowrap;">שעת שינה:</span>
-                            <input type="time" class="edit-input" x-model="addingSleep.sleep_time" style="width: 120px; direction: ltr;">
+                            <input type="time" class="edit-input" x-model="addingSleep.sleep_time" style="width: 120px; direction: ltr;"
+                                   @keydown.enter="submitNewSleep()">
                         </div>
                         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                             <button class="btn--small btn--primary" @click="submitNewSleep()">שמור</button>
                             <button class="btn--small btn--secondary" @click="addingSleep = null">ביטול</button>
                         </div>
                     </div>
-                    <button class="btn--small btn--outline" style="margin-top: 0.5rem;"
-                            @click.stop="addingSleep = { dayDate: day.date, sleep_time: '' }"
-                            x-show="!day.sleep && (!addingSleep || addingSleep.dayDate !== day.date)">
-                        ➕ הוסף שעת שינה
-                    </button>
                 </div>
 
                 <!-- Self-care -->
@@ -1079,6 +1140,11 @@
                     <div class="history-section-title history-section-title--selfcare">
                         <span class="history-section-emoji">💆</span>
                         <span>משהו לעצמי</span>
+                        <button class="btn--small btn--outline section-title-add"
+                                @click.stop="addingSelfCare = { dayDate: day.date, description: '' }"
+                                x-show="(!day.self_care || day.self_care.length === 0) && (!addingSelfCare || addingSelfCare.dayDate !== day.date)">
+                            ➕
+                        </button>
                     </div>
                     <div class="self-care-chips" x-show="day.self_care && day.self_care.length > 0">
                         <template x-for="sc in (day.self_care || [])" :key="sc.id">
@@ -1101,8 +1167,7 @@
                             </div>
                         </template>
                     </div>
-                    <!-- Add self-care -->
-                    <div x-show="addingSelfCare && addingSelfCare.dayDate === day.date" class="add-workout-form">
+                    <div x-show="addingSelfCare && addingSelfCare.dayDate === day.date" class="add-inline-form">
                         <input type="text" class="edit-input" x-model="addingSelfCare.description" placeholder="מה עשית לעצמך?"
                                @keydown.enter="submitNewSelfCare()">
                         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
@@ -1110,15 +1175,10 @@
                             <button class="btn--small btn--secondary" @click="addingSelfCare = null">ביטול</button>
                         </div>
                     </div>
-                    <button class="btn--small btn--outline" style="margin-top: 0.5rem;"
-                            @click.stop="addingSelfCare = { dayDate: day.date, description: '' }"
-                            x-show="!addingSelfCare || addingSelfCare.dayDate !== day.date">
-                        ➕ הוסף משהו טוב לעצמי
-                    </button>
                 </div>
 
-                <!-- No meals fallback -->
-                <div x-show="day.meals.length === 0 && day.workouts.length === 0 && !day.sleep"
+                <!-- No activity fallback -->
+                <div x-show="day.meals.length === 0 && day.workouts.length === 0 && !day.sleep && (!day.self_care || day.self_care.length === 0)"
                      style="text-align: center; padding: 1rem; color: var(--text-light);">
                     <p>📭 לא נרשמה פעילות ביום הזה</p>
                 </div>
@@ -1145,6 +1205,7 @@ function historyApp() {
         days: [],
         weeklyTotals: { avg_calories: 0, avg_protein: 0, workout_count: 0, sleep_logged_days: 0, total_days: 0 },
         targets: {},
+        eatingWindow: null,
         loading: true,
         openDays: {},
         startDate: '',
@@ -1154,6 +1215,7 @@ function historyApp() {
         currentSingleDate: null,
         editingEntry: null,
         confirmDelete: null,
+        addingMeal: null,
         addingWorkout: null,
         addingSleep: null,
         addingSelfCare: null,
@@ -1191,6 +1253,11 @@ function historyApp() {
             return 'progress-mini-fill--low';
         },
 
+        sleepOnTime(sleepTime) {
+            if (!this.targets.sleep_time || !sleepTime) return true;
+            return sleepTime <= this.targets.sleep_time;
+        },
+
         formatDate(d) {
             return d.toISOString().slice(0, 10);
         },
@@ -1205,7 +1272,6 @@ function historyApp() {
                     start = end = new Date(today);
                     break;
                 case 'week': {
-                    // Sunday-based week (Israeli week)
                     const dayOfWeek = today.getDay();
                     start = new Date(today);
                     start.setDate(today.getDate() - dayOfWeek);
@@ -1235,7 +1301,6 @@ function historyApp() {
         },
 
         navigateDay(direction) {
-            // direction: 1 = back, -1 = forward (RTL arrows)
             const current = new Date(this.currentSingleDate || new Date());
             current.setDate(current.getDate() - direction);
 
@@ -1259,18 +1324,18 @@ function historyApp() {
                 const d = new Date(this.startDate);
                 const dd = String(d.getDate()).padStart(2, '0');
                 const mm = String(d.getMonth() + 1).padStart(2, '0');
-                this.currentDateDisplay = `${dd}/${mm} — ${hebrewDays[d.getDay()]}`;
+                this.currentDateDisplay = `${dd}/${mm} - ${hebrewDays[d.getDay()]}`;
             } else {
                 const s = new Date(this.startDate);
                 const e = new Date(this.endDate);
                 const sd = String(s.getDate()).padStart(2, '0') + '/' + String(s.getMonth() + 1).padStart(2, '0');
                 const ed = String(e.getDate()).padStart(2, '0') + '/' + String(e.getMonth() + 1).padStart(2, '0');
-                this.currentDateDisplay = `${sd} — ${ed}`;
+                this.currentDateDisplay = `${sd} - ${ed}`;
             }
         },
 
-        async fetchRange() {
-            this.loading = true;
+        async fetchRange(silent = false) {
+            if (!silent) this.loading = true;
             this.updateCurrentDisplay();
 
             try {
@@ -1282,21 +1347,23 @@ function historyApp() {
                 this.days = data.days || [];
                 this.weeklyTotals = data.weekly_totals || {};
                 this.targets = data.targets || {};
+                this.eatingWindow = data.eating_window || null;
 
-                // Auto-expand single day, first 3 for multi-day
-                this.openDays = {};
-                if (this.days.length === 1) {
-                    this.openDays[0] = true;
-                } else {
-                    for (let i = 0; i < Math.min(3, this.days.length); i++) {
-                        this.openDays[i] = true;
+                if (!silent) {
+                    this.openDays = {};
+                    if (this.days.length === 1) {
+                        this.openDays[0] = true;
+                    } else {
+                        for (let i = 0; i < Math.min(3, this.days.length); i++) {
+                            this.openDays[i] = true;
+                        }
                     }
                 }
             } catch (e) {
                 console.error('Failed to fetch activity history:', e);
-                this.days = [];
+                if (!silent) this.days = [];
             } finally {
-                this.loading = false;
+                if (!silent) this.loading = false;
             }
         },
 
@@ -1316,7 +1383,7 @@ function historyApp() {
                 const resp = await fetch(`/api/${this._urlForType(type)}/${id}`, { method: 'DELETE' });
                 if (resp.ok) {
                     this.confirmDelete = null;
-                    await this.fetchRange();
+                    await this.fetchRange(true);
                 }
             } catch (e) {
                 console.error('Delete failed:', e);
@@ -1342,10 +1409,34 @@ function historyApp() {
                 });
                 if (resp.ok) {
                     this.editingEntry = null;
-                    await this.fetchRange();
+                    await this.fetchRange(true);
                 }
             } catch (err) {
                 console.error('Save failed:', err);
+            }
+        },
+
+        async submitNewMeal() {
+            const m = this.addingMeal;
+            if (!m || !m.description.trim()) return;
+            try {
+                const resp = await fetch('/api/food-entry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: m.dayDate,
+                        time: m.time,
+                        description: m.description.trim(),
+                        calories: m.calories || 0,
+                        protein: m.protein || 0,
+                    }),
+                });
+                if (resp.ok) {
+                    this.addingMeal = null;
+                    await this.fetchRange(true);
+                }
+            } catch (err) {
+                console.error('Add meal failed:', err);
             }
         },
 
@@ -1360,7 +1451,7 @@ function historyApp() {
                 });
                 if (resp.ok) {
                     this.addingWorkout = null;
-                    await this.fetchRange();
+                    await this.fetchRange(true);
                 }
             } catch (err) {
                 console.error('Add workout failed:', err);
@@ -1378,7 +1469,7 @@ function historyApp() {
                 });
                 if (resp.ok) {
                     this.addingSleep = null;
-                    await this.fetchRange();
+                    await this.fetchRange(true);
                 }
             } catch (err) {
                 console.error('Add sleep failed:', err);
@@ -1396,7 +1487,7 @@ function historyApp() {
                 });
                 if (resp.ok) {
                     this.addingSelfCare = null;
-                    await this.fetchRange();
+                    await this.fetchRange(true);
                 }
             } catch (err) {
                 console.error('Add self-care failed:', err);

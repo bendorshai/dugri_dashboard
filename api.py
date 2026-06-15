@@ -97,6 +97,7 @@ def activity_history():
 
     raw = storage.get_activity_history(email, start_date, end_date)
     targets = raw["targets"]
+    eating_window = raw.get("eating_window")
 
     # Group food by date
     food_by_date: dict[str, list] = {}
@@ -108,6 +109,7 @@ def activity_history():
             "description": entry.get("description", ""),
             "calories": entry.get("calories", 0),
             "protein": entry.get("protein", 0),
+            "within_window": entry.get("within_window", True),
         })
 
     # Sort meals by time within each day
@@ -203,11 +205,36 @@ def activity_history():
             "calories": targets.get("calories"),
             "protein": targets.get("protein"),
             "workouts_per_week": targets.get("workouts_per_week"),
+            "sleep_time": targets.get("sleep_time"),
         },
+        "eating_window": eating_window,
     })
 
 
 # -- Activity CRUD endpoints --
+
+@api_bp.route("/food-entry", methods=["POST"])
+@login_required
+def create_food_entry():
+    data = request.get_json()
+    if not data or not data.get("date") or not data.get("description"):
+        return jsonify({"error": "missing fields"}), 400
+    date_str = datetime.strptime(data["date"], "%Y-%m-%d").strftime("%d/%m/%Y")
+    now = datetime.now()
+    time_str = data.get("time") or now.strftime("%H:%M")
+    storage = _get_storage()
+    entry_id = storage.create_food_entry(
+        session["user_email"],
+        date_str,
+        time_str,
+        data["description"],
+        int(data.get("calories", 0)),
+        int(data.get("protein", 0)),
+    )
+    if entry_id:
+        return jsonify({"ok": True, "id": entry_id}), 201
+    return jsonify({"error": "could not create"}), 400
+
 
 @api_bp.route("/food-entry/<entry_id>", methods=["DELETE"])
 @login_required

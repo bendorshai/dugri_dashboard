@@ -253,6 +253,25 @@ class DashboardStorage:
         })
         return str(result.inserted_id)
 
+    def create_food_entry(
+        self, email: str, date_str: str, time_str: str,
+        description: str, calories: int, protein: int,
+    ) -> str | None:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return None
+        result = self._db["food_entries"].insert_one({
+            "telegram_user_id": tid,
+            "date": date_str,
+            "time": time_str,
+            "description": description,
+            "calories": calories,
+            "protein": protein,
+            "within_window": True,
+            "created_at": datetime.now(timezone.utc),
+        })
+        return str(result.inserted_id)
+
     def create_self_care_log(self, email: str, week_id: str, description: str) -> str | None:
         tid = self._get_telegram_user_id(email)
         if not tid:
@@ -276,10 +295,11 @@ class DashboardStorage:
         """
         user = self._users.find_one({"_id": email})
         if not user or not user.get("telegram_user_id"):
-            return {"food": [], "workouts": [], "sleep": [], "self_care": [], "targets": {}}
+            return {"food": [], "workouts": [], "sleep": [], "self_care": [], "targets": {}, "eating_window": None}
 
         tid = user["telegram_user_id"]
         targets = user.get("targets", {})
+        eating_window = user.get("eating_window")
 
         # Generate DD/MM/YYYY date strings for the range
         date_strings = []
@@ -315,6 +335,7 @@ class DashboardStorage:
             "sleep": sleep,
             "self_care": self_care,
             "targets": targets,
+            "eating_window": eating_window,
         }
 
     # -- Trend data --
