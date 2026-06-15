@@ -88,11 +88,35 @@ class MessageRouterService:
             try:
                 self._feature_request_repo.log(
                     telegram_user_id, question_text, result.response_text,
+                    request_type="knowledge_gap",
                 )
             except Exception:
                 logger.exception("Failed to log feature request")
 
         return RouteResult(response_text=result.response_text)
+
+    def route_feature_request(
+        self,
+        telegram_user_id: int,
+        message_text: str,
+        request_type: str,
+        bot_response: str,
+        message_id: int | None = None,
+        chat_id: int | None = None,
+    ) -> RouteResult:
+        if self._feature_request_repo:
+            try:
+                self._feature_request_repo.log(
+                    telegram_user_id=telegram_user_id,
+                    question_text=message_text,
+                    bot_response=bot_response,
+                    request_type=request_type,
+                    message_id=message_id,
+                    chat_id=chat_id,
+                )
+            except Exception:
+                logger.exception("Failed to log feature request")
+        return RouteResult(response_text=bot_response)
 
     def route_answer_question(
         self, telegram_user_id: int, question_text: str,

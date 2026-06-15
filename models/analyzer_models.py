@@ -89,7 +89,7 @@ class RouterClassification(BaseModel):
     type: Literal[
         "meal", "opt_in", "correction",
         "name_declaration", "gender_declaration", "sleep", "workout", "self_care", "emotional",
-        "feedback_request", "feedback_reaction", "conversational",
+        "feedback_request", "feedback_reaction", "feature_request", "conversational",
         "inappropriate",
     ]
     meal: TimedFoodAnalysisResult | None = None

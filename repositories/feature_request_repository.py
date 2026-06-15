@@ -1,5 +1,5 @@
 """
-feature_request_repository.py — לוגים של שאלות שדוגרי לא ידע לענות עליהן.
+feature_request_repository.py — לוגים של בקשות פיצ'ר, דיווחי באגים, והרגלים חסרים.
 
 שומר בקשות פיצ'ר עם TTL של 90 יום.
 
@@ -25,10 +25,20 @@ class FeatureRequestRepository:
         telegram_user_id: int,
         question_text: str,
         bot_response: str,
+        request_type: str | None = None,
+        message_id: int | None = None,
+        chat_id: int | None = None,
     ) -> None:
-        self._collection.insert_one({
+        doc = {
             "timestamp": datetime.now(timezone.utc),
             "telegram_user_id": telegram_user_id,
             "question_text": question_text,
             "bot_response": bot_response,
-        })
+        }
+        if request_type is not None:
+            doc["request_type"] = request_type
+        if message_id is not None:
+            doc["message_id"] = message_id
+        if chat_id is not None:
+            doc["chat_id"] = chat_id
+        self._collection.insert_one(doc)

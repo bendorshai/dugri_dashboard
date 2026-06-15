@@ -23,7 +23,7 @@ from keyboards import (
     make_emotional_support_keyboard, make_emotional_creator_keyboard,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_WEEKLY, CB_DAILY, CB_BACK,
-    CB_FEEDBACK, CB_EMOTIONAL,
+    CB_FEEDBACK, CB_EMOTIONAL, CB_FEATURE,
 )
 from handlers.utils import safe_answer
 
@@ -213,6 +213,24 @@ class CallbackHandler:
         }
 
         await query.edit_message_text("❓ שאל אותי כל שאלה על תזונה:")
+
+    async def handle_feature_request_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        import messages as M
+        data = query.data.removeprefix(CB_FEATURE)
+        request_type = "bug_report" if data == "bug" else "feature_request"
+
+        context.chat_data["pending_feature_request"] = {
+            "timestamp": time.time(),
+            "request_type": request_type,
+        }
+
+        prompt = M.FEATURE_REQUEST_PROMPT_BUG if data == "bug" else M.FEATURE_REQUEST_PROMPT_SUGGESTION
+        await query.edit_message_text(prompt)
 
     async def handle_food_delete_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query

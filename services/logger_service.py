@@ -7,12 +7,14 @@ The Router classifies; the Logger extracts.
 
 Depends on: analyzer (for LLM calls), existing extraction prompts.
 Used by: handlers/base.py (dispatched for sleep, workout, self_care,
-         correction, name_declaration, emotional, feedback_reaction).
+         correction, name_declaration, emotional, feedback_reaction,
+         feature_request).
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from analyzer import FoodAnalyzer, HabitEntry
 from pydantic import BaseModel
@@ -36,6 +38,11 @@ class NameExtraction(BaseModel):
 
 class EmotionalResponse(BaseModel):
     empathy_reflection: str
+
+
+class FeatureRequestClassification(BaseModel):
+    request_type: Literal["bug_report", "feature_request", "habit_of_interest"]
+    ack_text: str
 
 
 class LoggerService:
@@ -84,3 +91,25 @@ class LoggerService:
         except Exception:
             logger.exception("Empathy generation failed")
             return EmotionalResponse(empathy_reflection="נשמע שקשה לך.")
+
+    def classify_feature_request(self, text: str) -> FeatureRequestClassification:
+        """Classify feature request sub-type and generate Dugri-tone ack."""
+        from prompts import FEATURE_REQUEST_LOGGER_PROMPT
+        try:
+            response = self._analyzer._parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": FEATURE_REQUEST_LOGGER_PROMPT},
+                    {"role": "user", "content": text},
+                ],
+                response_format=FeatureRequestClassification,
+                temperature=0,
+                max_tokens=150,
+            )
+            return response.choices[0].message.parsed
+        except Exception:
+            logger.exception("Feature request classification failed")
+            return FeatureRequestClassification(
+                request_type="feature_request",
+                ack_text="קיבלתי, רשמתי את זה.",
+            )

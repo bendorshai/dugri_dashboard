@@ -1,5 +1,5 @@
 """
-pending_handler.py - Pending edit/question/correction/bulk-fix state handlers.
+pending_handler.py - Pending edit/question/correction/bulk-fix/feature-request state handlers.
 """
 
 from __future__ import annotations
@@ -61,6 +61,36 @@ class PendingHandler:
         except Exception:
             logger.exception("Failed to update profile field %s", field)
 
+        return True
+
+    async def handle_pending_feature_request(self, message, context, tid: int) -> bool:
+        pending = context.chat_data.get("pending_feature_request")
+        if not pending:
+            return False
+        if time.time() - pending.get("timestamp", 0) > PENDING_STATE_TTL:
+            del context.chat_data["pending_feature_request"]
+            return False
+
+        del context.chat_data["pending_feature_request"]
+        request_type = pending.get("request_type", "feature_request")
+
+        from services.logger_service import LoggerService
+        logger_svc = LoggerService(self.ctx.analyzer)
+        classification = logger_svc.classify_feature_request(message.text)
+        # Menu button overrides the sub-type
+        final_type = request_type
+        ack_text = classification.ack_text
+
+        if self.ctx.message_router:
+            self.ctx.message_router.route_feature_request(
+                telegram_user_id=tid,
+                message_text=message.text,
+                request_type=final_type,
+                bot_response=ack_text,
+                message_id=message.message_id,
+                chat_id=message.chat_id,
+            )
+        await self.ctx._send(ack_text, tid=tid, message=message)
         return True
 
     async def handle_pending_question(self, message, context, tid: int, profile: UserProfile) -> bool:

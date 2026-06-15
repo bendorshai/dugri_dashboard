@@ -93,6 +93,7 @@ class HealthHandlers:
         self.handle_edit_field_callback = self._cb.handle_edit_field_callback
         self.handle_suggest_callback = self._cb.handle_suggest_callback
         self.handle_ask_callback = self._cb.handle_ask_callback
+        self.handle_feature_request_callback = self._cb.handle_feature_request_callback
         self.handle_food_delete_callback = self._cb.handle_food_delete_callback
         self.handle_food_edit_callback = self._cb.handle_food_edit_callback
         self.handle_food_again_callback = self._cb.handle_food_again_callback
@@ -359,6 +360,9 @@ class HealthHandlers:
     async def _handle_pending_correction(self, message, context, tid, profile):
         return await self._get_pending_handler().handle_pending_correction(message, context, tid, profile)
 
+    async def _handle_pending_feature_request(self, message, context, tid):
+        return await self._get_pending_handler().handle_pending_feature_request(message, context, tid)
+
     @staticmethod
     def _format_correction_response(correction, orig_desc, orig_cal, orig_prot, new_cal, new_prot):
         return FoodHandler.format_correction_response(correction, orig_desc, orig_cal, orig_prot, new_cal, new_prot)
@@ -513,6 +517,10 @@ class HealthHandlers:
                 toggle_lines.append(f"- {label}: cancelled")
         toggle_state = "\n".join(toggle_lines) if toggle_lines else None
 
+        # Pending feature request from menu button
+        if await self._handle_pending_feature_request(message, context, tid):
+            return
+
         # Pending correction from edit flow (must check before Router)
         if await self._handle_pending_correction(message, context, tid, profile):
             return
@@ -658,6 +666,21 @@ class HealthHandlers:
                 response = self.feedback_service.process_reaction(tid, message.text, steering)
                 if response:
                     await self._send(response, tid=tid, message=message)
+            return
+
+        if rtype == "feature_request" and self.message_router:
+            from services.logger_service import LoggerService
+            logger_svc = LoggerService(self.analyzer)
+            classification = logger_svc.classify_feature_request(message.text)
+            self.message_router.route_feature_request(
+                telegram_user_id=tid,
+                message_text=message.text,
+                request_type=classification.request_type,
+                bot_response=classification.ack_text,
+                message_id=message.message_id,
+                chat_id=message.chat_id,
+            )
+            await self._send(classification.ack_text, tid=tid, message=message)
             return
 
         if rtype == "emotional" and self.emotional_support_service:

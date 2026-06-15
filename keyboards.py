@@ -21,6 +21,7 @@ CB_FEEDBACK = "feedback_"
 CB_EMOTIONAL = "emo_"
 CB_DEBUG = "dbg_"
 CB_GEM = "gem_"
+CB_FEATURE = "feat_"
 
 
 def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
@@ -44,6 +45,10 @@ def make_main_menu_keyboard(dashboard_url: str = "") -> InlineKeyboardMarkup:
         [InlineKeyboardButton("💬 משוב על התזונה", callback_data=f"{CB_FEEDBACK}daily")],
         [InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals")],
         [InlineKeyboardButton("❓ שאל שאלה על תזונה", callback_data=f"{CB_ASK}question")],
+        [
+            InlineKeyboardButton("🐛 משהו לא בסדר", callback_data=f"{CB_FEATURE}bug"),
+            InlineKeyboardButton("💡 הצעה לשיפור", callback_data=f"{CB_FEATURE}suggestion"),
+        ],
         [InlineKeyboardButton("👤 פרופיל ויעדים", callback_data=f"{CB_MENU}profile")],
         [InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings")],
     ]
