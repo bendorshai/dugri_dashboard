@@ -4,6 +4,8 @@
 1. VERSION = ... 
 2. VERSION_NOTES = ...
 
+> WORKTREE IS MANDATORY BEFORE ANY FILE CHANGE! (SEE BELOW FOR DETAILS)
+
 ---
 
 ## MANDATORY: Worktree isolation for ALL work
