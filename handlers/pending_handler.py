@@ -83,6 +83,8 @@ class PendingHandler:
         ack_text = classification.ack_text
 
         if self.ctx.message_router:
+            from constants import MAX_RECENT_MESSAGES
+            chat_history = self.ctx.user_repo.get_recent_messages(tid, MAX_RECENT_MESSAGES)
             self.ctx.message_router.route_feature_request(
                 telegram_user_id=tid,
                 message_text=message.text,
@@ -90,6 +92,7 @@ class PendingHandler:
                 bot_response=ack_text,
                 message_id=message.message_id,
                 chat_id=message.chat_id,
+                chat_history=chat_history,
             )
         await self.ctx._send(ack_text, tid=tid, message=message)
         return True

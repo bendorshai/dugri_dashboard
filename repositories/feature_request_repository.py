@@ -28,6 +28,7 @@ class FeatureRequestRepository:
         request_type: str | None = None,
         message_id: int | None = None,
         chat_id: int | None = None,
+        chat_history: list[dict] | None = None,
     ) -> None:
         doc = {
             "timestamp": datetime.now(timezone.utc),
@@ -41,4 +42,6 @@ class FeatureRequestRepository:
             doc["message_id"] = message_id
         if chat_id is not None:
             doc["chat_id"] = chat_id
+        if chat_history is not None:
+            doc["chat_history"] = chat_history
         self._collection.insert_one(doc)
