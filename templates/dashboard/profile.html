@@ -29,6 +29,11 @@
                            {{ 'checked' if user.get('gender') == 'female' else '' }}>
                     בת
                 </label>
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                    <input type="radio" name="gender" value="other"
+                           {{ 'checked' if user.get('gender') == 'other' else '' }}>
+                    אחר
+                </label>
             </div>
         </div>
 

@@ -284,7 +284,7 @@ def profile_post():
         profile_data["onboarding.name_collected"] = True
     else:
         profile_data["name"] = None
-    if gender in ("male", "female"):
+    if gender in ("male", "female", "other"):
         profile_data["gender"] = gender
     else:
         profile_data["gender"] = None
