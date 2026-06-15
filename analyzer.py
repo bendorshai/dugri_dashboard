@@ -150,6 +150,7 @@ class RouterClassification(BaseModel):
     meal: TimedFoodAnalysisResult | None = None  # populated only for type=meal
     toggle_name: str | None = None  # for opt_in, when Router can identify which habit
     declared_gender: Literal["male", "female", "other"] | None = None  # for gender_declaration
+    workout_note: str | None = None  # for workout: Hebrew noun phrase, e.g. "אימון רכיבה על אופניים"
 
 
 from prompts import (
