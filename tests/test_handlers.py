@@ -923,3 +923,219 @@ class TestToggleCancelHandler:
         h.toggle_service.cancel_toggle.assert_called_once_with(123, "sleep")
         sent_text = message.reply_text.call_args[0][0]
         assert sent_text == M.EXIT_DOOR_CANCELLED
+
+
+# ============================================================================
+# EDIT FLOW INTEGRATION (handle_message -> _handle_pending_correction)
+# ============================================================================
+# When pending_correction is set in chat_data, handle_message must:
+# - Route to _handle_pending_correction BEFORE the Router/classifier
+# - Call analyze_correction (not classify_message) with the original entry context
+# - Re-download photo if photo_file_id is present
+# - Update the existing food entry (not create a new one)
+# - Never reach the Router at all
+# ============================================================================
+
+class TestEditFlowIntegration:
+    """Integration tests: handle_message correctly routes through pending_correction."""
+
+    def _make_handler(self):
+        from handlers.base import HealthHandlers
+        h = HealthHandlers.__new__(HealthHandlers)
+        h._debug_mode = False
+        h.user_repo = MagicMock()
+        h.food_repo = MagicMock()
+        h.feedback_repo = MagicMock()
+        h.eating_day_svc = MagicMock()
+        h.analyzer = MagicMock()
+        h.trial_service = None
+        h.re_engagement_service = None
+        h.toggle_service = MagicMock()
+        h.message_router = None
+        h.landing_page_url = "https://example.com"
+        h.wisdom_gem_service = None
+        h._setup_token_tracking = MagicMock()
+        return h
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_pending_correction_bypasses_router(self, mock_send, mock_react, mock_now, _kb):
+        """When pending_correction exists, handle_message calls _handle_pending_correction,
+        not the Router. The Router/classifier should never be invoked."""
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 6, 10, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h._get_profile = MagicMock(return_value=profile)
+        h.eating_day_svc.resolve_eating_day.return_value = "10/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (800, 50)
+        h.eating_day_svc.get_stats_date.return_value = "10/06/2026"
+
+        entry_id = "abc123def456abc123def456"
+        correction_result = CorrectionResult(
+            items=[
+                CorrectionFoodItem(description="שניצל 200 גרם", estimated_grams=200, calories=400, protein=35, change_type="modified"),
+                CorrectionFoodItem(description="אורז", estimated_grams=200, calories=260, protein=5),
+            ],
+            corrected_description="שניצל 200 גרם, אורז",
+            corrected_calories=660,
+            corrected_protein=40,
+        )
+        h.analyzer.analyze_correction.return_value = correction_result
+
+        # Build the Update/Message mocks as handle_message expects
+        message = AsyncMock()
+        message.text = "השניצל היה 200 גרם לא 100"
+        message.reply_to_message = None
+        update = MagicMock()
+        update.effective_message = message
+        update.effective_user.id = 123
+
+        context = MagicMock()
+        context.chat_data = {
+            "pending_correction": {
+                "entry": {
+                    "description": "שניצל 100 גרם, אורז",
+                    "calories": 500,
+                    "protein": 30,
+                    "entry_id": entry_id,
+                },
+                "correction_history": [],
+                "timestamp": __import__("time").time(),
+            }
+        }
+
+        await h.handle_message(update, context)
+
+        # _handle_pending_correction was used (analyze_correction called)
+        h.analyzer.analyze_correction.assert_called_once()
+        call_kwargs = h.analyzer.analyze_correction.call_args[1]
+        assert call_kwargs["original_description"] == "שניצל 100 גרם, אורז"
+        assert call_kwargs["new_correction"] == "השניצל היה 200 גרם לא 100"
+
+        # Router/classifier was NOT called
+        h.analyzer.route_message.assert_not_called()
+        h.analyzer.classify_message.assert_not_called()
+
+        # pending_correction was consumed
+        assert "pending_correction" not in context.chat_data
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_pending_correction_with_photo_redownloads(self, mock_send, mock_react, mock_now, _kb):
+        """When pending entry has photo_file_id, the photo is re-downloaded and
+        passed as photo_base64 to analyze_correction."""
+        from datetime import datetime as dt
+        from analyzer import CorrectionResult
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 6, 10, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h._get_profile = MagicMock(return_value=profile)
+        h.eating_day_svc.resolve_eating_day.return_value = "10/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (800, 50)
+        h.eating_day_svc.get_stats_date.return_value = "10/06/2026"
+
+        entry_id = "photo_entry_id_123456789012"
+        correction_result = CorrectionResult(
+            items=[
+                CorrectionFoodItem(description="שווארמה בפיתה", estimated_grams=350, calories=650, protein=40, change_type="modified"),
+            ],
+            corrected_description="שווארמה בפיתה",
+            corrected_calories=650,
+            corrected_protein=40,
+        )
+        h.analyzer.analyze_correction.return_value = correction_result
+
+        message = AsyncMock()
+        message.text = "זה שווארמה לא פלאפל"
+        message.reply_to_message = None
+        update = MagicMock()
+        update.effective_message = message
+        update.effective_user.id = 123
+
+        # Mock photo re-download
+        mock_file = AsyncMock()
+        mock_file.download_as_bytearray.return_value = bytearray(b"fake_photo_bytes")
+        context = MagicMock()
+        context.bot.get_file = AsyncMock(return_value=mock_file)
+        context.chat_data = {
+            "pending_correction": {
+                "entry": {
+                    "description": "פלאפל בפיתה",
+                    "calories": 450,
+                    "protein": 15,
+                    "entry_id": entry_id,
+                    "photo_file_id": "AgACAgIAAxk_photo_id",
+                },
+                "correction_history": [],
+                "timestamp": __import__("time").time(),
+            }
+        }
+
+        await h.handle_message(update, context)
+
+        # Photo was re-downloaded
+        context.bot.get_file.assert_called_once_with("AgACAgIAAxk_photo_id")
+
+        # analyze_correction received photo_base64
+        call_kwargs = h.analyzer.analyze_correction.call_args[1]
+        assert call_kwargs["photo_base64"] is not None
+        assert len(call_kwargs["photo_base64"]) > 0
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.base.get_user_now")
+    @patch("handlers.base.safe_react", new_callable=AsyncMock)
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_no_pending_correction_reaches_router(self, mock_send, mock_react, mock_now, _kb):
+        """Without pending_correction, handle_message proceeds to Router classification."""
+        from datetime import datetime as dt
+        from analyzer import RouterClassification
+        import pytz
+        tz = pytz.timezone("Asia/Jerusalem")
+        mock_now.return_value = dt(2026, 6, 10, 14, 0, tzinfo=tz)
+
+        h = self._make_handler()
+        profile = _make_profile()
+        h.user_repo.get.return_value = profile
+        h._get_profile = MagicMock(return_value=profile)
+        h.eating_day_svc.resolve_eating_day.return_value = "10/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (0, 0)
+        h.eating_day_svc.get_stats_date.return_value = "10/06/2026"
+        h.user_repo.get_recent_messages.return_value = []
+
+        # Router returns conversational so we don't need meal extraction mocks
+        h.analyzer.route_message.return_value = RouterClassification(type="conversational")
+        h._handle_conversational = AsyncMock()
+
+        message = AsyncMock()
+        message.text = "מה שלומך"
+        message.reply_to_message = None
+        update = MagicMock()
+        update.effective_message = message
+        update.effective_user.id = 123
+
+        context = MagicMock()
+        context.chat_data = {}  # No pending_correction
+
+        await h.handle_message(update, context)
+
+        # Router WAS called (no pending state to intercept)
+        h.analyzer.route_message.assert_called_once()
+        # analyze_correction was NOT called
+        h.analyzer.analyze_correction.assert_not_called()

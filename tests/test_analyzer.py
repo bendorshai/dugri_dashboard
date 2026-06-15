@@ -66,11 +66,6 @@ correct prompts, models, and structured output formats are used.
 # - Uses CorrectionResult structured output format
 # - Returns None on failure
 #
-# BULK CORRECTION (bulk_correct)
-# -------------------------------
-# - Returns BulkCorrectionResult with corrected items
-# - Includes CSV entries in user message
-# - Returns empty list on failure
 #
 # ============================================================================
 """
@@ -84,7 +79,7 @@ import pytest
 from analyzer import (
     FoodAnalyzer, FoodItem, FoodAnalysisResult, FoodPhotoResult,
     MessageParseResult, CorrectionFoodItem,
-    CorrectionResult, BulkCorrectionItem, BulkCorrectionResult,
+    CorrectionResult,
     WeeklyFeedbackResult, TimedFoodAnalysisResult,
 )
 
@@ -470,46 +465,6 @@ class TestSuggestTargets:
         assert "175" in user_msg
         assert "80" in user_msg
         assert "30" in user_msg
-
-
-class TestBulkCorrection:
-    def test_returns_corrections(self, analyzer):
-        fa, mock_client = analyzer
-        items = [
-            BulkCorrectionItem(
-                row_index=0, original_description="עוגת בננה",
-                corrected_description="פרוסת עוגת בננה",
-                corrected_calories=150, corrected_protein=3,
-            ),
-        ]
-        expected = BulkCorrectionResult(corrections=items)
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.parsed = expected
-        mock_client.beta.chat.completions.parse.return_value = mock_response
-
-        result = fa.analyze_bulk_correction("עוגת בננה זה פרוסה", "0,עוגת בננה,350,5")
-        assert len(result) == 1
-        assert result[0].corrected_calories == 150
-
-    def test_includes_entries_in_prompt(self, analyzer):
-        fa, mock_client = analyzer
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.parsed = BulkCorrectionResult(corrections=[])
-        mock_client.beta.chat.completions.parse.return_value = mock_response
-
-        fa.analyze_bulk_correction("תיקון", "0,שניצל,400,30\n1,קפה,50,3")
-        call_args = mock_client.beta.chat.completions.parse.call_args
-        user_msg = call_args[1]["messages"][1]["content"]
-        assert "שניצל" in user_msg
-        assert "קפה" in user_msg
-
-    def test_handles_failure(self, analyzer):
-        fa, mock_client = analyzer
-        mock_client.beta.chat.completions.parse.side_effect = Exception("API error")
-        result = fa.analyze_bulk_correction("test", "data")
-        assert result == []
 
 
 class TestAnalyzeCorrection:

@@ -39,7 +39,7 @@ from keyboards import (
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
     make_emotional_support_keyboard, make_emotional_creator_keyboard,
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
-    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
+    CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_WEEKLY, CB_DAILY, CB_BACK,
     CB_FEEDBACK, CB_EMOTIONAL,
 )
 from handlers.utils import PENDING_STATE_TTL, safe_react, send_long_text, send_long_bot, safe_answer
@@ -1072,6 +1072,10 @@ class HealthHandlers:
                 toggle_lines.append(f"- {label}: cancelled")
         toggle_state = "\n".join(toggle_lines) if toggle_lines else None
 
+        # Check pending states BEFORE classification - these have explicit context
+        # that would be lost if routed through the generic classifier.
+        if await self._handle_pending_correction(message, context, tid, profile):
+            return
         # Classify the user message.
         # USE_ROUTER_V2 switches between old classifier and new modular Router.
         from constants import USE_ROUTER_V2
@@ -1810,75 +1814,6 @@ class HealthHandlers:
 
         return True
 
-    async def _handle_pending_bulk_fix(self, message, context, tid: int, profile: UserProfile) -> bool:
-        pending = context.chat_data.get("pending_bulk_fix")
-        if not pending:
-            return False
-        if time.time() - pending.get("timestamp", 0) > PENDING_STATE_TTL:
-            del context.chat_data["pending_bulk_fix"]
-            return False
-
-        del context.chat_data["pending_bulk_fix"]
-        await safe_react(message, THUMBS_UP)
-
-        correction_text = message.text.strip()
-
-        all_entries = self.food_repo.get_all_for_user(tid)
-        if not all_entries:
-            await self._send("אין רשומות לתיקון.", tid=tid, message=message, save=False)
-            return True
-
-        csv_lines = ["row_index,תאריך,שעה,תיאור,קלוריות,חלבון"]
-        for i, e in enumerate(all_entries):
-            csv_lines.append(f"{i},{e.date},{e.time},{e.description},{e.calories},{e.protein}")
-        entries_csv = "\n".join(csv_lines)
-
-        await self._send("🔍 מחפש רשומות לתיקון...", tid=tid, message=message, save=False)
-
-        corrections = self.analyzer.analyze_bulk_correction(correction_text, entries_csv)
-
-        if not corrections:
-            await self._send("לא מצאתי רשומות שמתאימות לתיקון.", tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
-            return True
-
-        report_lines = []
-        total_cal_diff = 0
-        total_prot_diff = 0
-
-        for c in corrections:
-            if c.row_index >= len(all_entries):
-                continue
-            old_entry = all_entries[c.row_index]
-            old_cal = old_entry.calories
-            old_prot = old_entry.protein
-
-            self.food_repo.update(old_entry.id, {
-                "description": c.corrected_description,
-                "calories": c.corrected_calories,
-                "protein": c.corrected_protein,
-            })
-
-            cal_diff = c.corrected_calories - old_cal
-            prot_diff = c.corrected_protein - old_prot
-            total_cal_diff += cal_diff
-            total_prot_diff += prot_diff
-
-            report_lines.append(
-                f"• {c.original_description} → {c.corrected_description} "
-                f"({old_cal}→{c.corrected_calories} קל׳, {old_prot}→{c.corrected_protein} גרם חלבון)"
-            )
-
-        report = (
-            f"✅ תוקנו {len(corrections)} רשומות:\n\n"
-            + "\n".join(report_lines)
-            + f"\n\nשינוי כולל: {'+' if total_cal_diff >= 0 else ''}{total_cal_diff} קל׳, "
-            f"{'+' if total_prot_diff >= 0 else ''}{total_prot_diff} גרם חלבון"
-        )
-
-        await self._send(report, tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
-        await safe_react(message, OK_HAND)
-        return True
-
     # ------------------------------------------------------------------
     # Callback handlers
     # ------------------------------------------------------------------
@@ -2120,24 +2055,6 @@ class HealthHandlers:
             await self._send(response, tid=tid, context=context, reply_markup=make_food_entry_keyboard(saved.id))
         except Exception:
             logger.exception("Failed to duplicate food entry %s", entry_id)
-
-    async def handle_bulk_fix_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query = update.callback_query
-        if not query:
-            return
-        await safe_answer(query)
-
-        context.chat_data["pending_bulk_fix"] = {
-            "timestamp": time.time(),
-        }
-
-        await query.edit_message_text(
-            "🔧 תיקון כללי\n\n"
-            "תאר את הטעות שחוזרת על עצמה.\n"
-            "למשל: 'כל פעם שכתבתי עוגת בננה זה היה פרוסה לא עוגה שלמה'\n"
-            "או: 'הקפה שלי תמיד עם חלב שקד, לא חלב רגיל'\n\n"
-            "הבוט יתקן את כל הרשומות שמתאימות."
-        )
 
     async def handle_daily_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query

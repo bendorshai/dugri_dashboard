@@ -70,18 +70,6 @@ class MessageParseResult(BaseModel):
     correction: CorrectionResult | None = None
 
 
-class BulkCorrectionItem(BaseModel):
-    row_index: int
-    original_description: str
-    corrected_description: str
-    corrected_calories: int
-    corrected_protein: int
-
-
-class BulkCorrectionResult(BaseModel):
-    corrections: list[BulkCorrectionItem]
-
-
 class WeeklyFeedbackResult(BaseModel):
     feedback_text: str
     discovered_pattern: str | None = None
@@ -154,7 +142,6 @@ class RouterClassification(BaseModel):
 
 
 from prompts import (
-    BULK_CORRECTION_SYSTEM_PROMPT,
     CLASSIFIER_SYSTEM_PROMPT,
     CORRECTION_PHOTO_ADDENDUM,
     CORRECTION_SYSTEM_PROMPT,
@@ -747,33 +734,6 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT extraction failed for %s: %s", goal_type, text[:80])
             return None
-
-    def analyze_bulk_correction(
-        self, correction_text: str, entries_csv: str,
-        on_usage: TokenCallback | None = None,
-    ) -> list[BulkCorrectionItem]:
-        user_msg = (
-            f"רשומות האכילה:\n{entries_csv}\n\n"
-            f"תיקון מהמשתמש: {correction_text}"
-        )
-        try:
-            response = self._parse(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": BULK_CORRECTION_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_msg},
-                ],
-                response_format=BulkCorrectionResult,
-                temperature=0,
-                on_usage=on_usage,
-            )
-            result = response.choices[0].message.parsed
-            if result is None:
-                return []
-            return result.corrections
-        except Exception:
-            logger.exception("GPT bulk correction failed")
-            return []
 
     # ------------------------------------------------------------------
     # Public wrappers for external callers (feedback_service, help_service, internal_api)
