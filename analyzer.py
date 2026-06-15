@@ -19,99 +19,22 @@ _token_callback_var: contextvars.ContextVar[TokenCallback | None] = contextvars.
 )
 
 
-class FoodItem(BaseModel):
-    description: str
-    estimated_grams: int
-    calories: int
-    protein: int
-
-
-class FoodAnalysisResult(BaseModel):
-    items: list[FoodItem]
-    total_calories: int
-    total_protein: int
-
-
-class TimedFoodGroup(BaseModel):
-    temporal_label: str
-    date: str
-    time: str
-    items: list[FoodItem]
-    total_calories: int
-    total_protein: int
-
-
-class TimedFoodAnalysisResult(BaseModel):
-    groups: list[TimedFoodGroup]
-
-
-class FoodPhotoResult(BaseModel):
-    items: list[FoodItem]
-    total_calories: int
-    total_protein: int
-    photo_tips: list[str]
-    unidentified_items: list[str] = Field(default_factory=list)
-
-
-class CorrectionFoodItem(FoodItem):
-    change_type: Literal["unchanged", "modified", "added", "removed"] = "unchanged"
-
-
-class CorrectionResult(BaseModel):
-    items: list[CorrectionFoodItem]
-    corrected_description: str
-    corrected_calories: int
-    corrected_protein: int
-
-
-class MessageParseResult(BaseModel):
-    type: Literal["food", "correction", "unknown"]
-    food: FoodAnalysisResult | None = None
-    correction: CorrectionResult | None = None
-
-
-class WeeklyFeedbackResult(BaseModel):
-    feedback_text: str
-    discovered_pattern: str | None = None
-    pattern_summary: str | None = None
-
-
-class NormalizedActivity(BaseModel):
-    """GPT output for self-care activity normalization."""
-    activity_name: str
-
-
-class HabitEntry(BaseModel):
-    """A single habit log entry with temporal context.
-
-    Used for multi-entry and mixed-type messages, e.g.,
-    "שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, והיום אכלתי צ'יזבורגר"
-    """
-    habit_type: Literal["sleep", "workout", "self_care"]
-    temporal_label: str
-    date: str
-    sleep_time: str | None = None
-    workout_note: str | None = None
-    self_care_description: str | None = None
-
-
-class RouterClassification(BaseModel):
-    """Slim Router output - classifies message type and extracts meal data inline.
-
-    The Router's job is to classify AND extract food data for meals (80% of traffic).
-    For all non-meal types, only the type and optional toggle_name are populated.
-    No emotion detection, no habit extraction, no empathy generation.
-    """
-    type: Literal[
-        "meal", "opt_in", "correction",
-        "name_declaration", "gender_declaration", "sleep", "workout", "self_care", "emotional",
-        "feedback_request", "feedback_reaction", "conversational",
-        "inappropriate",
-    ]
-    meal: TimedFoodAnalysisResult | None = None  # populated only for type=meal
-    toggle_name: str | None = None  # for opt_in, when Router can identify which habit
-    declared_gender: Literal["male", "female", "other"] | None = None  # for gender_declaration
-    workout_note: str | None = None  # for workout: Hebrew noun phrase, e.g. "אימון רכיבה על אופניים"
+# Models are defined in models/analyzer_models.py.
+# Re-export here for backward compatibility (many files do `from analyzer import FoodItem`).
+from models.analyzer_models import (  # noqa: E402, F401
+    FoodItem,
+    FoodAnalysisResult,
+    TimedFoodGroup,
+    TimedFoodAnalysisResult,
+    FoodPhotoResult,
+    CorrectionFoodItem,
+    CorrectionResult,
+    MessageParseResult,
+    WeeklyFeedbackResult,
+    NormalizedActivity,
+    HabitEntry,
+    RouterClassification,
+)
 
 
 from prompts import (

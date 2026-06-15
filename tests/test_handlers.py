@@ -267,7 +267,7 @@ class TestDailySummaryCallback:
     @pytest.mark.asyncio
     @patch("handlers.base.make_daily_summary_keyboard", return_value="kb")
     @patch("handlers.base.get_user_now")
-    @patch("handlers.base.safe_answer", new_callable=AsyncMock)
+    @patch("handlers.callback_handler.safe_answer", new_callable=AsyncMock)
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)
     async def test_shows_itemized_entries(self, mock_send, mock_answer, mock_now, _kb):
         from datetime import datetime as dt
@@ -305,7 +305,7 @@ class TestDailySummaryCallback:
     @pytest.mark.asyncio
     @patch("handlers.base.make_daily_summary_keyboard", return_value="kb")
     @patch("handlers.base.get_user_now")
-    @patch("handlers.base.safe_answer", new_callable=AsyncMock)
+    @patch("handlers.callback_handler.safe_answer", new_callable=AsyncMock)
     async def test_shows_empty_message(self, mock_answer, mock_now, _kb):
         from datetime import datetime as dt
         import pytz
@@ -677,9 +677,9 @@ class TestFoodAgainCallback:
         return h
 
     @pytest.mark.asyncio
-    @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
-    @patch("handlers.base.get_user_now")
-    @patch("handlers.base.safe_answer", new_callable=AsyncMock)
+    @patch("handlers.callback_handler.make_food_entry_keyboard", return_value="kb")
+    @patch("handlers.callback_handler.get_user_now")
+    @patch("handlers.callback_handler.safe_answer", new_callable=AsyncMock)
     async def test_again_duplicates_entry(self, mock_answer, mock_now, mock_kb):
         from datetime import datetime as dt
         from bson import ObjectId
