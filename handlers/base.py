@@ -626,7 +626,7 @@ class HealthHandlers:
             return
 
         if rtype == "workout" and self.message_router:
-            result = self.message_router.route_workout(tid, stats_date, message.text)
+            result = self.message_router.route_workout(tid, stats_date, router_result.workout_note)
             text = result.response_text
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text

@@ -432,13 +432,26 @@ class TestHabitRouting:
         assert result.type == "opt_in"
 
     def test_workout_report(self):
-        """'worked out today' = workout."""
+        """'worked out today' = workout, default note is 'אימון'."""
         analyzer = _make_analyzer()
         result = _route(
             analyzer, "התאמנתי היום",
             toggle_state=_build_toggle_state(workouts="active_with_goal"),
         )
         assert result.type == "workout"
+        assert result.workout_note == "אימון"
+
+    def test_workout_note_extraction(self):
+        """'rode a bike' -> workout_note is a Hebrew noun phrase with workout type."""
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer, "רכבתי על אופניים",
+            toggle_state=_build_toggle_state(workouts="active_with_goal"),
+        )
+        assert result.type == "workout"
+        assert result.workout_note is not None
+        assert "אימון" in result.workout_note
+        assert "אופניים" in result.workout_note or "רכיבה" in result.workout_note
 
     def test_self_care_report(self):
         """'went to the beach' = self_care."""
