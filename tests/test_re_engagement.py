@@ -2,9 +2,10 @@
 test_re_engagement.py - TDD tests for the re-engagement system.
 
 Two pipelines:
-- Pipeline A (Food Nudge): no food yesterday (calendar day), morning nudge.
+- Pipeline A (Food Nudge): no food since yesterday (today OR yesterday), morning nudge.
   Blocks sleep hooks until answered. Resets when food is logged.
   Purely calendar-based - no "is user active" gate.
+  Skipped if user already ate today (even if they skipped yesterday).
 - Pipeline B (Complete Silence): user stops communicating entirely.
   Uses elapsed hours (not calendar days) to avoid false triggers:
   48h -> day1 nudge, 72h -> GPT smart question, 96h -> GPT context message,
@@ -133,8 +134,8 @@ class TestSuppressionLevel:
 # ---------------------------------------------------------------------------
 
 class TestFoodNudge:
-    def test_fires_when_no_food_yesterday_and_morning_window(self):
-        """User active, no food yesterday, 9:00 AM -> food nudge fires."""
+    def test_fires_when_no_food_today_or_yesterday_and_morning_window(self):
+        """User active, no food today or yesterday, 9:00 AM -> food nudge fires."""
         svc, _, _ = _make_service()
         user = _make_user(
             last_user_message_at=datetime(2026, 6, 15, 5, 0, tzinfo=timezone.utc),
@@ -162,6 +163,20 @@ class TestFoodNudge:
         yesterday = "14/06/2026"
         svc, _, _ = _make_service(food_entries_by_date={
             yesterday: [{"description": "salad"}],
+        })
+        user = _make_user(
+            last_user_message_at=datetime(2026, 6, 15, 5, 0, tzinfo=timezone.utc),
+        )
+        clock = _morning_clock()
+        action = svc.check_re_engagement(user, clock)
+
+        assert action is None
+
+    def test_skipped_when_food_exists_today_but_not_yesterday(self):
+        """User skipped yesterday but already ate today -> no nudge."""
+        today = "15/06/2026"
+        svc, _, _ = _make_service(food_entries_by_date={
+            today: [{"description": "omelette"}],
         })
         user = _make_user(
             last_user_message_at=datetime(2026, 6, 15, 5, 0, tzinfo=timezone.utc),

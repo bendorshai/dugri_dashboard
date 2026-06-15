@@ -107,7 +107,7 @@ def reset_user(email: str) -> None:
     }
 
     now = datetime.now(timezone.utc).isoformat()
-    trial_start = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+    trial_start = now
 
     reset_fields = {
         "toggles": fresh_toggles,
@@ -137,6 +137,18 @@ def reset_user(email: str) -> None:
         "last_feedback_offered_at": None,
         "discovered_patterns": [],
         "strikes": [],
+        # Wisdom gems state
+        "gem_state": {
+            "used_gem_ids": [],
+            "cycle_number": 1,
+            "last_delivered_at": None,
+            "deliveries": [],
+            "feedbacks": [],
+            "threshold_adjustment": 0.0,
+            "week_start_iso": None,
+            "gem_delivered_this_week": False,
+            "silent_week": False,
+        },
         "updated_at": now,
     }
 

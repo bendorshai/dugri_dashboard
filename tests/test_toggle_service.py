@@ -176,6 +176,14 @@ class TestShouldRevealSleep:
         )
         assert svc.should_reveal_sleep(user) is False
 
+    def test_false_on_same_day_as_trial_start(self):
+        """Sleep is gated to 24h - must not reveal on day 0."""
+        svc, _ = _make_service()
+        user = _make_user(
+            trial_started_at=datetime.now(timezone.utc) - timedelta(hours=6),
+        )
+        assert svc.should_reveal_sleep(user) is False
+
     def test_false_when_no_trial_started(self):
         svc, _ = _make_service()
         user = _make_user(trial_started_at=None)

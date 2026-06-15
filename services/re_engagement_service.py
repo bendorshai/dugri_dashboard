@@ -209,7 +209,7 @@ class ReEngagementService:
         if self._already_sent_today(profile, clock):
             return None
 
-        if self._has_food_yesterday(profile, clock):
+        if self._has_food_today_or_yesterday(profile, clock):
             return None
 
         return ReEngagementAction(
