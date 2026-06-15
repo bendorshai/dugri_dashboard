@@ -92,6 +92,7 @@ class HealthHandlers:
         self.emotional_support_service = emotional_support_service
         self.conversational_service = conversational_service
         self.re_engagement_service = re_engagement_service
+        self.gem_service = None  # set externally after construction
         self.admin_chat_id = admin_chat_id
         self.token_log_repo = token_log_repo
         self._debug_classification = None
@@ -194,6 +195,31 @@ class HealthHandlers:
             await query.message.reply_text("Debug info expired.")
             return
         await query.message.reply_text(metadata)
+
+    async def handle_gem_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle like/dislike feedback on wisdom gems."""
+        from handlers.utils import safe_answer
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        tid = update.effective_user.id
+        data = query.data.removeprefix("gem_")
+
+        if not self.gem_service:
+            return
+
+        if data.startswith("like_"):
+            gem_id = data.removeprefix("like_")
+            self.gem_service.handle_feedback(tid, gem_id, "like")
+            import messages as M
+            await query.message.reply_text(M.GEM_LIKE_ACK)
+        elif data.startswith("dislike_"):
+            gem_id = data.removeprefix("dislike_")
+            self.gem_service.handle_feedback(tid, gem_id, "dislike")
+            import messages as M
+            await query.message.reply_text(M.GEM_DISLIKE_ACK)
 
     # ------------------------------------------------------------------
     # Profile helpers
@@ -1472,6 +1498,15 @@ class HealthHandlers:
             self.toggle_service.record_asked(tid, "weekly_summary")
             self.toggle_service.increment_unanswered(tid, profile, "weekly_summary")
             await self._send(M.WEEKLY_SUMMARY_OFFER, tid=tid, message=message)
+            return
+
+        # Wisdom gem (lowest priority - only if no other hook fired)
+        if self.gem_service:
+            gem_result = self.gem_service.try_deliver_gem(profile, clock)
+            if gem_result:
+                from keyboards import make_gem_feedback_keyboard
+                kb = make_gem_feedback_keyboard(gem_result.gem_id)
+                await self._send(gem_result.dressed_text, tid=tid, message=message, reply_markup=kb)
 
     async def _handle_correction(
         self, message, context, correction, last_entry: dict,

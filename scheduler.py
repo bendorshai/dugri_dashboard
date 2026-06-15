@@ -98,6 +98,7 @@ def schedule_global_poller(
     hook_schedule_store=None,
     food_repo=None,
     re_engagement_service=None,
+    gem_service=None,
     admin_chat_id: int = 0,
 ):
     """Schedule the single unified polling loop.
@@ -126,6 +127,7 @@ def schedule_global_poller(
             "hook_schedule_store": hook_schedule_store,
             "food_repo": food_repo,
             "re_engagement_service": re_engagement_service,
+            "gem_service": gem_service,
             "admin_chat_id": admin_chat_id,
         },
     )
@@ -294,6 +296,17 @@ async def _check_user_hooks(
             admin_chat_id=admin_chat_id, food_repo=food_repo,
         )
 
+    # --- Wisdom gem (poller path) ---
+    gem_service = context.job.data.get("gem_service")
+    if gem_service:
+        gem_result = gem_service.try_deliver_gem(profile, clock)
+        if gem_result:
+            from keyboards import make_gem_feedback_keyboard
+            kb = make_gem_feedback_keyboard(gem_result.gem_id)
+            await _send_and_save(context, tid, gem_result.dressed_text,
+                                 user_repo, profile, toggle_service, admin_chat_id,
+                                 reply_markup=kb)
+
     # --- Ghosting detection (goal flows that went unanswered) ---
     goal_service = context.job.data.get("goal_service")
     if goal_service:
@@ -434,7 +447,8 @@ def _build_eating_close_summary(profile, eating_day_svc, clock) -> str:
 # ---------------------------------------------------------------------------
 
 async def _send_and_save(context, tid: int, text: str, user_repo,
-                         profile=None, toggle_service=None, admin_chat_id: int = 0) -> None:
+                         profile=None, toggle_service=None, admin_chat_id: int = 0,
+                         reply_markup=None) -> None:
     """Send a message and save to conversation history."""
     try:
         msg = {
@@ -444,6 +458,6 @@ async def _send_and_save(context, tid: int, text: str, user_repo,
         }
         user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
 
-        await context.bot.send_message(chat_id=tid, text=text)
+        await context.bot.send_message(chat_id=tid, text=text, reply_markup=reply_markup)
     except Exception:
         logger.exception("Failed to send scheduled message to user %d", tid)

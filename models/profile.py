@@ -58,6 +58,34 @@ class Strike(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class GemDelivery(BaseModel):
+    """Record of a delivered wisdom gem."""
+    gem_id: str
+    category: str
+    pattern_key: str | None = None
+    delivered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class GemFeedback(BaseModel):
+    """User's like/dislike reaction to a delivered gem."""
+    gem_id: str
+    reaction: Literal["like", "dislike"]
+    reacted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class GemState(BaseModel):
+    """Wisdom gems state, embedded on User document."""
+    used_gem_ids: list[str] = Field(default_factory=list)
+    cycle_number: int = 1
+    last_delivered_at: datetime | None = None
+    deliveries: list[GemDelivery] = Field(default_factory=list)
+    feedbacks: list[GemFeedback] = Field(default_factory=list)
+    threshold_adjustment: float = 0.0
+    week_start_iso: str | None = None
+    gem_delivered_this_week: bool = False
+    silent_week: bool = False
+
+
 class DiscoveredPattern(BaseModel):
     """A behavioral pattern discovered during weekly feedback."""
     pattern: str          # Hebrew description shown to user
@@ -150,6 +178,9 @@ class User(BaseModel):
     last_feedback_offered_at: datetime | None = None
     discovered_patterns: list[DiscoveredPattern] = Field(default_factory=list)
     strikes: list[Strike] = Field(default_factory=list)
+
+    # Wisdom gems
+    gem_state: GemState = Field(default_factory=GemState)
 
     # Re-engagement tracking
     last_user_message_at: datetime | None = None

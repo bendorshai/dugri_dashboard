@@ -21,6 +21,7 @@ CB_BACK = "back_"
 CB_FEEDBACK = "feedback_"
 CB_EMOTIONAL = "emo_"
 CB_DEBUG = "dbg_"
+CB_GEM = "gem_"
 
 
 def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
@@ -141,3 +142,10 @@ def format_daily_status(
         f"{prot_icon} גרם חלבון: {total_protein}/{target_protein} ({prot_pct}%, נותרו: {prot_remaining})",
     ]
     return "\n".join(lines)
+
+
+def make_gem_feedback_keyboard(gem_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("\U0001F44D", callback_data=f"{CB_GEM}like_{gem_id}"),
+        InlineKeyboardButton("\U0001F44E", callback_data=f"{CB_GEM}dislike_{gem_id}"),
+    ]])

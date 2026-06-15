@@ -164,6 +164,7 @@ from prompts import (
     EXTRACT_WORKOUT_COUNT_PROMPT,
     FOOD_PHOTO_SYSTEM_PROMPT,
     FOOD_TEXT_SYSTEM_PROMPT,
+    GEM_DRESSING_PROMPT,
     MEAL_SUGGESTION_SYSTEM_PROMPT,
     PARSE_MESSAGE_SYSTEM_PROMPT,
     QA_SYSTEM_PROMPT,
@@ -565,6 +566,47 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT weekly feedback failed")
             return None
+
+    def dress_wisdom_gem(
+        self,
+        gem_text: str,
+        category: str,
+        mode: str,
+        context: dict | None,
+        name: str,
+        gender: str,
+        on_usage: TokenCallback | None = None,
+    ) -> str:
+        """Dress a wisdom gem with personal context. Returns Hebrew text.
+
+        mode: "pattern" (ties to detected behavior) or "general" (neutral hook).
+        The engine chose the gem; GPT only personalizes the text.
+        """
+        gender_suffix = "ה" if gender == "female" else ""
+        context_str = json.dumps(context, ensure_ascii=False) if context else "אין"
+        user_msg = (
+            f"הפנינה: {gem_text}\n"
+            f"קטגוריה: {category}\n"
+            f"מצב: {mode}\n"
+            f"שם: {name or 'לא ידוע'}\n"
+            f"סיומת מגדר: {gender_suffix}\n"
+            f"הקשר: {context_str}"
+        )
+        try:
+            response = self._create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": GEM_DRESSING_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                temperature=0.7,
+                max_tokens=300,
+                on_usage=on_usage,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception:
+            logger.exception("GPT gem dressing failed")
+            return gem_text  # fallback to raw gem text
 
     def suggest_meals(
         self,

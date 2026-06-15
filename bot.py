@@ -42,7 +42,7 @@ from handlers.start_handler import StartHandler
 from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_BULK_FIX, CB_WEEKLY, CB_DAILY, CB_BACK,
-    CB_FEEDBACK, CB_EMOTIONAL, CB_DEBUG,
+    CB_FEEDBACK, CB_EMOTIONAL, CB_DEBUG, CB_GEM,
 )
 from handlers import HealthHandlers
 from scheduler import schedule_global_poller
@@ -142,6 +142,12 @@ def create_bot(
     )
     re_engagement_service = ReEngagementService(user_repo, food_repo, analyzer)
 
+    # Wisdom gems
+    from services.pattern_detector import PatternDetector
+    from services.gem_service import GemService
+    pattern_detector = PatternDetector(food_repo)
+    gem_service = GemService(user_repo, pattern_detector, toggle_service, analyzer)
+
     h = HealthHandlers(
         analyzer=analyzer,
         user_repo=user_repo,
@@ -161,6 +167,7 @@ def create_bot(
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,
     )
+    h.gem_service = gem_service
 
     # Start handler with linking
     linking_service = LinkingService(user_repo)
@@ -191,6 +198,7 @@ def create_bot(
     app.add_handler(CallbackQueryHandler(h.handle_emotional_callback, pattern=f"^{CB_EMOTIONAL}"))
     app.add_handler(CallbackQueryHandler(h.handle_back_callback, pattern=f"^{CB_BACK}"))
     app.add_handler(CallbackQueryHandler(h.handle_debug_callback, pattern=f"^{CB_DEBUG}"))
+    app.add_handler(CallbackQueryHandler(h.handle_gem_callback, pattern=f"^{CB_GEM}"))
 
     # Error handler
     app.add_error_handler(_make_error_handler(error_repo))
@@ -203,6 +211,7 @@ def create_bot(
         hook_schedule_store=hook_schedule_store,
         food_repo=food_repo,
         re_engagement_service=re_engagement_service,
+        gem_service=gem_service,
         admin_chat_id=admin_chat_id,
     )
 

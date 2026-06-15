@@ -140,3 +140,31 @@ USE_ROUTER_V2 = True
 """When True, use the new slim Router for message classification instead of the old classifier.
 The new Router uses modular dispatch (opt_in, conversational, etc.) instead of the old
 15-type classifier. Set to False to revert to old classifier if issues arise."""
+
+# ---------------------------------------------------------------------------
+# Wisdom gems
+# ---------------------------------------------------------------------------
+
+GEM_GATE_DAYS = 14
+"""Minimum days since trial start before gems activate."""
+
+GEM_SILENT_WEEK_RATE = 0.10
+"""Probability of a silent week (~10%). Silent weeks = no gems."""
+
+GEM_FIRE_PROBABILITY = 0.85
+"""Base probability of firing when pattern is above threshold."""
+
+GEM_THRESHOLD_LIKE_DELTA = -0.01
+"""Threshold adjustment on like (1% easier)."""
+
+GEM_THRESHOLD_DISLIKE_DELTA = 0.10
+"""Threshold adjustment on dislike (10% harder)."""
+
+GEM_THRESHOLD_FLOOR = -0.15
+"""Minimum threshold adjustment (even many likes won't go below this)."""
+
+GEM_THRESHOLD_CEILING = 0.30
+"""Maximum threshold adjustment (even many dislikes won't go above this)."""
+
+GEM_FLOOR_OF_WEEK_DAY = 4
+"""Gem-week day (0=Sun) from which floor-of-week general gems can fire."""
