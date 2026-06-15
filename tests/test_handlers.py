@@ -262,6 +262,7 @@ class TestDailySummaryCallback:
         h.feedback_repo = MagicMock()
         h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
+        h.landing_page_url = ""
         return h
 
     @pytest.mark.asyncio
@@ -342,6 +343,7 @@ class TestCorrectionHistory:
         h.feedback_repo = MagicMock()
         h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
+        h.landing_page_url = ""
         return h
 
     @pytest.mark.asyncio
@@ -462,6 +464,7 @@ class TestCorrectionResponseFormat:
         h.feedback_repo = MagicMock()
         h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
+        h.landing_page_url = ""
         return h
 
     def test_format_correction_response_shows_three_sections(self):
@@ -674,6 +677,7 @@ class TestFoodAgainCallback:
         h.feedback_repo = MagicMock()
         h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
+        h.landing_page_url = ""
         return h
 
     @pytest.mark.asyncio
@@ -1177,6 +1181,7 @@ class TestKeyboardPreservation:
         h.feedback_repo = MagicMock()
         h.eating_day_svc = MagicMock()
         h.analyzer = MagicMock()
+        h.landing_page_url = ""
         return h
 
     # -- Edit flow stores message coordinates for later restoration --

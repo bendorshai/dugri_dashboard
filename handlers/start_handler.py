@@ -46,7 +46,7 @@ class StartHandler:
             elif result.status == "already_linked":
                 await message.reply_text(
                     "היי, כבר מקושר 👋 בוא נמשיך.",
-                    reply_markup=make_main_menu_keyboard(),
+                    reply_markup=make_main_menu_keyboard(self._landing_page_url),
                 )
                 return
 
@@ -65,5 +65,5 @@ class StartHandler:
         else:
             await message.reply_text(
                 "היי 👋 בוא נמשיך.",
-                reply_markup=make_main_menu_keyboard(),
+                reply_markup=make_main_menu_keyboard(self._landing_page_url),
             )
