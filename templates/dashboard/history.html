@@ -525,6 +525,189 @@
     color: var(--accent-dark);
 }
 
+/* Action buttons (edit/delete) */
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.action-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.action-btn--delete:hover {
+    background: rgba(220, 53, 69, 0.1);
+}
+
+.action-btn--save {
+    color: var(--success);
+    font-weight: 700;
+}
+
+.action-btn--save:hover {
+    background: rgba(40, 167, 69, 0.1);
+}
+
+.action-btn--cancel {
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.actions-cell {
+    display: flex;
+    gap: 0.15rem;
+    align-items: center;
+}
+
+/* Inline edit inputs */
+.edit-input {
+    padding: 0.3rem 0.5rem;
+    border: 2px solid var(--primary-light);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-family: var(--font);
+    color: var(--text);
+    width: 100%;
+    transition: border-color 0.2s;
+}
+
+.edit-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.edit-input--narrow {
+    width: 70px;
+    text-align: center;
+}
+
+/* Delete confirmation overlay */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirm-dialog {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 1.5rem 2rem;
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+}
+
+.confirm-dialog p {
+    margin-bottom: 0.5rem;
+}
+
+.btn--danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1.25rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: #dc3545;
+    color: white;
+    font-weight: 700;
+    font-family: var(--font);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn--danger:hover {
+    background: #c82333;
+}
+
+/* Self-care chips */
+.self-care-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.self-care-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    background: rgba(176, 124, 200, 0.1);
+    border: 1.5px solid rgba(176, 124, 200, 0.25);
+    border-radius: 999px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #8B5FA8;
+}
+
+.self-care-chip .action-btn {
+    width: 22px;
+    height: 22px;
+    font-size: 0.75rem;
+}
+
+/* Add workout form */
+.add-workout-form {
+    padding: 0.5rem 0;
+}
+
+.add-workout-form .edit-input {
+    margin-bottom: 0.5rem;
+}
+
+.btn--small {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn--small.btn--primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn--small.btn--primary:hover {
+    background: var(--primary-dark);
+}
+
+.btn--small.btn--secondary {
+    background: var(--border);
+    color: var(--text);
+}
+
+.btn--small.btn--outline {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--text-muted);
+}
+
+.btn--small.btn--outline:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
 @media (max-width: 600px) {
     .meals-table-wrap {
         display: none;
@@ -559,6 +742,10 @@
         flex-wrap: wrap;
         gap: 0.75rem;
     }
+
+    .edit-input--narrow {
+        width: 55px;
+    }
 }
 </style>
 
@@ -573,7 +760,7 @@
             <button class="btn btn--secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem; min-height: 36px;"
                     @click="downloadCsv()" :disabled="loading || days.length === 0"
                     x-show="hasAnyData">
-                📥 הורד CSV
+                📥 הורד נתונים
             </button>
         </div>
     </div>
@@ -684,15 +871,46 @@
                                     <th>תיאור</th>
                                     <th>קלוריות</th>
                                     <th>חלבון</th>
+                                    <th style="width: 60px;"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="meal in day.meals" :key="meal.time + meal.description">
+                                <template x-for="meal in day.meals" :key="meal.id">
                                     <tr>
-                                        <td class="meal-time" x-text="meal.time"></td>
-                                        <td class="meal-desc" x-text="meal.description"></td>
-                                        <td class="meal-cal" x-text="formatNumber(meal.calories)"></td>
-                                        <td class="meal-prot" x-text="meal.protein + 'g'"></td>
+                                        <template x-if="editingEntry && editingEntry.id === meal.id">
+                                            <td colspan="5" style="padding: 0.5rem;">
+                                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                                    <span class="meal-time" x-text="meal.time" style="min-width: 45px;"></span>
+                                                    <input type="text" class="edit-input" x-model="editingEntry.description" style="flex: 1; min-width: 120px;">
+                                                    <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.calories" placeholder="קל'">
+                                                    <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.protein" placeholder="g">
+                                                    <div class="actions-cell">
+                                                        <button class="action-btn action-btn--save" @click="saveEdit()" title="שמור">✓</button>
+                                                        <button class="action-btn action-btn--cancel" @click="cancelEdit()" title="ביטול">✕</button>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </template>
+                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                            <td class="meal-time" x-text="meal.time"></td>
+                                        </template>
+                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                            <td class="meal-desc" x-text="meal.description"></td>
+                                        </template>
+                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                            <td class="meal-cal" x-text="formatNumber(meal.calories)"></td>
+                                        </template>
+                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                            <td class="meal-prot" x-text="meal.protein + 'g'"></td>
+                                        </template>
+                                        <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                            <td>
+                                                <div class="actions-cell">
+                                                    <button class="action-btn" @click.stop="startEdit('food', meal)" title="ערוך">✏️</button>
+                                                    <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'food', id: meal.id, description: meal.description }" title="מחק">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </template>
                                     </tr>
                                 </template>
                             </tbody>
@@ -701,16 +919,37 @@
 
                     <!-- Mobile cards -->
                     <div class="meals-mobile">
-                        <template x-for="meal in day.meals" :key="meal.time + meal.description">
+                        <template x-for="meal in day.meals" :key="meal.id">
                             <div class="meal-mobile-card">
-                                <div class="meal-mobile-top">
-                                    <span class="meal-mobile-desc" x-text="meal.description"></span>
-                                    <span class="meal-mobile-time" x-text="meal.time"></span>
-                                </div>
-                                <div class="meal-mobile-stats">
-                                    <span class="meal-mobile-cal">⚡ <span x-text="formatNumber(meal.calories)"></span> קל'</span>
-                                    <span class="meal-mobile-prot">💪 <span x-text="meal.protein"></span>g</span>
-                                </div>
+                                <template x-if="editingEntry && editingEntry.id === meal.id">
+                                    <div>
+                                        <input type="text" class="edit-input" x-model="editingEntry.description" style="margin-bottom: 0.4rem;">
+                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
+                                            <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.calories" placeholder="קל'">
+                                            <input type="number" class="edit-input edit-input--narrow" x-model.number="editingEntry.protein" placeholder="g">
+                                        </div>
+                                        <div style="display: flex; gap: 0.5rem;">
+                                            <button class="btn--small btn--primary" @click="saveEdit()">שמור</button>
+                                            <button class="btn--small btn--secondary" @click="cancelEdit()">ביטול</button>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="!editingEntry || editingEntry.id !== meal.id">
+                                    <div>
+                                        <div class="meal-mobile-top">
+                                            <span class="meal-mobile-desc" x-text="meal.description"></span>
+                                            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                                <span class="meal-mobile-time" x-text="meal.time"></span>
+                                                <button class="action-btn" @click.stop="startEdit('food', meal)" title="ערוך">✏️</button>
+                                                <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'food', id: meal.id, description: meal.description }" title="מחק">🗑️</button>
+                                            </div>
+                                        </div>
+                                        <div class="meal-mobile-stats">
+                                            <span class="meal-mobile-cal">⚡ <span x-text="formatNumber(meal.calories)"></span> קל'</span>
+                                            <span class="meal-mobile-prot">💪 <span x-text="meal.protein"></span>g</span>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
                         </template>
                     </div>
@@ -755,20 +994,47 @@
                     </div>
                     <template x-if="day.workouts.length > 0">
                         <div>
-                            <template x-for="w in day.workouts" :key="w.note">
+                            <template x-for="w in day.workouts" :key="w.id">
                                 <div class="habit-item">
                                     <span>✅</span>
-                                    <span x-text="w.note || 'אימון נרשם'"></span>
+                                    <template x-if="editingEntry && editingEntry.id === w.id">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+                                            <input type="text" class="edit-input" x-model="editingEntry.note" placeholder="תיאור האימון" style="flex: 1;">
+                                            <button class="action-btn action-btn--save" @click="saveEdit()" title="שמור">✓</button>
+                                            <button class="action-btn action-btn--cancel" @click="cancelEdit()" title="ביטול">✕</button>
+                                        </div>
+                                    </template>
+                                    <template x-if="!editingEntry || editingEntry.id !== w.id">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+                                            <span x-text="w.note || 'אימון נרשם'" style="flex: 1;"></span>
+                                            <button class="action-btn" @click.stop="startEdit('workout', w)" title="ערוך">✏️</button>
+                                            <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'workout', id: w.id, description: w.note || 'אימון' }" title="מחק">🗑️</button>
+                                        </div>
+                                    </template>
                                 </div>
                             </template>
                         </div>
                     </template>
-                    <template x-if="day.workouts.length === 0">
+                    <template x-if="day.workouts.length === 0 && !(addingWorkout && addingWorkout.dayDate === day.date)">
                         <div class="habit-item habit-item--empty">
                             <span>—</span>
                             <span>לא נרשם אימון</span>
                         </div>
                     </template>
+                    <!-- Add workout -->
+                    <div x-show="addingWorkout && addingWorkout.dayDate === day.date" class="add-workout-form">
+                        <input type="text" class="edit-input" x-model="addingWorkout.note" placeholder="תיאור האימון (אופציונלי)"
+                               @keydown.enter="submitNewWorkout()">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn--small btn--primary" @click="submitNewWorkout()">שמור</button>
+                            <button class="btn--small btn--secondary" @click="addingWorkout = null">ביטול</button>
+                        </div>
+                    </div>
+                    <button class="btn--small btn--outline" style="margin-top: 0.5rem;"
+                            @click.stop="addingWorkout = { dayDate: day.date, note: '' }"
+                            x-show="!addingWorkout || addingWorkout.dayDate !== day.date">
+                        ➕ הוסף אימון
+                    </button>
                 </div>
 
                 <!-- Sleep -->
@@ -780,7 +1046,8 @@
                     <template x-if="day.sleep">
                         <div class="habit-item">
                             <span>🌙</span>
-                            <span>שעת שינה: <strong x-text="day.sleep.sleep_time"></strong></span>
+                            <span style="flex: 1;">שעת שינה: <strong x-text="day.sleep.sleep_time"></strong></span>
+                            <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'sleep', id: day.sleep.id, description: 'שינה ' + day.sleep.sleep_time }" title="מחק">🗑️</button>
                         </div>
                     </template>
                     <template x-if="!day.sleep">
@@ -795,14 +1062,29 @@
                 <div class="history-section" x-show="day.self_care && day.self_care.length > 0">
                     <div class="history-section-title history-section-title--selfcare">
                         <span class="history-section-emoji">💆</span>
-                        <span>משהו לעצמי השבוע</span>
+                        <span>משהו לעצמי</span>
                     </div>
-                    <template x-for="sc in (day.self_care || [])" :key="sc.description">
-                        <div class="habit-item">
-                            <span>✨</span>
-                            <span x-text="sc.description"></span>
-                        </div>
-                    </template>
+                    <div class="self-care-chips">
+                        <template x-for="sc in (day.self_care || [])" :key="sc.id">
+                            <div class="self-care-chip">
+                                <span>✨</span>
+                                <template x-if="editingEntry && editingEntry.id === sc.id">
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="text" class="edit-input" x-model="editingEntry.description" style="width: 150px; font-size: 0.85rem; padding: 0.2rem 0.4rem;">
+                                        <button class="action-btn action-btn--save" @click="saveEdit()" title="שמור">✓</button>
+                                        <button class="action-btn action-btn--cancel" @click="cancelEdit()" title="ביטול">✕</button>
+                                    </div>
+                                </template>
+                                <template x-if="!editingEntry || editingEntry.id !== sc.id">
+                                    <div style="display: inline-flex; align-items: center; gap: 0.3rem;">
+                                        <span x-text="sc.description"></span>
+                                        <button class="action-btn" @click.stop="startEdit('self_care', sc)" title="ערוך">✏️</button>
+                                        <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'self_care', id: sc.id, description: sc.description }" title="מחק">🗑️</button>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
                 <!-- No meals fallback -->
@@ -813,6 +1095,18 @@
             </div>
         </div>
     </template>
+
+    <!-- Delete confirmation modal -->
+    <div class="confirm-overlay" x-show="confirmDelete" x-transition.opacity @click.self="confirmDelete = null" style="display: none;">
+        <div class="confirm-dialog">
+            <p style="font-size: 1.05rem; font-weight: 600;">למחוק את הרשומה?</p>
+            <p x-text="confirmDelete?.description" style="font-weight: 700; color: var(--primary-dark); margin-bottom: 1rem;"></p>
+            <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                <button class="btn--danger" @click="deleteEntry(confirmDelete.type, confirmDelete.id)">מחק</button>
+                <button class="btn btn--secondary" style="padding: 0.5rem 1.25rem; font-size: 0.9rem;" @click="confirmDelete = null">ביטול</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -828,6 +1122,9 @@ function historyApp() {
         activeFilter: 'week',
         currentDateDisplay: '',
         currentSingleDate: null,
+        editingEntry: null,
+        confirmDelete: null,
+        addingWorkout: null,
 
         get isToday() {
             if (!this.currentSingleDate) return true;
@@ -973,6 +1270,69 @@ function historyApp() {
 
         toggleDay(index) {
             this.openDays[index] = !this.openDays[index];
+        },
+
+        // -- CRUD methods --
+
+        _urlForType(type) {
+            const map = { food: 'food-entry', workout: 'workout-log', sleep: 'sleep-log', self_care: 'self-care-log' };
+            return map[type];
+        },
+
+        async deleteEntry(type, id) {
+            try {
+                const resp = await fetch(`/api/${this._urlForType(type)}/${id}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    this.confirmDelete = null;
+                    await this.fetchRange();
+                }
+            } catch (e) {
+                console.error('Delete failed:', e);
+            }
+        },
+
+        startEdit(type, entry) {
+            this.editingEntry = { type, ...JSON.parse(JSON.stringify(entry)) };
+        },
+
+        cancelEdit() {
+            this.editingEntry = null;
+        },
+
+        async saveEdit() {
+            const e = this.editingEntry;
+            if (!e) return;
+            try {
+                const resp = await fetch(`/api/${this._urlForType(e.type)}/${e.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(e),
+                });
+                if (resp.ok) {
+                    this.editingEntry = null;
+                    await this.fetchRange();
+                }
+            } catch (err) {
+                console.error('Save failed:', err);
+            }
+        },
+
+        async submitNewWorkout() {
+            const w = this.addingWorkout;
+            if (!w) return;
+            try {
+                const resp = await fetch('/api/workout-log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: w.dayDate, note: w.note }),
+                });
+                if (resp.ok) {
+                    this.addingWorkout = null;
+                    await this.fetchRange();
+                }
+            } catch (err) {
+                console.error('Add workout failed:', err);
+            }
         },
 
         downloadCsv() {

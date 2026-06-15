@@ -4,6 +4,7 @@ import logging
 import secrets
 from datetime import date, datetime, timedelta, timezone
 
+from bson import ObjectId
 from pymongo import MongoClient
 
 logger = logging.getLogger(__name__)
@@ -144,6 +145,101 @@ class DashboardStorage:
             }},
         )
         return old_targets
+
+    # -- Activity record helpers --
+
+    def _get_telegram_user_id(self, email: str) -> int | None:
+        user = self._users.find_one({"_id": email}, {"telegram_user_id": 1})
+        return user.get("telegram_user_id") if user else None
+
+    # -- Activity CRUD --
+
+    def delete_food_entry(self, email: str, entry_id: str) -> bool:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return False
+        result = self._db["food_entries"].delete_one(
+            {"_id": ObjectId(entry_id), "telegram_user_id": tid},
+        )
+        return result.deleted_count > 0
+
+    def delete_workout_log(self, email: str, entry_id: str) -> bool:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return False
+        result = self._db["workout_logs"].delete_one(
+            {"_id": ObjectId(entry_id), "telegram_user_id": tid},
+        )
+        return result.deleted_count > 0
+
+    def delete_sleep_log(self, email: str, entry_id: str) -> bool:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return False
+        result = self._db["sleep_logs"].delete_one(
+            {"_id": ObjectId(entry_id), "telegram_user_id": tid},
+        )
+        return result.deleted_count > 0
+
+    def delete_self_care_log(self, email: str, entry_id: str) -> bool:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return False
+        result = self._db["self_care_logs"].delete_one(
+            {"_id": ObjectId(entry_id), "telegram_user_id": tid},
+        )
+        return result.deleted_count > 0
+
+    def update_food_entry(self, email: str, entry_id: str, data: dict) -> bool:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return False
+        allowed = {k: v for k, v in data.items() if k in ("description", "calories", "protein")}
+        if not allowed:
+            return False
+        result = self._db["food_entries"].update_one(
+            {"_id": ObjectId(entry_id), "telegram_user_id": tid},
+            {"$set": allowed},
+        )
+        return result.modified_count > 0
+
+    def update_workout_log(self, email: str, entry_id: str, data: dict) -> bool:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return False
+        allowed = {k: v for k, v in data.items() if k in ("note",)}
+        if not allowed:
+            return False
+        result = self._db["workout_logs"].update_one(
+            {"_id": ObjectId(entry_id), "telegram_user_id": tid},
+            {"$set": allowed},
+        )
+        return result.modified_count > 0
+
+    def update_self_care_log(self, email: str, entry_id: str, data: dict) -> bool:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return False
+        allowed = {k: v for k, v in data.items() if k in ("description",)}
+        if not allowed:
+            return False
+        result = self._db["self_care_logs"].update_one(
+            {"_id": ObjectId(entry_id), "telegram_user_id": tid},
+            {"$set": allowed},
+        )
+        return result.modified_count > 0
+
+    def create_workout_log(self, email: str, date_str: str, note: str = "") -> str | None:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return None
+        result = self._db["workout_logs"].insert_one({
+            "telegram_user_id": tid,
+            "date": date_str,
+            "note": note,
+            "created_at": datetime.now(timezone.utc),
+        })
+        return str(result.inserted_id)
 
     # -- Activity history --
 

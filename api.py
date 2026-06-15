@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app, session
 
@@ -103,6 +103,7 @@ def activity_history():
     for entry in raw["food"]:
         d = entry["date"]
         food_by_date.setdefault(d, []).append({
+            "id": str(entry["_id"]),
             "time": entry.get("time", ""),
             "description": entry.get("description", ""),
             "calories": entry.get("calories", 0),
@@ -118,6 +119,7 @@ def activity_history():
     for entry in raw["workouts"]:
         d = entry["date"]
         workouts_by_date.setdefault(d, []).append({
+            "id": str(entry["_id"]),
             "note": entry.get("note", ""),
         })
 
@@ -125,6 +127,7 @@ def activity_history():
     sleep_by_date: dict[str, dict] = {}
     for entry in raw["sleep"]:
         sleep_by_date[entry["date"]] = {
+            "id": str(entry["_id"]),
             "sleep_time": entry.get("sleep_time", ""),
         }
 
@@ -133,6 +136,7 @@ def activity_history():
     for entry in raw["self_care"]:
         wid = entry.get("week_id", "")
         self_care_by_week.setdefault(wid, []).append({
+            "id": str(entry["_id"]),
             "description": entry.get("description", ""),
         })
 
@@ -178,7 +182,7 @@ def activity_history():
             "meals_total": {"calories": day_cal, "protein": day_prot},
             "workouts": day_workouts,
             "sleep": day_sleep,
-            "self_care": day_self_care if current.weekday() == 6 else [],  # show on Sunday only to avoid repetition
+            "self_care": day_self_care,
         })
 
         current -= timedelta(days=1)
@@ -201,3 +205,94 @@ def activity_history():
             "workouts_per_week": targets.get("workouts_per_week"),
         },
     })
+
+
+# -- Activity CRUD endpoints --
+
+@api_bp.route("/food-entry/<entry_id>", methods=["DELETE"])
+@login_required
+def delete_food_entry(entry_id):
+    storage = _get_storage()
+    if storage.delete_food_entry(session["user_email"], entry_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found"}), 404
+
+
+@api_bp.route("/workout-log/<entry_id>", methods=["DELETE"])
+@login_required
+def delete_workout_log(entry_id):
+    storage = _get_storage()
+    if storage.delete_workout_log(session["user_email"], entry_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found"}), 404
+
+
+@api_bp.route("/sleep-log/<entry_id>", methods=["DELETE"])
+@login_required
+def delete_sleep_log(entry_id):
+    storage = _get_storage()
+    if storage.delete_sleep_log(session["user_email"], entry_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found"}), 404
+
+
+@api_bp.route("/self-care-log/<entry_id>", methods=["DELETE"])
+@login_required
+def delete_self_care_log(entry_id):
+    storage = _get_storage()
+    if storage.delete_self_care_log(session["user_email"], entry_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found"}), 404
+
+
+@api_bp.route("/food-entry/<entry_id>", methods=["PATCH"])
+@login_required
+def update_food_entry(entry_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "missing data"}), 400
+    storage = _get_storage()
+    if storage.update_food_entry(session["user_email"], entry_id, data):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found or unchanged"}), 404
+
+
+@api_bp.route("/workout-log/<entry_id>", methods=["PATCH"])
+@login_required
+def update_workout_log(entry_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "missing data"}), 400
+    storage = _get_storage()
+    if storage.update_workout_log(session["user_email"], entry_id, data):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found or unchanged"}), 404
+
+
+@api_bp.route("/self-care-log/<entry_id>", methods=["PATCH"])
+@login_required
+def update_self_care_log(entry_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "missing data"}), 400
+    storage = _get_storage()
+    if storage.update_self_care_log(session["user_email"], entry_id, data):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found or unchanged"}), 404
+
+
+@api_bp.route("/workout-log", methods=["POST"])
+@login_required
+def create_workout_log():
+    data = request.get_json()
+    if not data or not data.get("date"):
+        return jsonify({"error": "missing date"}), 400
+    # Convert ISO date (YYYY-MM-DD) to DD/MM/YYYY for MongoDB
+    date_str = datetime.strptime(data["date"], "%Y-%m-%d").strftime("%d/%m/%Y")
+    storage = _get_storage()
+    entry_id = storage.create_workout_log(
+        session["user_email"], date_str, data.get("note", ""),
+    )
+    if entry_id:
+        return jsonify({"ok": True, "id": entry_id}), 201
+    return jsonify({"error": "could not create"}), 400
