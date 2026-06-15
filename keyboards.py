@@ -24,36 +24,41 @@ CB_GEM = "gem_"
 CB_FEATURE = "feat_"
 
 
-def make_daily_summary_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📋 סיכום יומי", callback_data=f"{CB_DAILY}summary")],
-        [
-            InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals"),
-            InlineKeyboardButton("❓ שאל שאלה", callback_data=f"{CB_ASK}question"),
-        ],
-        [
+def make_daily_summary_keyboard(dashboard_url: str = "") -> InlineKeyboardMarkup:
+    base_url = dashboard_url.rstrip("/") if dashboard_url else ""
+    buttons = [
+        [InlineKeyboardButton("📋 מה אכלתי היום?", callback_data=f"{CB_DAILY}summary")],
+    ]
+    if base_url:
+        buttons.append([
+            InlineKeyboardButton("⚙️ הגדרות", url=f"{base_url}/dashboard/preferences"),
+            InlineKeyboardButton("👤 פרופיל", url=f"{base_url}/dashboard/profile"),
+        ])
+    else:
+        buttons.append([
             InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings"),
             InlineKeyboardButton("👤 פרופיל", callback_data=f"{CB_MENU}profile"),
-        ],
-    ])
+        ])
+    return InlineKeyboardMarkup(buttons)
 
 
 def make_main_menu_keyboard(dashboard_url: str = "") -> InlineKeyboardMarkup:
+    base_url = dashboard_url.rstrip("/") if dashboard_url else ""
     buttons = [
-        [InlineKeyboardButton("📋 סיכום יומי", callback_data=f"{CB_DAILY}summary")],
+        [InlineKeyboardButton("📋 מה אכלתי היום?", callback_data=f"{CB_DAILY}summary")],
         [InlineKeyboardButton("📅 סיכום שבועי", callback_data=f"{CB_WEEKLY}summary")],
-        [InlineKeyboardButton("💬 משוב על התזונה", callback_data=f"{CB_FEEDBACK}daily")],
-        [InlineKeyboardButton("🍽 הצעות ארוחה", callback_data=f"{CB_SUGGEST}meals")],
-        [InlineKeyboardButton("❓ שאל שאלה על תזונה", callback_data=f"{CB_ASK}question")],
+        [InlineKeyboardButton("💬 תן לי משוב", callback_data=f"{CB_FEEDBACK}daily")],
         [
             InlineKeyboardButton("🐛 משהו לא בסדר", callback_data=f"{CB_FEATURE}bug"),
             InlineKeyboardButton("💡 הצעה לשיפור", callback_data=f"{CB_FEATURE}suggestion"),
         ],
-        [InlineKeyboardButton("👤 פרופיל ויעדים", callback_data=f"{CB_MENU}profile")],
-        [InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings")],
     ]
-    if dashboard_url:
-        buttons.append([InlineKeyboardButton("📊 דשבורד", url=dashboard_url)])
+    if base_url:
+        buttons.append([InlineKeyboardButton("👤 פרופיל ויעדים", url=f"{base_url}/dashboard/profile")])
+        buttons.append([InlineKeyboardButton("⚙️ הגדרות", url=f"{base_url}/dashboard/preferences")])
+    else:
+        buttons.append([InlineKeyboardButton("👤 פרופיל ויעדים", callback_data=f"{CB_MENU}profile")])
+        buttons.append([InlineKeyboardButton("⚙️ הגדרות", callback_data=f"{CB_MENU}settings")])
     return InlineKeyboardMarkup(buttons)
 
 

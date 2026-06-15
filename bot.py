@@ -166,6 +166,8 @@ def create_bot(
         landing_page_url=landing_page_url,
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,
+        sleep_repo=sleep_repo,
+        workout_repo=workout_repo,
     )
     h.gem_service = gem_service
 

@@ -71,8 +71,12 @@ class HandlerContext:
         landing_page_url: str = "https://www.dugri.life",
         admin_chat_id: int = 0,
         token_log_repo=None,
+        sleep_repo=None,
+        workout_repo=None,
     ):
         self.landing_page_url = landing_page_url
+        self.sleep_repo = sleep_repo
+        self.workout_repo = workout_repo
         self.analyzer = analyzer
         self.user_repo = user_repo
         self.food_repo = food_repo

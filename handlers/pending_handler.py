@@ -124,7 +124,7 @@ class PendingHandler:
 
         answer = self.ctx.analyzer.answer_question(question, week_csv, targets)
         if answer:
-            await self.ctx._send(answer, tid=tid, message=message, reply_markup=make_daily_summary_keyboard(), save=False)
+            await self.ctx._send(answer, tid=tid, message=message, reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url), save=False)
         else:
             await self.ctx._send("לא הצלחתי לענות. נסה שוב.", tid=tid, message=message, save=False)
 
@@ -228,7 +228,7 @@ class PendingHandler:
         corrections = self.ctx.analyzer.analyze_bulk_correction(correction_text, entries_csv)
 
         if not corrections:
-            await self.ctx._send("לא מצאתי רשומות שמתאימות לתיקון.", tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
+            await self.ctx._send("לא מצאתי רשומות שמתאימות לתיקון.", tid=tid, message=message, reply_markup=make_main_menu_keyboard(self.ctx.landing_page_url), save=False)
             return True
 
         report_lines = []
@@ -265,6 +265,6 @@ class PendingHandler:
             f"{'+' if total_prot_diff >= 0 else ''}{total_prot_diff} גרם חלבון"
         )
 
-        await self.ctx._send(report, tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
+        await self.ctx._send(report, tid=tid, message=message, reply_markup=make_main_menu_keyboard(self.ctx.landing_page_url), save=False)
         await safe_react(message, OK_HAND)
         return True

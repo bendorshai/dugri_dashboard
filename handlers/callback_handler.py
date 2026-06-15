@@ -32,6 +32,20 @@ from handlers.context import HandlerContext, FIELD_LABELS
 logger = logging.getLogger(__name__)
 
 
+def _sleep_within_goal(actual: str, target: str) -> bool:
+    """Check if actual sleep time is within 30 minutes of target."""
+    def _to_minutes(t: str) -> int:
+        h, m = t.split(":")
+        return int(h) * 60 + int(m)
+
+    actual_min = _to_minutes(actual)
+    target_min = _to_minutes(target)
+    diff = abs(actual_min - target_min)
+    # Handle wrap-around midnight (e.g., 23:50 vs 00:10)
+    diff = min(diff, 1440 - diff)
+    return diff <= 30
+
+
 class CallbackHandler:
     def __init__(self, ctx: HandlerContext):
         self.ctx = ctx
@@ -194,12 +208,12 @@ class CallbackHandler:
         if suggestions:
             await query.edit_message_text(
                 f"🍽 הצעות ארוחה:\n\n{suggestions}",
-                reply_markup=make_daily_summary_keyboard(),
+                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
             )
         else:
             await query.edit_message_text(
                 "לא הצלחתי להציע ארוחות. נסה שוב.",
-                reply_markup=make_daily_summary_keyboard(),
+                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
             )
 
     async def handle_ask_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -243,13 +257,13 @@ class CallbackHandler:
             self.ctx.food_repo.delete(entry_id)
             import random
             import messages as M
-            await query.edit_message_text(random.choice(M.FOOD_DELETED), reply_markup=make_daily_summary_keyboard())
+            await query.edit_message_text(random.choice(M.FOOD_DELETED), reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url))
         except Exception:
             logger.exception("Failed to delete food entry %s", entry_id)
             # Menu must be preserved - send error with keyboard so user can retry
             await query.edit_message_text(
                 "❌ לא הצלחתי למחוק את הרשומה.",
-                reply_markup=make_daily_summary_keyboard(),
+                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
             )
 
     async def handle_food_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -262,7 +276,7 @@ class CallbackHandler:
         try:
             food_entry = self.ctx.food_repo.get(entry_id)
             if food_entry is None:
-                await query.edit_message_text("❌ הרשומה לא נמצאה.", reply_markup=make_daily_summary_keyboard())
+                await query.edit_message_text("❌ הרשומה לא נמצאה.", reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url))
                 return
 
             existing_history = food_entry.correction_history or \
@@ -297,7 +311,7 @@ class CallbackHandler:
             # Menu must be preserved - send error with keyboard so user can retry
             await query.edit_message_text(
                 "❌ לא הצלחתי לטעון את הרשומה.",
-                reply_markup=make_daily_summary_keyboard(),
+                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
             )
 
     async def handle_food_again_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -311,7 +325,7 @@ class CallbackHandler:
         try:
             food_entry = self.ctx.food_repo.get(entry_id)
             if food_entry is None:
-                await self.ctx._send("❌ הרשומה לא נמצאה.", tid=tid, context=context, reply_markup=make_daily_summary_keyboard(), save=False)
+                await self.ctx._send("❌ הרשומה לא נמצאה.", tid=tid, context=context, reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url), save=False)
                 return
 
             profile = self.ctx._get_profile(tid)
@@ -345,7 +359,7 @@ class CallbackHandler:
             await self.ctx._send(
                 "❌ לא הצלחתי לשכפל את הרשומה.",
                 tid=tid, context=context,
-                reply_markup=make_daily_summary_keyboard(),
+                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
                 save=False,
             )
 
@@ -384,7 +398,7 @@ class CallbackHandler:
         if not entries:
             await query.edit_message_text(
                 "📋 אין רשומות להיום.",
-                reply_markup=make_daily_summary_keyboard(),
+                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
             )
             return
 
@@ -399,7 +413,7 @@ class CallbackHandler:
         status = format_daily_status(total_cal, total_prot, self.ctx._target_cal(profile), self.ctx._target_prot(profile))
         text = "\n".join(lines) + status
 
-        await self.ctx._send(text, tid=tid, message=query.message, reply_markup=make_daily_summary_keyboard(), save=False)
+        await self.ctx._send(text, tid=tid, message=query.message, reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url), save=False)
 
     async def handle_weekly_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -416,44 +430,85 @@ class CallbackHandler:
         target_prot = self.ctx._target_prot(profile)
         window_start = profile.eating_window.start if profile.eating_window else "08:00"
         window_end = profile.eating_window.end if profile.eating_window else "20:00"
+        show_window = getattr(profile.toggles, "eating_window", None) and \
+            profile.toggles.eating_window.status == "active"
+        sleep_target = getattr(profile.targets, "sleep_time", None)
 
         now = get_user_now(profile.timezone)
         today = now.date()
 
         dates = [(today - timedelta(days=i)) for i in range(7)]
+        date_strings = [d.strftime("%d/%m/%Y") for d in dates]
+
+        # Fetch habit data in bulk
+        workout_by_date: dict[str, list] = {}
+        if getattr(self.ctx, "workout_repo", None):
+            for w in self.ctx.workout_repo.get_recent(tid, 7):
+                workout_by_date.setdefault(w.date, []).append(w)
+
+        sleep_by_date: dict[str, object] = {}
+        if getattr(self.ctx, "sleep_repo", None):
+            for s in self.ctx.sleep_repo.get_recent(tid, 7):
+                if s.date not in sleep_by_date:
+                    sleep_by_date[s.date] = s
 
         lines = ["📅 סיכום שבועי:\n"]
-        for d in dates:
-            ds = d.strftime("%d/%m/%Y")
+        for d, ds in zip(dates, date_strings):
             day_label = d.strftime("%a %d/%m")
             entries = self.ctx.eating_day_svc.get_eating_day_entries(profile, ds)
 
-            if not entries:
+            if not entries and ds not in workout_by_date and ds not in sleep_by_date:
                 lines.append(f"📆 {day_label}  —  אין נתונים")
                 continue
 
-            day_cal = sum(e.calories for e in entries)
-            day_prot = sum(e.protein for e in entries)
-            window_kept = all(
-                (not e.time or (window_start <= e.time < window_end))
-                for e in entries
-            )
+            day_lines = [f"📆 {day_label}"]
 
-            cal_pct = round(day_cal / target_cal * 100) if target_cal else 0
-            prot_pct = round(day_prot / target_prot * 100) if target_prot else 0
-            cal_icon = "✅" if day_cal <= target_cal else "⚠️"
-            prot_icon = "✅" if day_prot >= target_prot else "⚠️"
-            window_icon = "✅" if window_kept else "🍽"
+            # Food data
+            if entries:
+                day_cal = sum(e.calories for e in entries)
+                day_prot = sum(e.protein for e in entries)
 
-            lines.append(
-                f"📆 {day_label}\n"
-                f"  {cal_icon} קלוריות: {day_cal}/{target_cal} ({cal_pct}%)\n"
-                f"  {prot_icon} גרם חלבון: {day_prot}/{target_prot} ({prot_pct}%)\n"
-                f"  {window_icon} חלון אכילה: {'נשמר' if window_kept else 'לא נשמר'}"
-            )
+                cal_pct = round(day_cal / target_cal * 100) if target_cal else 0
+                prot_pct = round(day_prot / target_prot * 100) if target_prot else 0
+                cal_icon = "✅" if day_cal <= target_cal else "⚠️"
+                prot_icon = "✅" if day_prot >= target_prot else "⚠️"
+
+                day_lines.append(f"  {cal_icon} קלוריות: {day_cal}/{target_cal} ({cal_pct}%)")
+                day_lines.append(f"  {prot_icon} חלבון: {day_prot}/{target_prot} ({prot_pct}%)")
+
+                # Eating window - only when toggle is active
+                if show_window:
+                    window_kept = all(
+                        (not e.time or (window_start <= e.time < window_end))
+                        for e in entries
+                    )
+                    window_icon = "✅" if window_kept else "🍽"
+                    day_lines.append(
+                        f"  {window_icon} חלון אכילה: {'נשמר' if window_kept else 'לא נשמר'}"
+                    )
+
+            # Workout data
+            if ds in workout_by_date:
+                for w in workout_by_date[ds]:
+                    label = "  🏋️ אימון"
+                    if w.note:
+                        label += f": {w.note}"
+                    day_lines.append(label)
+
+            # Sleep data
+            if ds in sleep_by_date:
+                sl = sleep_by_date[ds]
+                if sleep_target:
+                    sleep_icon = "✅" if _sleep_within_goal(sl.sleep_time, sleep_target) else "⚠️"
+                    day_lines.append(f"  {sleep_icon} שינה: {sl.sleep_time} (יעד: {sleep_target})")
+                else:
+                    day_lines.append(f"  😴 שינה: {sl.sleep_time}")
+
+            lines.append("\n".join(day_lines))
 
         text = "\n".join(lines)
-        await query.edit_message_text(text, reply_markup=make_main_menu_keyboard())
+        await query.edit_message_text(text, reply_markup=make_main_menu_keyboard(
+            self.ctx.landing_page_url))
 
     async def handle_back_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -472,7 +527,7 @@ class CallbackHandler:
         status = format_daily_status(
             total_cal, total_protein, self.ctx._target_cal(profile), self.ctx._target_prot(profile),
         )
-        await self.ctx._send(f"📋 תפריט ראשי{status}", tid=tid, context=context, reply_markup=make_main_menu_keyboard(), save=False)
+        await self.ctx._send(f"📋 תפריט ראשי{status}", tid=tid, context=context, reply_markup=make_main_menu_keyboard(self.ctx.landing_page_url), save=False)
 
     async def handle_feedback_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -502,9 +557,9 @@ class CallbackHandler:
                     profile.feedback_steering_prompt,
                     is_first,
                 )
-                await self.ctx._send(feedback_text, tid=tid, context=context, reply_markup=make_main_menu_keyboard())
+                await self.ctx._send(feedback_text, tid=tid, context=context, reply_markup=make_main_menu_keyboard(self.ctx.landing_page_url))
             else:
-                await self.ctx._send("לא הצלחתי לייצר משוב כרגע.", tid=tid, context=context, reply_markup=make_main_menu_keyboard(), save=False)
+                await self.ctx._send("לא הצלחתי לייצר משוב כרגע.", tid=tid, context=context, reply_markup=make_main_menu_keyboard(self.ctx.landing_page_url), save=False)
         except Exception:
             logger.exception("Failed to generate feedback")
 

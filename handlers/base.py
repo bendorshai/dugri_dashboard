@@ -53,6 +53,8 @@ class HealthHandlers:
         landing_page_url: str = "https://www.dugri.life",
         admin_chat_id: int = 0,
         token_log_repo=None,
+        sleep_repo=None,
+        workout_repo=None,
     ):
         # Shared context for all sub-handlers
         self.ctx = HandlerContext(
@@ -73,6 +75,8 @@ class HealthHandlers:
             landing_page_url=landing_page_url,
             admin_chat_id=admin_chat_id,
             token_log_repo=token_log_repo,
+            sleep_repo=sleep_repo,
+            workout_repo=workout_repo,
         )
 
         # Sub-handlers
@@ -402,7 +406,7 @@ class HealthHandlers:
             f"  חלון אכילה: {profile.eating_window.start if profile.eating_window else '08:00'}-{profile.eating_window.end if profile.eating_window else '20:00'}\n\n"
             "אפשר לשנות הגדרות דרך התפריט למטה."
         )
-        await self._send(text, tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False)
+        await self._send(text, tid=tid, message=message, reply_markup=make_main_menu_keyboard(self.landing_page_url), save=False)
 
     async def handle_menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = update.effective_message
@@ -423,7 +427,7 @@ class HealthHandlers:
         )
         await self._send(
             f"📋 תפריט ראשי{status}",
-            tid=tid, message=message, reply_markup=make_main_menu_keyboard(), save=False,
+            tid=tid, message=message, reply_markup=make_main_menu_keyboard(self.landing_page_url), save=False,
         )
 
     # ------------------------------------------------------------------
@@ -657,7 +661,7 @@ class HealthHandlers:
                 feedback_text = self.feedback_service.give_feedback(
                     tid, stats_date, profile, is_first,
                 )
-                await self._send(feedback_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard())
+                await self._send(feedback_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard(self.landing_page_url))
             return
 
         if rtype == "feedback_reaction":
