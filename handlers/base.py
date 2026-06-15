@@ -557,6 +557,15 @@ class HealthHandlers:
         rtype = router_result.type
 
         if rtype == "opt_in":
+            # Check for log-confirmation misclassification: when toggle is
+            # dormant and the bot suggested logging a specific activity, the
+            # router says opt_in but it should be workout/sleep/self_care.
+            # Use a second LLM call (LoggerService) to disambiguate.
+            rtype = await self._check_log_confirmation_override(
+                rtype, router_result, message, tid, profile, recent_messages,
+            )
+
+        if rtype == "opt_in":
             await self._handle_opt_in(message, context, tid, profile, router_result)
             return
 
@@ -772,6 +781,33 @@ class HealthHandlers:
 
         await self._recompute_eating_window(context, tid, profile)
         await self._check_inline_hooks(message, tid, profile)
+
+    async def _check_log_confirmation_override(
+        self, rtype, router_result, message, tid, profile, recent_messages,
+    ):
+        """Check if opt_in is actually a log confirmation (second LLM call).
+
+        Runs for every opt_in classification. Uses a lightweight GPT call
+        to determine from conversation context alone whether the user is
+        confirming a habit log or responding to a goal-setting flow.
+        """
+        if rtype != "opt_in":
+            return rtype
+
+        # Get the bot's last message from recent history
+        bot_messages = [m for m in (recent_messages or []) if m.get("role") == "bot"]
+        if not bot_messages:
+            return rtype
+        last_bot_text = bot_messages[-1].get("text", "")
+
+        from services.logger_service import LoggerService
+        logger_svc = LoggerService(self.analyzer)
+        check = logger_svc.check_log_confirmation(last_bot_text, message.text)
+
+        if check.is_log_confirmation and check.habit_type:
+            logger.info("Log-confirmation override: opt_in -> %s", check.habit_type)
+            return check.habit_type
+        return rtype
 
     async def _handle_conversational(
         self, message, tid, profile, toggle_state, recent_messages,

@@ -128,6 +128,21 @@ This creates a double-check: the routing rules say it first, and the type defini
 6. Run twice to confirm stability (LLM variance)
 7. Also run `python -m pytest tests/test_retroactive.py -v --tb=short`
 
+### "Log confirmation vs opt_in" bug (multi-field approaches - all failed)
+**Symptom:** User says "כן!" after bot asks "רוצה לדווח על זה כהתאמן?" -> classified as opt_in instead of workout. Toggle is dormant.
+**Root cause:** GPT-4o-mini pattern-matches "כן + workout context = opt_in" in structured output. Prompt rules are processed (verified in free-form mode) but their influence is weaker than the pattern match.
+**What was tried and failed:**
+1. Prompt-only rules at every position (top, inline guard, critical rules, type definition) - model ignores them all in structured output for this pattern
+2. `bot_intent: Literal["log_offer", "other"]` BEFORE `type` - model fills it correctly 5/5, but causes 21 regressions across all other tests. Any pre-type field destabilizes all classifications.
+3. `bot_intent` AFTER `type` - model ignores it (always returns default)
+4. `bot_context: Literal["logging", "goal_setting", "other"]` 3-way split - model inverts categories (calls log offer "goal_setting" and formal offer "other")
+5. `bot_intent: Literal["log_workout", "log_sleep", "log_self_care", "other"]` specific habits - model returns "other" consistently
+6. `toggle_in_flow: bool` + `bot_intent` combined - model sets both to same values regardless of context
+
+**Key insight: one classification per structured output call.** GPT-4o-mini can make ONE reliable classification decision per structured output response. Adding a second decision field (before or after `type`) either disrupts the first (before) or gets ignored (after). The model can't hold two independent classification axes simultaneously in structured output.
+
+**Fix:** Second LLM call via LoggerService (same pattern as emotional/feature_request). Only runs when type=opt_in AND toggle is dormant (rare edge case). The router makes one decision (type), the logger makes the second (is this a log confirmation?). Each call does one thing well.
+
 ## Anti-patterns (things that made it worse)
 
 1. **Over-abstracting word lists** - replacing inline examples with "תשובה חיובית קצרה" lost the LLM

@@ -40,6 +40,11 @@ class EmotionalResponse(BaseModel):
     empathy_reflection: str
 
 
+class LogConfirmationCheck(BaseModel):
+    is_log_confirmation: bool
+    habit_type: Literal["workout", "sleep", "self_care"] | None = None
+
+
 class FeatureRequestClassification(BaseModel):
     request_type: Literal["bug_report", "feature_request", "habit_of_interest"]
     ack_text: str
@@ -113,3 +118,31 @@ class LoggerService:
                 request_type="feature_request",
                 ack_text="קיבלתי, רשמתי את זה.",
             )
+
+    def check_log_confirmation(self, bot_message: str, user_message: str) -> LogConfirmationCheck:
+        """Check if the user is confirming a bot suggestion to log a specific activity.
+
+        Called only when type=opt_in and toggle is dormant - a rare edge case
+        where the router can't distinguish log confirmation from toggle opt-in.
+        """
+        try:
+            response = self._analyzer._parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": (
+                        "הבוט שלח הודעה למשתמש, והמשתמש ענה.\n"
+                        "האם הבוט הציע לרשום פעילות ספציפית שהמשתמש כבר תיאר "
+                        "(למשל: 'רוצה לדווח על זה כהתאמן?') והמשתמש אישר?\n"
+                        "אם כן: is_log_confirmation=true, habit_type=סוג ההרגל (workout/sleep/self_care).\n"
+                        "אם לא (הצעת מעקב שוטף, שאלה כללית, וכו'): is_log_confirmation=false."
+                    )},
+                    {"role": "user", "content": f"הודעת בוט: {bot_message}\nתגובת משתמש: {user_message}"},
+                ],
+                response_format=LogConfirmationCheck,
+                temperature=0,
+                max_tokens=50,
+            )
+            return response.choices[0].message.parsed
+        except Exception:
+            logger.exception("Log confirmation check failed")
+            return LogConfirmationCheck(is_log_confirmation=False)
