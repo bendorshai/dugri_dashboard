@@ -191,7 +191,7 @@ def create_bot(
     app.add_handler(CallbackQueryHandler(h.handle_food_edit_callback, pattern=f"^{CB_FOOD_EDIT}"))
     app.add_handler(CallbackQueryHandler(h.handle_food_delete_callback, pattern=f"^{CB_FOOD_DELETE}"))
     app.add_handler(CallbackQueryHandler(h.handle_food_again_callback, pattern=f"^{CB_FOOD_AGAIN}"))
-app.add_handler(CallbackQueryHandler(h.handle_weekly_callback, pattern=f"^{CB_WEEKLY}"))
+    app.add_handler(CallbackQueryHandler(h.handle_weekly_callback, pattern=f"^{CB_WEEKLY}"))
     app.add_handler(CallbackQueryHandler(h.handle_daily_callback, pattern=f"^{CB_DAILY}"))
     app.add_handler(CallbackQueryHandler(h.handle_feedback_callback, pattern=f"^{CB_FEEDBACK}"))
     app.add_handler(CallbackQueryHandler(h.handle_emotional_callback, pattern=f"^{CB_EMOTIONAL}"))
