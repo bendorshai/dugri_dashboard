@@ -3,14 +3,15 @@ test_feature_request.py - TDD tests for the feature request system.
 
 Covers:
 - FeatureRequestRepository.log() with new fields (request_type, message_id, chat_id)
-- FeatureRequestRepository.log() backward compat (no new fields)
+- FeatureRequestRepository.log() stores chat_history when provided
+- FeatureRequestRepository.log() backward compat (no new fields, no chat_history)
 - LoggerService.classify_feature_request() returns sub-type + ack
 - LoggerService.classify_feature_request() fallback on GPT failure
-- MessageRouterService.route_feature_request() logs and returns ack
-- MessageRouterService.route_help() passes request_type="knowledge_gap"
-- _dispatch_v2 routes feature_request to logger + router service
+- MessageRouterService.route_feature_request() logs with chat_history and returns ack
+- MessageRouterService.route_help() passes request_type="knowledge_gap" with chat_history
+- _dispatch_v2 routes feature_request to logger + router service, passes recent_messages as chat_history
 - Menu button callback sets pending_feature_request state
-- Pending feature request consumed on next message
+- Pending feature request consumed on next message, includes chat_history
 """
 
 from __future__ import annotations
@@ -120,6 +121,36 @@ class TestFeatureRequestRepository:
         inserted = col.insert_one.call_args[0][0]
         assert inserted["request_type"] == "habit_of_interest"
 
+    def test_log_stores_chat_history(self):
+        """Chat history is saved in the document for admin context."""
+        col = _make_mock_collection()
+        repo = FeatureRequestRepository(col)
+        history = [
+            {"role": "user", "text": "אכלתי סלט", "timestamp": "2026-06-16T10:00:00Z"},
+            {"role": "bot", "text": "רשמתי סלט.", "timestamp": "2026-06-16T10:00:01Z"},
+        ]
+        repo.log(
+            telegram_user_id=123,
+            question_text="יש באג",
+            bot_response="רשמתי.",
+            request_type="bug_report",
+            chat_history=history,
+        )
+        inserted = col.insert_one.call_args[0][0]
+        assert inserted["chat_history"] == history
+
+    def test_log_omits_chat_history_when_none(self):
+        """Backward compat: no chat_history key when not provided."""
+        col = _make_mock_collection()
+        repo = FeatureRequestRepository(col)
+        repo.log(
+            telegram_user_id=123,
+            question_text="שאלה",
+            bot_response="תשובה",
+        )
+        inserted = col.insert_one.call_args[0][0]
+        assert "chat_history" not in inserted
+
 
 # ---------------------------------------------------------------------------
 # LoggerService.classify_feature_request
@@ -200,6 +231,10 @@ class TestMessageRouterServiceFeatureRequest:
             help_service=MagicMock(),
             feature_request_repo=fr_repo,
         )
+        chat_history = [
+            {"role": "user", "text": "אכלתי פיצה", "timestamp": "2026-06-16T10:00:00Z"},
+            {"role": "bot", "text": "רשמתי פיצה.", "timestamp": "2026-06-16T10:00:01Z"},
+        ]
         result = svc.route_feature_request(
             telegram_user_id=123,
             message_text="יש באג",
@@ -207,6 +242,7 @@ class TestMessageRouterServiceFeatureRequest:
             bot_response="רשמתי.",
             message_id=456,
             chat_id=123,
+            chat_history=chat_history,
         )
         assert result.response_text == "רשמתי."
         fr_repo.log.assert_called_once_with(
@@ -216,6 +252,7 @@ class TestMessageRouterServiceFeatureRequest:
             request_type="bug_report",
             message_id=456,
             chat_id=123,
+            chat_history=chat_history,
         )
 
     def test_route_feature_request_survives_repo_failure(self):
@@ -246,18 +283,20 @@ class TestMessageRouterServiceFeatureRequest:
         help_result.response_text = "לא יודע."
         help_svc.answer.return_value = help_result
 
+        recent = [
+            {"role": "user", "text": "שאלה קודמת", "timestamp": "2026-06-16T10:00:00Z"},
+        ]
         svc = MessageRouterService(
             habit_service=MagicMock(),
             qa_service=MagicMock(),
             help_service=help_svc,
             feature_request_repo=fr_repo,
         )
-        svc.route_help("שאלה שלא יודע", telegram_user_id=123)
+        svc.route_help("שאלה שלא יודע", recent_messages=recent, telegram_user_id=123)
         fr_repo.log.assert_called_once()
-        call_kwargs = fr_repo.log.call_args
-        assert call_kwargs[1].get("request_type") == "knowledge_gap" or \
-               (len(call_kwargs[0]) >= 4 and call_kwargs[0][3] == "knowledge_gap") or \
-               call_kwargs.kwargs.get("request_type") == "knowledge_gap"
+        call_kwargs = fr_repo.log.call_args.kwargs
+        assert call_kwargs["request_type"] == "knowledge_gap"
+        assert call_kwargs["chat_history"] == recent
 
 
 # ---------------------------------------------------------------------------
@@ -363,6 +402,7 @@ class TestDispatchFeatureRequest:
                 assert call_kwargs["request_type"] == "bug_report"
                 assert call_kwargs["message_id"] == 789
                 assert call_kwargs["chat_id"] == 123
+                assert call_kwargs["chat_history"] == []  # matches _DISPATCH_PARAMS recent_messages
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)

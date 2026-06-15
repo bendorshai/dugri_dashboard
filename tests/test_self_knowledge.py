@@ -265,7 +265,13 @@ class TestRouteHelpIntegration:
 
         router.route_help("למה לא רגשות?", recent_messages=None, telegram_user_id=456)
 
-        repo.log.assert_called_once_with(456, "למה לא רגשות?", "לא יודע.", request_type="knowledge_gap")
+        repo.log.assert_called_once_with(
+            telegram_user_id=456,
+            question_text="למה לא רגשות?",
+            bot_response="לא יודע.",
+            request_type="knowledge_gap",
+            chat_history=None,
+        )
 
     def test_no_log_when_no_knowledge_gap(self):
         repo = MagicMock()

@@ -87,8 +87,11 @@ class MessageRouterService:
         if result.knowledge_gap and self._feature_request_repo and telegram_user_id:
             try:
                 self._feature_request_repo.log(
-                    telegram_user_id, question_text, result.response_text,
+                    telegram_user_id=telegram_user_id,
+                    question_text=question_text,
+                    bot_response=result.response_text,
                     request_type="knowledge_gap",
+                    chat_history=recent_messages,
                 )
             except Exception:
                 logger.exception("Failed to log feature request")
@@ -103,6 +106,7 @@ class MessageRouterService:
         bot_response: str,
         message_id: int | None = None,
         chat_id: int | None = None,
+        chat_history: list[dict] | None = None,
     ) -> RouteResult:
         if self._feature_request_repo:
             try:
@@ -113,6 +117,7 @@ class MessageRouterService:
                     request_type=request_type,
                     message_id=message_id,
                     chat_id=chat_id,
+                    chat_history=chat_history,
                 )
             except Exception:
                 logger.exception("Failed to log feature request")

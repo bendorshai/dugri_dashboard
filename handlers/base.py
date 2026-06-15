@@ -692,6 +692,7 @@ class HealthHandlers:
                 bot_response=classification.ack_text,
                 message_id=message.message_id,
                 chat_id=message.chat_id,
+                chat_history=recent_messages,
             )
             await self._send(classification.ack_text, tid=tid, message=message)
             return
