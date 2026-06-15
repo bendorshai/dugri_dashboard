@@ -296,3 +296,38 @@ def create_workout_log():
     if entry_id:
         return jsonify({"ok": True, "id": entry_id}), 201
     return jsonify({"error": "could not create"}), 400
+
+
+@api_bp.route("/sleep-log", methods=["POST"])
+@login_required
+def create_sleep_log():
+    data = request.get_json()
+    if not data or not data.get("date") or not data.get("sleep_time"):
+        return jsonify({"error": "missing date or sleep_time"}), 400
+    date_str = datetime.strptime(data["date"], "%Y-%m-%d").strftime("%d/%m/%Y")
+    storage = _get_storage()
+    entry_id = storage.create_sleep_log(
+        session["user_email"], date_str, data["sleep_time"],
+    )
+    if entry_id:
+        return jsonify({"ok": True, "id": entry_id}), 201
+    return jsonify({"error": "could not create"}), 400
+
+
+@api_bp.route("/self-care-log", methods=["POST"])
+@login_required
+def create_self_care_log():
+    data = request.get_json()
+    if not data or not data.get("date") or not data.get("description"):
+        return jsonify({"error": "missing date or description"}), 400
+    # Compute ISO week_id from date
+    d = datetime.strptime(data["date"], "%Y-%m-%d")
+    iso_year, iso_week, _ = d.isocalendar()
+    week_id = f"{iso_year}-W{iso_week:02d}"
+    storage = _get_storage()
+    entry_id = storage.create_self_care_log(
+        session["user_email"], week_id, data["description"],
+    )
+    if entry_id:
+        return jsonify({"ok": True, "id": entry_id}), 201
+    return jsonify({"error": "could not create"}), 400

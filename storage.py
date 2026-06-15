@@ -241,6 +241,30 @@ class DashboardStorage:
         })
         return str(result.inserted_id)
 
+    def create_sleep_log(self, email: str, date_str: str, sleep_time: str) -> str | None:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return None
+        result = self._db["sleep_logs"].insert_one({
+            "telegram_user_id": tid,
+            "date": date_str,
+            "sleep_time": sleep_time,
+            "created_at": datetime.now(timezone.utc),
+        })
+        return str(result.inserted_id)
+
+    def create_self_care_log(self, email: str, week_id: str, description: str) -> str | None:
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return None
+        result = self._db["self_care_logs"].insert_one({
+            "telegram_user_id": tid,
+            "week_id": week_id,
+            "description": description,
+            "created_at": datetime.now(timezone.utc),
+        })
+        return str(result.inserted_id)
+
     # -- Activity history --
 
     def get_activity_history(

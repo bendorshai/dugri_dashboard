@@ -1050,21 +1050,37 @@
                             <button class="action-btn action-btn--delete" @click.stop="confirmDelete = { type: 'sleep', id: day.sleep.id, description: 'שינה ' + day.sleep.sleep_time }" title="מחק">🗑️</button>
                         </div>
                     </template>
-                    <template x-if="!day.sleep">
+                    <template x-if="!day.sleep && !(addingSleep && addingSleep.dayDate === day.date)">
                         <div class="habit-item habit-item--empty">
                             <span>—</span>
                             <span>לא נרשמה שינה</span>
                         </div>
                     </template>
+                    <!-- Add sleep -->
+                    <div x-show="addingSleep && addingSleep.dayDate === day.date" class="add-workout-form">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.9rem; font-weight: 600; white-space: nowrap;">שעת שינה:</span>
+                            <input type="time" class="edit-input" x-model="addingSleep.sleep_time" style="width: 120px; direction: ltr;">
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                            <button class="btn--small btn--primary" @click="submitNewSleep()">שמור</button>
+                            <button class="btn--small btn--secondary" @click="addingSleep = null">ביטול</button>
+                        </div>
+                    </div>
+                    <button class="btn--small btn--outline" style="margin-top: 0.5rem;"
+                            @click.stop="addingSleep = { dayDate: day.date, sleep_time: '' }"
+                            x-show="!day.sleep && (!addingSleep || addingSleep.dayDate !== day.date)">
+                        ➕ הוסף שעת שינה
+                    </button>
                 </div>
 
-                <!-- Self-care (shown when available) -->
-                <div class="history-section" x-show="day.self_care && day.self_care.length > 0">
+                <!-- Self-care -->
+                <div class="history-section">
                     <div class="history-section-title history-section-title--selfcare">
                         <span class="history-section-emoji">💆</span>
                         <span>משהו לעצמי</span>
                     </div>
-                    <div class="self-care-chips">
+                    <div class="self-care-chips" x-show="day.self_care && day.self_care.length > 0">
                         <template x-for="sc in (day.self_care || [])" :key="sc.id">
                             <div class="self-care-chip">
                                 <span>✨</span>
@@ -1085,6 +1101,20 @@
                             </div>
                         </template>
                     </div>
+                    <!-- Add self-care -->
+                    <div x-show="addingSelfCare && addingSelfCare.dayDate === day.date" class="add-workout-form">
+                        <input type="text" class="edit-input" x-model="addingSelfCare.description" placeholder="מה עשית לעצמך?"
+                               @keydown.enter="submitNewSelfCare()">
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                            <button class="btn--small btn--primary" @click="submitNewSelfCare()">שמור</button>
+                            <button class="btn--small btn--secondary" @click="addingSelfCare = null">ביטול</button>
+                        </div>
+                    </div>
+                    <button class="btn--small btn--outline" style="margin-top: 0.5rem;"
+                            @click.stop="addingSelfCare = { dayDate: day.date, description: '' }"
+                            x-show="!addingSelfCare || addingSelfCare.dayDate !== day.date">
+                        ➕ הוסף משהו טוב לעצמי
+                    </button>
                 </div>
 
                 <!-- No meals fallback -->
@@ -1125,6 +1155,8 @@ function historyApp() {
         editingEntry: null,
         confirmDelete: null,
         addingWorkout: null,
+        addingSleep: null,
+        addingSelfCare: null,
 
         get isToday() {
             if (!this.currentSingleDate) return true;
@@ -1332,6 +1364,42 @@ function historyApp() {
                 }
             } catch (err) {
                 console.error('Add workout failed:', err);
+            }
+        },
+
+        async submitNewSleep() {
+            const s = this.addingSleep;
+            if (!s || !s.sleep_time) return;
+            try {
+                const resp = await fetch('/api/sleep-log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: s.dayDate, sleep_time: s.sleep_time }),
+                });
+                if (resp.ok) {
+                    this.addingSleep = null;
+                    await this.fetchRange();
+                }
+            } catch (err) {
+                console.error('Add sleep failed:', err);
+            }
+        },
+
+        async submitNewSelfCare() {
+            const sc = this.addingSelfCare;
+            if (!sc || !sc.description.trim()) return;
+            try {
+                const resp = await fetch('/api/self-care-log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: sc.dayDate, description: sc.description.trim() }),
+                });
+                if (resp.ok) {
+                    this.addingSelfCare = null;
+                    await this.fetchRange();
+                }
+            } catch (err) {
+                console.error('Add self-care failed:', err);
             }
         },
 
