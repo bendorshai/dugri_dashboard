@@ -101,7 +101,8 @@ if isinstance(mock_ext, MagicMock):
     mock_ext.ContextTypes = MagicMock()
     mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
-from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult, CorrectionFoodItem, MessageClassification
+from types import SimpleNamespace
+from analyzer import FoodItem, FoodAnalysisResult, FoodPhotoResult, CorrectionFoodItem
 from keyboards import format_daily_status
 from models.profile import UserProfile, EatingWindow, Targets, ToggleState, Toggles
 from models.food import FoodEntry
@@ -773,7 +774,7 @@ class TestToggleCancelHandler:
         return h
 
     def _make_classification(self, toggle_name=None, refusal_tone="sharp"):
-        return MessageClassification(
+        return SimpleNamespace(
             type="toggle_cancel",
             toggle_name=toggle_name,
             refusal_tone=refusal_tone,

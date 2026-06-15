@@ -41,6 +41,10 @@ test_router_llm.py - TDD tests for the slim Router (Module 1).
 # 8. Iron rule: specific food + emotion = meal (not emotional).
 # 9. emotional = pure feeling, no specific food item, no habit action.
 # 10. inappropriate = abuse/trolling -> canned response, no wasted LLM.
+# 11. Toggle state gates opt-in flows and goal monitoring, NOT logging.
+#     sleep/workout/self_care classify by message content regardless of
+#     toggle state (dormant, cancelled, active - doesn't matter).
+#     Exception: sleep at active_goal_pending - time is a goal, not a log.
 #
 # OPT_IN vs CONVERSATIONAL BOUNDARY (the critical distinction):
 #   opt_in when:
@@ -470,6 +474,43 @@ class TestHabitRouting:
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
         )
         assert result.type == "sleep"
+
+
+# ============================================================================
+# HABIT LOGGING REGARDLESS OF TOGGLE STATE (Rule 11)
+# ============================================================================
+
+class TestHabitLoggingWithInactiveToggle:
+    """Habit reports should classify correctly even when toggle is not active.
+    Toggle state gates opt-in flows and goal monitoring, NOT logging permission.
+    """
+
+    def test_workout_report_dormant_toggle(self):
+        """Workout report should classify as workout even when toggle is dormant."""
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer, "התאמנתי היום",
+            toggle_state=_build_toggle_state(workouts="dormant"),
+        )
+        assert result.type == "workout"
+
+    def test_sleep_report_dormant_toggle(self):
+        """Sleep report should classify as sleep even when toggle is dormant."""
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer, "הלכתי לישון ב-23:00",
+            toggle_state=_build_toggle_state(sleep="dormant"),
+        )
+        assert result.type == "sleep"
+
+    def test_self_care_report_cancelled_toggle(self):
+        """Self-care report should classify as self_care even when toggle is cancelled."""
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer, "הלכתי לים",
+            toggle_state=_build_toggle_state(self_care="cancelled"),
+        )
+        assert result.type == "self_care"
 
 
 # ============================================================================

@@ -41,7 +41,7 @@ if isinstance(mock_ext, MagicMock):
 
 from analyzer import (
     RouterClassification, TimedFoodAnalysisResult, TimedFoodGroup,
-    FoodItem, MessageClassification,
+    FoodItem,
 )
 from models.profile import User, EatingWindow, Targets, ToggleState, Toggles
 from models.food import FoodEntry
@@ -181,9 +181,7 @@ class TestDispatchV2Routing:
             corrected_calories=750,
             corrected_protein=45,
         )
-        h.analyzer.classify_message.return_value = MessageClassification(
-            type="correction", correction=correction,
-        )
+        h.analyzer.analyze_correction.return_value = correction
 
         params = {**_DISPATCH_PARAMS, "last_entry": last_entry}
         await h._dispatch_v2(

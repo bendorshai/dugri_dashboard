@@ -95,33 +95,6 @@ class HabitEntry(BaseModel):
     self_care_description: str | None = None
 
 
-class MessageClassification(BaseModel):
-    type: Literal[
-        "meal", "correction", "sleep", "workout", "self_care",
-        "help", "answer_question", "feedback_request",
-        "feedback_reaction",
-        "toggle_cancel", "toggle_activate",
-        "conversation_reply", "name_declaration", "gender_declaration",
-        "emotional",
-        "unrelated",
-        "none",  # internal only: error/timeout fallback, never returned by LLM
-    ]
-    meal: TimedFoodAnalysisResult | None = None
-    correction: CorrectionResult | None = None
-    sleep_time: str | None = None
-    workout_note: str | None = None
-    self_care_description: str | None = None
-    habit_entries: list[HabitEntry] | None = None
-    question_text: str | None = None
-    toggle_name: str | None = None
-    declared_name: str | None = None
-    declared_gender: Literal["male", "female", "other"] | None = None
-    freeform_response: str | None = None
-    refusal_tone: Literal["sharp", "soft"] | None = None
-    emotional_context: bool = False
-    empathy_reflection: str | None = None
-
-
 class RouterClassification(BaseModel):
     """Slim Router output - classifies message type and extracts meal data inline.
 
@@ -142,7 +115,6 @@ class RouterClassification(BaseModel):
 
 
 from prompts import (
-    CLASSIFIER_SYSTEM_PROMPT,
     CORRECTION_PHOTO_ADDENDUM,
     CORRECTION_SYSTEM_PROMPT,
     EXTRACT_BODY_STATS_PROMPT,
@@ -275,69 +247,6 @@ class FoodAnalyzer:
         except Exception:
             logger.exception("GPT parse_message failed for: %s", text[:80])
             return MessageParseResult(type="unknown")
-
-    def classify_message(
-        self, text: str, today_str: str, last_entry: dict | None = None,
-        recent_messages: list[dict] | None = None,
-        toggle_state: str | None = None,
-        reply_context: str | None = None,
-        day_name: str = "",
-        on_usage: TokenCallback | None = None,
-    ) -> MessageClassification:
-        """Classify a message using GPT. This is the ONLY entry point for all user messages."""
-        system = ""
-
-        # Telegram reply context (user swiped left on a specific message)
-        if reply_context:
-            system += f"ההודעה הנוכחית היא תגובה ישירה להודעת הבוט:\n\"{reply_context}\"\n\n"
-
-        # Toggle state (always present - gives the classifier the full picture)
-        if toggle_state:
-            system += f"מצב ההרגלים של המשתמש:\n{toggle_state}\n\n"
-
-        system += CLASSIFIER_SYSTEM_PROMPT
-        date_line = f"\nהתאריך של היום: {today_str}"
-        if day_name:
-            date_line += f" (יום {day_name})"
-        system += date_line + "\n"
-
-        if last_entry:
-            system += (
-                f"\nהרשומה האחרונה שנרשמה:\n"
-                f"תיאור: {last_entry.get('description', '')}\n"
-                f"קלוריות: {last_entry.get('calories', 0)}\n"
-                f"חלבון: {last_entry.get('protein', 0)}\n"
-            )
-        else:
-            system += "\nאין רשומה קודמת. תיקון → food חדש.\n"
-
-        if recent_messages:
-            system += "\nתזכורת: לצורך סיווג רגשות - התעלם מההיסטוריה. סווג רק לפי תוכן ההודעה הנוכחית.\n"
-            system += "היסטוריית שיחה אחרונה (מהישנה לחדשה):\n"
-            for msg in recent_messages:
-                role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
-                system += f"[{role_label}]: {msg.get('text', '')}\n"
-            system += "\nההודעה הנוכחית של המשתמש מופיעה למטה. השתמש בהיסטוריה כדי להבין את ההקשר.\nחשוב: אם ההודעה הנוכחית מזכירה מאכל/שתייה ספציפיים - סווג כ-meal עם emotional_context=true, לא כ-emotional, ללא קשר להיסטוריה.\n"
-
-        try:
-            response = self._parse(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": text},
-                ],
-                response_format=MessageClassification,
-                temperature=0,
-                on_usage=on_usage,
-            )
-            result = response.choices[0].message.parsed
-            if result is None:
-                logger.warning("GPT classifier returned None for: %s", text[:80])
-                return MessageClassification(type="none")
-            return result
-        except Exception:
-            logger.exception("GPT classifier failed for: %s", text[:80])
-            return MessageClassification(type="none")
 
     def route_message(
         self, text: str, today_str: str, last_entry: dict | None = None,

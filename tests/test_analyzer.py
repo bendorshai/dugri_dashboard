@@ -48,7 +48,7 @@ correct prompts, models, and structured output formats are used.
 # -------------------------------------
 # - Sends question with week_csv and targets context
 #
-# MESSAGE PARSING (parse_message / classify_message)
+# MESSAGE PARSING (parse_message / route_message)
 # ---------------------------------------------------
 # - Returns MessageParseResult with type="food" + FoodAnalysisResult
 #   or type="correction" + CorrectionResult

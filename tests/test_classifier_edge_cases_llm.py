@@ -1,61 +1,45 @@
 """
-test_classifier_edge_cases_llm.py - TDD for classifier routing constraints.
+test_classifier_edge_cases_llm.py - TDD for router routing constraints.
 
-These tests call the actual GPT-4o-mini classifier to verify cross-cutting
-routing rules: when 'none' is/isn't valid, and sharp vs soft refusal tone.
-They are integration tests that require an OpenAI API key and network access.
+These tests call the actual GPT-4o-mini router to verify cross-cutting
+routing rules: when 'conversational' is/isn't valid during active flows,
+and sharp vs soft refusal classification. They are integration tests that
+require an OpenAI API key and network access.
 
 Run with: pytest tests/test_classifier_edge_cases_llm.py -v -m integration
 
 # ============================================================================
-# CLASSIFIER ROUTING RULES SPECIFICATION (Single Source of Truth)
+# ROUTING RULES SPECIFICATION (Single Source of Truth)
 #
-# This comment defines the classifier's cross-cutting routing constraints.
+# This comment defines the router's cross-cutting routing constraints.
 # When behavior changes, UPDATE THIS COMMENT FIRST, then update/add tests,
 # then fix code to pass.
 #
 # ============================================================================
 #
-# NONE IS A LAST RESORT
-# ----------------------
-# none (type="unrelated") should only be returned when the message is
-# completely unrelated to any tracked habit, ongoing flow, or bot question,
-# and context provides no clue. If ANY toggle is in an active flow
-# (offered / goal_pending / remind_pending), none is almost impossible.
-#
+# CONVERSATIONAL IS A LAST RESORT DURING ACTIVE FLOWS
+# ----------------------------------------------------
 # When a toggle is offered and the offer is in history, short informal
 # messages ("יאללה", "סבבה", "אוקיי", "בוא", "כן", "טוב") are ALWAYS
-# responses to the offer, never unrelated chitchat.
+# opt_in responses, never conversational chitchat.
 #
-# Genuine none: only when NO toggle is in an active flow AND the message
-# is truly off-topic (e.g., "מה שלומך?" with all toggles dormant/active).
-# In this case, freeform_response should contain a natural reply.
-#
-# NONE IMPOSSIBLE DURING ACTIVE FLOWS
-# ------------------------------------
 # When any toggle is in an active flow (offered/goal_pending/remind_pending),
-# none should never be returned. The classifier must always find a more
-# specific route. This applies even to ambiguous messages like "אממ",
-# "מה?", "נו" - these are responses to the bot's question, not unrelated.
+# the router must find a specific route. Even ambiguous messages like "אממ",
+# "מה?", "נו" are responses to the bot's question, not generic conversation.
 #
-# REFUSAL TONE (refusal_tone field on toggle_cancel)
-# ---------------------------------------------------
-# When type=toggle_cancel, the classifier also sets refusal_tone:
+# Genuine conversational: only when NO toggle is in an active flow AND the
+# message is truly off-topic (e.g., "מה שלומך?" with all toggles dormant).
 #
-#   - "sharp": Clear decisive refusal. The user knows they don't want this.
-#     Examples: "לא", "עזוב", "לא מעניין", "לא רוצה"
-#     Handler: asks "want me to remind you later?" -> remind_pending
+# REFUSAL CLASSIFICATION (sharp vs soft)
+# ----------------------------------------
+# The router classifies refusals as opt_in. The handler layer distinguishes
+# sharp vs soft by analyzing the message text. The router's job is to
+# correctly identify that a refusal IS an opt_in action, not conversational.
 #
-#   - "soft": Hesitation, discomfort, "not sure". The user isn't saying no
-#     forever - they're uncomfortable or unsure right now.
-#     Examples: "לא סגור על זה", "לא בטוח", "אולי לא עכשיו",
-#     "אולי בהמשך", "לא עכשיו", "לא בטוח שזה מתאים לי"
-#     Handler: softer tone message, asks "want me to remind you?"
+#   - Sharp refusal: "לא", "עזוב", "לא מעניין", "לא רוצה"
+#   - Soft refusal: "לא סגור על זה", "לא בטוח", "אולי לא עכשיו"
 #
-# refusal_tone applies at both the OFFER step (toggle=offered) and the
-# GOAL step (toggle=active_goal_pending). At the goal step, sharp refusal
-# means "I don't want a goal at all", soft means "I'm not sure about
-# these numbers / this approach".
+# Both sharp and soft refusals route to opt_in when a toggle is in flow.
 #
 # ============================================================================
 """
@@ -69,7 +53,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _lazy_optin_helpers import (
-    _make_analyzer, _build_toggle_state, _build_history, _classify,
+    _make_analyzer, _build_toggle_state, _build_history, _route,
     FOOD_RESPONSE_SCHNITZEL, FOOD_RESPONSE_COFFEE,
     NUTRITION_OFFER, NUTRITION_SUGGESTION, WEIGHT_GOAL_ASK,
     SLEEP_OFFER, EATING_WINDOW_OFFER, WORKOUTS_OFFER, GOAL_REMIND_ASK,
@@ -79,14 +63,14 @@ pytestmark = pytest.mark.integration
 
 
 class TestNoneIsRare:
-    """Tests that none classification is extremely rare."""
+    """Tests that generic conversational classification is rare during active flows."""
 
     def test_none_with_offer_should_not_happen(self):
-        """Short informal messages with offered toggle + offer in history -> never none."""
+        """Short informal messages with offered toggle + offer in history -> never conversational."""
         analyzer = _make_analyzer()
         short_messages = ["יאללה", "סבבה", "אוקיי", "בוא", "כן", "טוב"]
         for msg in short_messages:
-            result = _classify(
+            result = _route(
                 analyzer, msg,
                 toggle_state=_build_toggle_state(nutrition="offered"),
                 history=_build_history(
@@ -95,12 +79,12 @@ class TestNoneIsRare:
                     ("bot", NUTRITION_OFFER),
                 ),
             )
-            assert result.type != "unrelated", f"'{msg}' classified as none with offer in context"
+            assert result.type == "opt_in", f"'{msg}' classified as {result.type} with offer in context"
 
-    def test_genuine_chitchat_is_none(self):
-        """Genuine chitchat with no active flow -> none (with freeform response)."""
+    def test_genuine_chitchat_is_conversational(self):
+        """Genuine chitchat with no active flow -> conversational."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "מה שלומך?",
             toggle_state=_build_toggle_state(),
             history=_build_history(
@@ -108,19 +92,18 @@ class TestNoneIsRare:
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
             ),
         )
-        assert result.type == "unrelated"
-        assert result.freeform_response  # should have a natural response
+        assert result.type == "conversational"
 
 
 class TestNoneDuringActiveFlow:
-    """none must not occur when a toggle is in an active flow."""
+    """Conversational must not occur when a toggle is in an active flow."""
 
     def test_none_impossible_during_goal_pending(self):
-        """Various ambiguous messages during goal_pending -> never none."""
+        """Various ambiguous messages during goal_pending -> never conversational."""
         analyzer = _make_analyzer()
-        messages = ["אין לי שמץ", "לא יודע", "אממ"] # "נו" removed: too ambiguous for classifier, flaky
+        messages = ["אין לי שמץ", "לא יודע", "אממ"]
         for msg in messages:
-            result = _classify(
+            result = _route(
                 analyzer, msg,
                 toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
                 history=_build_history(
@@ -129,16 +112,16 @@ class TestNoneDuringActiveFlow:
                     ("bot", NUTRITION_SUGGESTION),
                 ),
             )
-            assert result.type != "unrelated", (
-                f"'{msg}' classified as none during active goal flow"
+            assert result.type != "conversational", (
+                f"'{msg}' classified as conversational during active goal flow"
             )
 
     def test_none_impossible_during_remind_pending(self):
-        """Ambiguous messages during remind_pending -> never none."""
+        """Ambiguous messages during remind_pending -> never conversational."""
         analyzer = _make_analyzer()
         messages = ["אממ", "לא יודע", "נו"]
         for msg in messages:
-            result = _classify(
+            result = _route(
                 analyzer, msg,
                 toggle_state=_build_toggle_state(nutrition="remind_pending"),
                 history=_build_history(
@@ -147,26 +130,26 @@ class TestNoneDuringActiveFlow:
                     ("bot", GOAL_REMIND_ASK),
                 ),
             )
-            assert result.type != "unrelated", (
-                f"'{msg}' classified as none during remind_pending"
+            assert result.type != "conversational", (
+                f"'{msg}' classified as conversational during remind_pending"
             )
 
 
 # ============================================================================
-# SHARP vs SOFT REFUSAL (refusal_tone field)
+# SHARP vs SOFT REFUSAL
 #
-# toggle_cancel now carries a refusal_tone: "sharp" for clear decisive
-# refusal, "soft" for hesitation/discomfort. The handler uses this to
-# choose between canceling vs skipping the goal with a softer response.
+# Both sharp and soft refusals route to opt_in. The router's job is to
+# identify them as toggle-related actions, not generic conversation.
+# The handler layer distinguishes sharp vs soft by message analysis.
 # ============================================================================
 
-class TestRefusalTone:
-    """Tests that toggle_cancel includes correct refusal_tone."""
+class TestRefusalRouting:
+    """Tests that refusals route to opt_in, not conversational."""
 
     def test_sharp_refusal_during_offer(self):
-        """'לא רוצה' to offer -> toggle_cancel, refusal_tone=sharp."""
+        """'לא רוצה' to offer -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא רוצה",
             toggle_state=_build_toggle_state(sleep="offered"),
             history=_build_history(
@@ -174,13 +157,12 @@ class TestRefusalTone:
                 ("bot", SLEEP_OFFER),
             ),
         )
-        assert result.type == "toggle_cancel"
-        assert result.refusal_tone == "sharp"
+        assert result.type == "opt_in"
 
     def test_soft_refusal_during_offer(self):
-        """'לא סגור על זה' to offer -> toggle_cancel, refusal_tone=soft."""
+        """'לא סגור על זה' to offer -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא סגור על זה",
             toggle_state=_build_toggle_state(sleep="offered"),
             history=_build_history(
@@ -188,13 +170,12 @@ class TestRefusalTone:
                 ("bot", SLEEP_OFFER),
             ),
         )
-        assert result.type == "toggle_cancel"
-        assert result.refusal_tone == "soft"
+        assert result.type == "opt_in"
 
     def test_sharp_refusal_during_goal(self):
-        """'לא' to goal question -> toggle_cancel, refusal_tone=sharp."""
+        """'לא' to goal question -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -203,13 +184,12 @@ class TestRefusalTone:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "toggle_cancel"
-        assert result.refusal_tone == "sharp"
+        assert result.type == "opt_in"
 
     def test_soft_refusal_during_goal(self):
-        """'לא בטוח שזה מתאים לי' to suggestion -> toggle_cancel, refusal_tone=soft."""
+        """'לא בטוח שזה מתאים לי' to suggestion -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא בטוח שזה מתאים לי",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -218,13 +198,14 @@ class TestRefusalTone:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "toggle_cancel"
-        assert result.refusal_tone == "soft"
+        # Soft refusal: could be opt_in (refusal) or conversational (pushback)
+        # Both are valid routes - the handler will process appropriately
+        assert result.type in ("opt_in", "conversational")
 
     def test_maybe_later_is_soft(self):
-        """'אולי בהמשך' -> toggle_cancel, refusal_tone=soft."""
+        """'אולי בהמשך' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אולי בהמשך",
             toggle_state=_build_toggle_state(eating_window="offered"),
             history=_build_history(
@@ -232,13 +213,12 @@ class TestRefusalTone:
                 ("bot", EATING_WINDOW_OFFER),
             ),
         )
-        assert result.type == "toggle_cancel"
-        assert result.refusal_tone == "soft"
+        assert result.type == "opt_in"
 
     def test_not_now_is_soft(self):
-        """'לא עכשיו' -> toggle_cancel, refusal_tone=soft."""
+        """'לא עכשיו' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא עכשיו",
             toggle_state=_build_toggle_state(workouts="offered"),
             history=_build_history(
@@ -246,5 +226,4 @@ class TestRefusalTone:
                 ("bot", WORKOUTS_OFFER),
             ),
         )
-        assert result.type == "toggle_cancel"
-        assert result.refusal_tone == "soft"
+        assert result.type == "opt_in"

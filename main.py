@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "7.6.1"
-VERSION_NOTES = "Fix gender_declaration crash in Router v2 + support 'other' gender with GPT extraction"
+VERSION = "8.0.0"
+VERSION_NOTES = "Decouple habit logging from toggles + remove V1 classifier"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

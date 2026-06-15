@@ -16,10 +16,10 @@ Skip in CI: pytest -m "not integration"
 # feature changes, UPDATE THIS COMMENT FIRST, then update/add tests, then
 # fix code to pass.
 #
-# Related test files (each with their own spec header):
-#   - test_classifier_edge_cases_llm.py: none rarity, refusal_tone
-#   - test_multi_entry_llm.py: multi-entry logging, name collection, feedback
-#   - test_emotional_llm.py: emotional classification, empathy reflection
+# Related test files:
+#   - test_router_llm.py: Router classification tests (primary)
+#   - test_router_integration_llm.py: multi-turn integration tests
+#   - test_multi_intent_router_llm.py: multi-intent detection
 #
 # ============================================================================
 #
@@ -59,6 +59,11 @@ Skip in CI: pytest -m "not integration"
 #
 # The classifier sees the toggle state and the last bot message in history.
 # Together these provide full context for routing - no state machine needed.
+#
+# IMPORTANT: Toggle state gates proactive hooks and goal flows, NOT the
+# ability to log. A user can report sleep/workout/self_care at any time
+# regardless of toggle state. Dormant/cancelled toggles mean Dugri won't
+# proactively ask - but if the user volunteers a report, it gets logged.
 #
 # HABIT SEQUENCE (order of introduction)
 # ----------------------------------------
@@ -378,7 +383,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import messages as M
 
 from _lazy_optin_helpers import (
-    _make_analyzer, _build_toggle_state, _build_history, _classify,
+    _make_analyzer, _build_toggle_state, _build_history, _route,
     FOOD_RESPONSE_SCHNITZEL, FOOD_RESPONSE_COFFEE,
     FOOD_RESPONSE_EGGS, FOOD_RESPONSE_SALAD,
     NUTRITION_OFFER, BODY_STATS_ASK, WEIGHT_GOAL_ASK, NUTRITION_SUGGESTION,
@@ -397,9 +402,9 @@ class TestNutritionOffer:
     """Tests for the initial nutrition tracking offer after first food entry."""
 
     def test_yalla_accepted(self):
-        """User says 'יאללה' to nutrition offer -> conversation_reply."""
+        """User says 'יאללה' to nutrition offer -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "יאללה",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -408,12 +413,12 @@ class TestNutritionOffer:
                 ("bot", NUTRITION_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_ashma_accepted(self):
-        """User says 'אשמח' to nutrition offer -> conversation_reply."""
+        """User says 'אשמח' to nutrition offer -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אשמח",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -422,12 +427,12 @@ class TestNutritionOffer:
                 ("bot", NUTRITION_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_okay_accepted(self):
-        """User says 'אוקיי' -> conversation_reply."""
+        """User says 'אוקיי' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אוקיי",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -436,12 +441,12 @@ class TestNutritionOffer:
                 ("bot", NUTRITION_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_declined(self):
-        """User says 'לא מעניין אותי' -> toggle_cancel."""
+        """User says 'לא מעניין אותי' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא מעניין אותי",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -450,12 +455,12 @@ class TestNutritionOffer:
                 ("bot", NUTRITION_OFFER),
             ),
         )
-        assert result.type == "toggle_cancel"
+        assert result.type == "opt_in"
 
     def test_food_during_offer(self):
         """User sends food while nutrition is in offered state -> meal."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "שניצל עם אורז וסלט",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -469,7 +474,7 @@ class TestNutritionOffer:
     def test_late_reply_in_history(self):
         """User says 'אשמח' after TTL expired, offer still in history window."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אשמח",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -480,14 +485,14 @@ class TestNutritionOffer:
                 ("bot", FOOD_RESPONSE_EGGS),
             ),
         )
-        assert result.type in ("conversation_reply", "toggle_activate")
+        assert result.type == "opt_in"
 
     def test_late_late_reply_out_of_history(self):
         """User says 'אשמח' days later, offer scrolled out of history.
         History is full of recent food entries. Only toggle_state shows 'offered'."""
         analyzer = _make_analyzer()
         # Simulate a full history of food entries that pushed the offer out
-        result = _classify(
+        result = _route(
             analyzer, "אשמח",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -503,13 +508,13 @@ class TestNutritionOffer:
                 ("bot", FOOD_RESPONSE_COFFEE),
             ),
         )
-        assert result.type in ("conversation_reply", "toggle_activate")
+        assert result.type == "opt_in"
 
     def test_late_late_reply_multiple_offered_clear_intent(self):
         """Two habits offered, user's message clearly refers to one.
         Should route to the correct habit without asking for clarification."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אני מתאמן 3 פעמים בשבוע",
             toggle_state=_build_toggle_state(
                 sleep="offered", workouts="offered",
@@ -519,14 +524,13 @@ class TestNutritionOffer:
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
             ),
         )
-        assert result.type in ("conversation_reply", "toggle_activate")
-        if result.type == "toggle_activate":
-            assert result.toggle_name == "workouts"
+        assert result.type == "opt_in"
+        assert result.toggle_name == "workouts"
 
     def test_late_reply_swipe_reply(self):
-        """User swipe-replies 'אשמח' to the original offer -> conversation_reply."""
+        """User swipe-replies 'אשמח' to the original offer -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אשמח",
             toggle_state=_build_toggle_state(nutrition="offered"),
             reply_context=NUTRITION_OFFER,
@@ -537,12 +541,12 @@ class TestNutritionOffer:
                 ("bot", FOOD_RESPONSE_SALAD),
             ),
         )
-        assert result.type in ("conversation_reply", "toggle_activate")
+        assert result.type == "opt_in"
 
     def test_explicit_request_no_prior_offer(self):
-        """User proactively asks to track nutrition -> toggle_activate."""
+        """User proactively asks to track nutrition -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אשמח לעקוב אחרי הרגלי תזונה",
             toggle_state=_build_toggle_state(nutrition="dormant"),
             history=_build_history(
@@ -550,13 +554,13 @@ class TestNutritionOffer:
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
             ),
         )
-        assert result.type == "toggle_activate"
+        assert result.type == "opt_in"
         assert result.toggle_name == "nutrition"
 
     def test_user_asks_why_protein(self):
-        """User asks 'why protein?' during offer -> help (not meal, not none)."""
+        """User asks 'why protein?' during offer -> conversational (not meal, not conversational)."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "למה חלבון? מה זה נותן?",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -565,7 +569,7 @@ class TestNutritionOffer:
                 ("bot", NUTRITION_OFFER),
             ),
         )
-        assert result.type == "help"
+        assert result.type == "conversational"
 
 
 class TestNutritionBodyStats:
@@ -577,9 +581,9 @@ class TestNutritionBodyStats:
     """
 
     def test_comma_separated(self):
-        """Body stats in comma format -> conversation_reply."""
+        """Body stats in comma format -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "174, 112, 36",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -588,12 +592,12 @@ class TestNutritionBodyStats:
                 ("bot", BODY_STATS_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_natural_hebrew(self):
-        """Body stats in natural Hebrew -> conversation_reply."""
+        """Body stats in natural Hebrew -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "גובה 174, משקל 112, גיל 36",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -602,12 +606,12 @@ class TestNutritionBodyStats:
                 ("bot", BODY_STATS_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_multiline(self):
-        """Body stats on multiple lines -> conversation_reply."""
+        """Body stats on multiple lines -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "174\n112 קג\n36 שנים",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -616,16 +620,16 @@ class TestNutritionBodyStats:
                 ("bot", BODY_STATS_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
 
 class TestNutritionWeightGoal:
     """Tests for weight goal step."""
 
     def test_lose_weight(self):
-        """User says they want to lose weight -> conversation_reply."""
+        """User says they want to lose weight -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "ירידה! רוצה להגיע ל 98 קג",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -634,12 +638,12 @@ class TestNutritionWeightGoal:
                 ("bot", WEIGHT_GOAL_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_maintain_weight(self):
-        """User wants to maintain -> conversation_reply."""
+        """User wants to maintain -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לשמור על המשקל",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -648,12 +652,12 @@ class TestNutritionWeightGoal:
                 ("bot", WEIGHT_GOAL_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_gain_weight(self):
-        """User wants to gain -> conversation_reply."""
+        """User wants to gain -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "רוצה לעלות קצת, להגיע ל-80",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -662,13 +666,13 @@ class TestNutritionWeightGoal:
                 ("bot", WEIGHT_GOAL_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_bare_laredet(self):
         """User says just 'לרדת' (to lose) - the exact word from the bot's
         options. Regression: gpt-4o-mini misclassified this as toggle_cancel."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לרדת",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -677,7 +681,7 @@ class TestNutritionWeightGoal:
                 ("bot", "לפני שאחשב - אתה רוצה לרדת, לשמור על המשקל, או לעלות?"),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_weight_goal_all_ask_variants(self):
         """User answers weight goal with ALL NUTRITION_WEIGHT_GOAL_ASK variants.
@@ -687,7 +691,7 @@ class TestNutritionWeightGoal:
         """
         analyzer = _make_analyzer()
         for i, ask_variant in enumerate(M.NUTRITION_WEIGHT_GOAL_ASK):
-            result = _classify(
+            result = _route(
                 analyzer, "לרדת במשקל",
                 toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
                 history=_build_history(
@@ -696,7 +700,7 @@ class TestNutritionWeightGoal:
                     ("bot", ask_variant),
                 ),
             )
-            assert result.type == "conversation_reply", (
+            assert result.type == "opt_in", (
                 f"NUTRITION_WEIGHT_GOAL_ASK variant {i+1}/{len(M.NUTRITION_WEIGHT_GOAL_ASK)} "
                 f"misclassified as {result.type}: {ask_variant!r}"
             )
@@ -706,9 +710,9 @@ class TestNutritionConfirm:
     """Tests for confirming/correcting the GPT suggestion."""
 
     def test_accept_suggestion(self):
-        """User accepts suggestion -> conversation_reply."""
+        """User accepts suggestion -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "נשמע מעולה",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -717,16 +721,16 @@ class TestNutritionConfirm:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_correct_numbers(self):
-        """User corrects with specific numbers -> conversation_reply or correction.
+        """User corrects with specific numbers -> opt_in or correction.
 
         The handler treats both the same in active_goal_pending context:
         extract the numbers as the user's desired targets.
         """
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "1800 קלוריות אבל 180 חלבון",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -735,7 +739,7 @@ class TestNutritionConfirm:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type in ("conversation_reply", "correction")
+        assert result.type in ("opt_in", "correction")
 
     def test_accept_suggestion_all_variants(self):
         """User accepts suggestion with ALL NUTRITION_SUGGESTION variants.
@@ -746,7 +750,7 @@ class TestNutritionConfirm:
         analyzer = _make_analyzer()
         for i, suggestion_template in enumerate(M.NUTRITION_SUGGESTION):
             suggestion = suggestion_template.format(calories=1800, protein=160)
-            result = _classify(
+            result = _route(
                 analyzer, "אוקיי",
                 toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
                 history=_build_history(
@@ -755,7 +759,7 @@ class TestNutritionConfirm:
                     ("bot", suggestion),
                 ),
             )
-            assert result.type == "conversation_reply", (
+            assert result.type == "opt_in", (
                 f"NUTRITION_SUGGESTION variant {i+1}/{len(M.NUTRITION_SUGGESTION)} "
                 f"misclassified as {result.type}: {suggestion!r}"
             )
@@ -766,7 +770,7 @@ class TestNutritionConfirm:
 #
 # When Dugri suggests nutrition targets and the user wants to adjust only
 # one value (e.g., protein but not calories), the classifier must route it
-# as conversation_reply (not toggle_cancel) and the handler must merge the
+# as opt_in (not toggle_cancel) and the handler must merge the
 # user's adjustment with the original suggestion.
 #
 # Real failure (2026-06-07): bot suggested 2200 cal + 179g protein, user
@@ -778,7 +782,7 @@ class TestNutritionPartialAdjustment:
     """Tests for adjusting one value from the nutrition suggestion.
 
     The user accepts the suggestion but wants to change only calories or
-    only protein. This is cooperation (conversation_reply), not refusal.
+    only protein. This is cooperation (opt_in), not refusal.
     """
 
     SUGGESTION_2200 = (
@@ -786,13 +790,13 @@ class TestNutritionPartialAdjustment:
     )
 
     def test_adjust_protein_only(self):
-        """'אני מעדיף 170 גרם חלבון' -> conversation_reply, not toggle_cancel.
+        """'אני מעדיף 170 גרם חלבון' -> opt_in, not toggle_cancel.
 
         Real case from 2026-06-07. User accepted calories but wanted
         different protein. Classifier misrouted as toggle_cancel.
         """
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אני מעדיף 170 גרם חלבון",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -803,15 +807,15 @@ class TestNutritionPartialAdjustment:
                 ("bot", self.SUGGESTION_2200),
             ),
         )
-        assert result.type == "conversation_reply", (
+        assert result.type == "opt_in", (
             f"partial adjustment classified as {result.type} - "
             f"adjusting one number is cooperation, not refusal"
         )
 
     def test_adjust_calories_only(self):
-        """'בוא נעשה 2000 קלוריות' -> conversation_reply."""
+        """'בוא נעשה 2000 קלוריות' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "בוא נעשה 2000 קלוריות",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -820,15 +824,15 @@ class TestNutritionPartialAdjustment:
                 ("bot", self.SUGGESTION_2200),
             ),
         )
-        assert result.type == "conversation_reply", (
+        assert result.type == "opt_in", (
             f"partial adjustment classified as {result.type} - "
             f"adjusting one number is cooperation, not refusal"
         )
 
     def test_adjust_both_values(self):
-        """'אני מעדיף 2000 ו-160' -> conversation_reply."""
+        """'אני מעדיף 2000 ו-160' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אני מעדיף 2000 ו-160",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -837,7 +841,7 @@ class TestNutritionPartialAdjustment:
                 ("bot", self.SUGGESTION_2200),
             ),
         )
-        assert result.type == "conversation_reply", (
+        assert result.type == "opt_in", (
             f"full adjustment classified as {result.type} - "
             f"changing numbers is cooperation, not refusal"
         )
@@ -852,7 +856,7 @@ class TestNutritionPartialAdjustment:
             "אני חושב ש-2000 קלוריות יותר מתאים לי",
         ]
         for phrase in phrases:
-            result = _classify(
+            result = _route(
                 analyzer, phrase,
                 toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
                 history=_build_history(
@@ -861,7 +865,7 @@ class TestNutritionPartialAdjustment:
                     ("bot", self.SUGGESTION_2200),
                 ),
             )
-            assert result.type == "conversation_reply", (
+            assert result.type == "opt_in", (
                 f"'{phrase}' classified as {result.type} - "
                 f"negotiating numbers is cooperation, not refusal"
             )
@@ -875,9 +879,9 @@ class TestSleepOffer:
     """Tests for sleep tracking offer."""
 
     def test_accept_sleep(self):
-        """User accepts sleep tracking -> conversation_reply."""
+        """User accepts sleep tracking -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "כן, בטח",
             toggle_state=_build_toggle_state(nutrition="active_with_goal", sleep="offered"),
             history=_build_history(
@@ -886,12 +890,12 @@ class TestSleepOffer:
                 ("bot", SLEEP_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_explicit_sleep_request(self):
-        """User proactively asks to track sleep -> toggle_activate."""
+        """User proactively asks to track sleep -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אני רוצה לעקוב אחרי השינה שלי",
             toggle_state=_build_toggle_state(nutrition="active_with_goal", sleep="dormant"),
             history=_build_history(
@@ -899,7 +903,7 @@ class TestSleepOffer:
                 ("bot", FOOD_RESPONSE_COFFEE),
             ),
         )
-        assert result.type == "toggle_activate"
+        assert result.type == "opt_in"
         assert result.toggle_name == "sleep"
 
 
@@ -908,13 +912,13 @@ class TestSleepGoalValue:
 
     IMPORTANT: when toggle_state shows sleep=active_goal_pending and history
     shows the bot asked "what time do you aim to sleep?", a time is the GOAL,
-    not a sleep log. The classifier should return conversation_reply, not sleep.
+    not a sleep log. The classifier should return opt_in, not sleep.
     """
 
     def test_sleep_time_natural(self):
-        """User says sleep time naturally during goal setting -> conversation_reply."""
+        """User says sleep time naturally during goal setting -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "23 בלילה",
             toggle_state=_build_toggle_state(sleep="active_goal_pending"),
             history=_build_history(
@@ -923,12 +927,12 @@ class TestSleepGoalValue:
                 ("bot", SLEEP_GOAL_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_sleep_time_formal(self):
-        """User says 23:00 during goal setting -> conversation_reply."""
+        """User says 23:00 during goal setting -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "23:00",
             toggle_state=_build_toggle_state(sleep="active_goal_pending"),
             history=_build_history(
@@ -937,7 +941,7 @@ class TestSleepGoalValue:
                 ("bot", SLEEP_GOAL_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
 
 # ============================================================================
@@ -948,9 +952,9 @@ class TestEatingWindowOffer:
     """Tests for eating window offer."""
 
     def test_accept_eating_window(self):
-        """User accepts eating window -> conversation_reply."""
+        """User accepts eating window -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "בוא ננסה",
             toggle_state=_build_toggle_state(eating_window="offered"),
             history=_build_history(
@@ -959,12 +963,12 @@ class TestEatingWindowOffer:
                 ("bot", EATING_WINDOW_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_window_times_natural(self):
-        """User gives window in natural Hebrew -> conversation_reply."""
+        """User gives window in natural Hebrew -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "מ-8 בבוקר עד 8 בערב",
             toggle_state=_build_toggle_state(eating_window="active_goal_pending"),
             history=_build_history(
@@ -973,12 +977,12 @@ class TestEatingWindowOffer:
                 ("bot", "מתי אתה מתחיל ומסיים לאכול?"),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_update_window_request(self):
-        """User asks to update eating window -> toggle_activate or conversation_reply."""
+        """User asks to update eating window -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "שומע, אני רוצה לעדכן את חלון האכילה",
             toggle_state=_build_toggle_state(eating_window="active_with_goal"),
             history=_build_history(
@@ -986,7 +990,7 @@ class TestEatingWindowOffer:
                 ("bot", FOOD_RESPONSE_SALAD),
             ),
         )
-        assert result.type in ("toggle_activate", "conversation_reply")
+        assert result.type == "opt_in"
 
 
 # ============================================================================
@@ -997,9 +1001,9 @@ class TestWorkoutsOffer:
     """Tests for workouts offer."""
 
     def test_accept_workouts(self):
-        """User accepts workouts -> conversation_reply."""
+        """User accepts workouts -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "קדימה",
             toggle_state=_build_toggle_state(workouts="offered"),
             history=_build_history(
@@ -1008,12 +1012,12 @@ class TestWorkoutsOffer:
                 ("bot", WORKOUTS_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_workout_count_natural(self):
-        """User says '3 פעמים בשבוע' -> conversation_reply."""
+        """User says '3 פעמים בשבוע' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "3 פעמים בשבוע",
             toggle_state=_build_toggle_state(workouts="active_goal_pending"),
             history=_build_history(
@@ -1022,7 +1026,7 @@ class TestWorkoutsOffer:
                 ("bot", "כמה אימונים בשבוע אתה מכוון?"),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
 
 # ============================================================================
@@ -1033,9 +1037,9 @@ class TestSelfCareOffer:
     """Tests for self-care offer. No goal question - just tracking."""
 
     def test_accept_self_care(self):
-        """User accepts self-care (naive user says simply yes) -> conversation_reply."""
+        """User accepts self-care (naive user says simply yes) -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "כן",
             toggle_state=_build_toggle_state(self_care="offered"),
             history=_build_history(
@@ -1044,7 +1048,7 @@ class TestSelfCareOffer:
                 ("bot", SELF_CARE_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
 
 # ============================================================================
@@ -1059,13 +1063,12 @@ class TestGoalRemind:
     """
 
     def test_accept_reminder(self):
-        """User accepts reminder -> conversation_reply or toggle_activate.
+        """User accepts reminder -> opt_in.
 
-        Both are valid: the handler sees remind_pending + affirmative
-        and sets the reminder either way.
+        The handler sees remind_pending + affirmative and sets the reminder.
         """
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "כן, תזכיר לי",
             toggle_state=_build_toggle_state(nutrition="remind_pending"),
             history=_build_history(
@@ -1074,12 +1077,12 @@ class TestGoalRemind:
                 ("bot", GOAL_REMIND_ASK),
             ),
         )
-        assert result.type in ("conversation_reply", "toggle_activate")
+        assert result.type == "opt_in"
 
     def test_decline_reminder_forever(self):
-        """User declines reminder -> toggle_cancel."""
+        """User declines reminder -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא, תעזוב",
             toggle_state=_build_toggle_state(nutrition="remind_pending"),
             history=_build_history(
@@ -1088,12 +1091,12 @@ class TestGoalRemind:
                 ("bot", GOAL_REMIND_ASK),
             ),
         )
-        assert result.type == "toggle_cancel"
+        assert result.type == "opt_in"
 
     def test_accept_reminder_casual(self):
-        """Casual 'כן' to reminder question -> conversation_reply."""
+        """Casual 'כן' to reminder question -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "כן",
             toggle_state=_build_toggle_state(sleep="remind_pending"),
             history=_build_history(
@@ -1102,12 +1105,12 @@ class TestGoalRemind:
                 ("bot", GOAL_REMIND_ASK),
             ),
         )
-        assert result.type in ("conversation_reply", "toggle_activate")
+        assert result.type == "opt_in"
 
     def test_accept_reminder_sure(self):
-        """'סבבה' to reminder question -> conversation_reply."""
+        """'סבבה' to reminder question -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "סבבה",
             toggle_state=_build_toggle_state(eating_window="remind_pending"),
             history=_build_history(
@@ -1116,12 +1119,12 @@ class TestGoalRemind:
                 ("bot", GOAL_REMIND_ASK),
             ),
         )
-        assert result.type in ("conversation_reply", "toggle_activate")
+        assert result.type == "opt_in"
 
     def test_decline_reminder_not_interested(self):
-        """'לא מעניין' to reminder question -> toggle_cancel."""
+        """'לא מעניין' to reminder question -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא מעניין",
             toggle_state=_build_toggle_state(workouts="remind_pending"),
             history=_build_history(
@@ -1130,14 +1133,14 @@ class TestGoalRemind:
                 ("bot", GOAL_REMIND_ASK),
             ),
         )
-        assert result.type == "toggle_cancel"
+        assert result.type == "opt_in"
 
     def test_reminder_not_none(self):
-        """Any response during remind_pending -> never none."""
+        """Any response during remind_pending -> never conversational."""
         analyzer = _make_analyzer()
         messages = ["כן", "לא", "אולי", "נו", "סבבה"]
         for msg in messages:
-            result = _classify(
+            result = _route(
                 analyzer, msg,
                 toggle_state=_build_toggle_state(nutrition="remind_pending"),
                 history=_build_history(
@@ -1146,8 +1149,8 @@ class TestGoalRemind:
                     ("bot", GOAL_REMIND_ASK),
                 ),
             )
-            assert result.type != "unrelated", (
-                f"'{msg}' classified as none during remind_pending"
+            assert result.type != "conversational", (
+                f"'{msg}' classified as conversational during remind_pending"
             )
 
 
@@ -1155,9 +1158,9 @@ class TestToggleCancel:
     """Tests for cancelling tracking mid-flow or standalone."""
 
     def test_cancel_during_offer(self):
-        """User refuses offer -> toggle_cancel."""
+        """User refuses offer -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא רוצה",
             toggle_state=_build_toggle_state(sleep="offered"),
             history=_build_history(
@@ -1166,12 +1169,12 @@ class TestToggleCancel:
                 ("bot", SLEEP_OFFER),
             ),
         )
-        assert result.type == "toggle_cancel"
+        assert result.type == "opt_in"
 
     def test_cancel_standalone(self):
-        """User asks to stop tracking sleep -> toggle_cancel."""
+        """User asks to stop tracking sleep -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "תפסיק לשאול אותי על שינה",
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
             history=_build_history(
@@ -1179,13 +1182,13 @@ class TestToggleCancel:
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
             ),
         )
-        assert result.type == "toggle_cancel"
+        assert result.type == "opt_in"
         assert result.toggle_name == "sleep"
 
     def test_cancel_natural_language(self):
-        """User says 'I don't want nutrition tracking' -> toggle_cancel."""
+        """User says 'I don't want nutrition tracking' -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אני לא רוצה מעקב תזונה",
             toggle_state=_build_toggle_state(nutrition="active_with_goal"),
             history=_build_history(
@@ -1193,7 +1196,7 @@ class TestToggleCancel:
                 ("bot", FOOD_RESPONSE_COFFEE),
             ),
         )
-        assert result.type == "toggle_cancel"
+        assert result.type == "opt_in"
         assert result.toggle_name == "nutrition"
 
 
@@ -1260,19 +1263,19 @@ class TestGoalShortcut:
 #
 # When the user expresses uncertainty ("I have no clue", "whatever you say")
 # during goal-setting, it's NOT a refusal - it's deference. The classifier
-# must route to conversation_reply so the handler accepts the suggestion.
+# must route to opt_in so the handler accepts the suggestion.
 # ============================================================================
 
 class TestUncertaintyDuringGoal:
-    """Uncertain/deferring responses during goal-setting -> conversation_reply."""
+    """Uncertain/deferring responses during goal-setting -> opt_in."""
 
     def test_no_clue_during_nutrition_confirm(self):
-        """'אין לי שמץ' after nutrition suggestion -> conversation_reply.
+        """'אין לי שמץ' after nutrition suggestion -> opt_in.
 
         Regression: was misclassified as none, breaking the goal flow.
         """
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אין לי שמץ",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -1281,14 +1284,14 @@ class TestUncertaintyDuringGoal:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "conversation_reply", (
+        assert result.type == "opt_in", (
             f"'אין לי שמץ' during goal confirm misclassified as {result.type}"
         )
 
     def test_deference_during_nutrition_confirm(self):
-        """'מה שאתה אומר' after nutrition suggestion -> conversation_reply."""
+        """'מה שאתה אומר' after nutrition suggestion -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "מה שאתה אומר",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -1297,12 +1300,12 @@ class TestUncertaintyDuringGoal:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_dont_know_during_sleep_goal(self):
-        """'אני לא יודע' when asked for sleep goal -> conversation_reply."""
+        """'אני לא יודע' when asked for sleep goal -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אני לא יודע",
             toggle_state=_build_toggle_state(sleep="active_goal_pending"),
             history=_build_history(
@@ -1311,12 +1314,12 @@ class TestUncertaintyDuringGoal:
                 ("bot", SLEEP_GOAL_ASK),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_you_decide_during_goal(self):
-        """'תחליט אתה' after suggestion -> conversation_reply."""
+        """'תחליט אתה' after suggestion -> opt_in."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "תחליט אתה",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -1325,12 +1328,12 @@ class TestUncertaintyDuringGoal:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
     def test_doesnt_matter_during_goal(self):
-        """'לא משנה' during goal -> conversation_reply (deference, not refusal)."""
+        """'לא משנה' during goal -> opt_in (deference, not refusal)."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "לא משנה",
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
             history=_build_history(
@@ -1339,4 +1342,4 @@ class TestUncertaintyDuringGoal:
                 ("bot", NUTRITION_SUGGESTION),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"

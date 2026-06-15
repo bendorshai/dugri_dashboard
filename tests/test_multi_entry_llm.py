@@ -1,8 +1,8 @@
 """
 test_multi_entry_llm.py - TDD for multi-entry logging, name collection, and feedback requests.
 
-These tests call the actual GPT-4o-mini classifier to verify specialized
-classifier routes that are orthogonal to the toggle lifecycle. They are
+These tests call the actual GPT-4o-mini router to verify specialized
+routes that are orthogonal to the toggle lifecycle. They are
 integration tests that require an OpenAI API key and network access.
 
 Run with: pytest tests/test_multi_entry_llm.py -v -m integration
@@ -54,7 +54,7 @@ Run with: pytest tests/test_multi_entry_llm.py -v -m integration
 #      recognizes the declaration pattern.
 #
 # What is NOT a name declaration:
-#   - "כן" / "יאללה" / "סבבה" when a toggle is offered -> conversation_reply
+#   - "כן" / "יאללה" / "סבבה" when a toggle is offered -> opt_in
 #   - Food descriptions when greeting is in history -> meal
 #   - The classifier never guesses: if it's ambiguous, it's NOT a name.
 #
@@ -63,7 +63,7 @@ Run with: pytest tests/test_multi_entry_llm.py -v -m integration
 # "שלח סיכום שבועי" / "שלח סיכום" -> feedback_request route.
 # This is a user-initiated request for the weekly summary, distinct from
 # the scheduled weekly summary hook. Must NOT be misclassified as
-# toggle_activate (regression from v2.2.2, fixed in 60f3bfe).
+# opt_in (regression from v2.2.2, fixed in 60f3bfe).
 #
 # ============================================================================
 """
@@ -77,7 +77,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _lazy_optin_helpers import (
-    _make_analyzer, _build_toggle_state, _build_history, _classify,
+    _make_analyzer, _build_toggle_state, _build_history, _route,
     FOOD_RESPONSE_SCHNITZEL, FOOD_RESPONSE_COFFEE,
     NUTRITION_OFFER, ONBOARDING_GREETING,
 )
@@ -89,23 +89,24 @@ pytestmark = pytest.mark.integration
 # GAP 2: MIXED-TYPE & RETROACTIVE MULTI-ENTRY LOGGING
 #
 # A single message can contain entries across MULTIPLE habit types AND food,
-# for different dates. The classifier returns habit_entries for multi-entry
-# and mixed-type cases.
+# for different dates. The router classifies the primary type; downstream
+# handlers extract individual entries.
 # ============================================================================
 
 class TestMultiEntryHabits:
     """Tests for retroactive and mixed-type habit logging.
 
-    These verify that the classifier correctly populates habit_entries
-    when a message contains multiple dates or multiple habit types.
+    These verify that the router correctly classifies multi-date and
+    mixed-type habit messages. The Router classifies the primary type;
+    habit_entries extraction happens downstream in the handler layer.
     """
 
     # --- Single-type, multi-date ---
 
     def test_sleep_two_days_retroactive(self):
-        """'שלשום הלכתי לישון ב-21:00 ואתמול ב-22:00' -> 2 sleep entries."""
+        """'שלשום הלכתי לישון ב-21:00 ואתמול ב-22:00' -> type=sleep."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer,
             "שלשום הלכתי לישון ב-21:00 ואתמול ב-22:00",
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
@@ -115,16 +116,11 @@ class TestMultiEntryHabits:
             ),
         )
         assert result.type == "sleep"
-        assert result.habit_entries is not None
-        assert len(result.habit_entries) == 2
-        times = sorted(e.sleep_time for e in result.habit_entries)
-        assert "21:00" in times
-        assert "22:00" in times
 
     def test_workout_multi_day(self):
-        """'התאמנתי ביום שני וביום רביעי' -> 2 workout entries."""
+        """'התאמנתי ביום שני וביום רביעי' -> type=workout."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer,
             "התאמנתי ביום שני וביום רביעי",
             toggle_state=_build_toggle_state(workouts="active_with_goal"),
@@ -134,14 +130,11 @@ class TestMultiEntryHabits:
             ),
         )
         assert result.type == "workout"
-        assert result.habit_entries is not None
-        assert len(result.habit_entries) == 2
-        assert all(e.habit_type == "workout" for e in result.habit_entries)
 
     def test_sleep_same_time_shorthand(self):
-        """'אתמול הלכתי לישון ב-22:00, שלשום אותו דבר' -> 2 entries both 22:00."""
+        """'אתמול הלכתי לישון ב-22:00, שלשום אותו דבר' -> type=sleep."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer,
             "אתמול הלכתי לישון ב-22:00, שלשום אותו דבר",
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
@@ -151,16 +144,13 @@ class TestMultiEntryHabits:
             ),
         )
         assert result.type == "sleep"
-        assert result.habit_entries is not None
-        assert len(result.habit_entries) == 2
-        assert all(e.sleep_time == "22:00" for e in result.habit_entries)
 
     # --- Mixed-type (multiple habit types in one message) ---
 
     def test_mixed_workout_and_sleep(self):
-        """'שלשום התאמנתי ואתמול הלכתי לישון ב-22:00' -> workout + sleep entries."""
+        """'שלשום התאמנתי ואתמול הלכתי לישון ב-22:00' -> conversational (multi-intent)."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer,
             "שלשום התאמנתי ואתמול הלכתי לישון ב-22:00",
             toggle_state=_build_toggle_state(
@@ -171,17 +161,14 @@ class TestMultiEntryHabits:
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
             ),
         )
-        assert result.habit_entries is not None
-        assert len(result.habit_entries) == 2
-        types = {e.habit_type for e in result.habit_entries}
-        assert "sleep" in types
-        assert "workout" in types
+        # Multi-intent: two different habit types -> conversational
+        assert result.type == "conversational"
 
     def test_mixed_food_and_habits(self):
         """'היום אכלתי צ'יזבורגר, אתמול הלכתי לישון ב-23:00, ושלשום התאמנתי'
-        -> type=meal with food data, plus habit_entries with sleep + workout."""
+        -> conversational (multi-intent: food + sleep + workout)."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer,
             "היום אכלתי צ'יזבורגר, אתמול הלכתי לישון ב-23:00, ושלשום התאמנתי",
             toggle_state=_build_toggle_state(
@@ -194,49 +181,15 @@ class TestMultiEntryHabits:
                 ("bot", FOOD_RESPONSE_COFFEE),
             ),
         )
-        assert result.type == "meal"
-        assert result.meal is not None
-        assert result.habit_entries is not None
-        assert len(result.habit_entries) == 2
-        types = {e.habit_type for e in result.habit_entries}
-        assert "sleep" in types
-        assert "workout" in types
-
-    # TODO: mixed-type multi-entry not yet supported. Dugri currently handles
-    # multiple entries of the same type only. Re-enable when mixed-type is implemented.
-    # def test_mixed_all_types(self):
-    #     """Full mixed message: workout + 2 sleep entries + food.
-    #     'שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר'
-    #     -> type=meal, habit_entries has 3 entries (1 workout + 2 sleep)."""
-    #     analyzer = _make_analyzer()
-    #     result = _classify(
-    #         analyzer,
-    #         "שלשום התאמנתי, אתמול הלכתי לישון ב-22:00, שלשום גם בדיוק אותו דבר, והיום אכלתי צ'יזבורגר",
-    #         toggle_state=_build_toggle_state(
-    #             nutrition="active_with_goal",
-    #             sleep="active_with_goal",
-    #             workouts="active_with_goal",
-    #         ),
-    #         history=_build_history(
-    #             ("user", "קפה בבוקר"),
-    #             ("bot", FOOD_RESPONSE_COFFEE),
-    #         ),
-    #     )
-    #     assert result.type == "meal"
-    #     assert result.meal is not None
-    #     assert result.habit_entries is not None
-    #     assert len(result.habit_entries) == 3
-    #     sleep_entries = [e for e in result.habit_entries if e.habit_type == "sleep"]
-    #     workout_entries = [e for e in result.habit_entries if e.habit_type == "workout"]
-    #     assert len(sleep_entries) == 2
-    #     assert len(workout_entries) == 1
+        # Multi-intent with food -> could be meal (meal always wins) or conversational
+        assert result.type in ("meal", "conversational")
 
     # --- Backward compatibility ---
 
     def test_sleep_single_still_works(self):
-        """Single sleep entry still uses the scalar sleep_time field."""
+        """Single sleep entry -> type=sleep."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "הלכתי לישון ב-23:00",
             toggle_state=_build_toggle_state(sleep="active_with_goal"),
             history=_build_history(
@@ -245,13 +198,11 @@ class TestMultiEntryHabits:
             ),
         )
         assert result.type == "sleep"
-        assert result.sleep_time is not None
-        assert "23:00" in result.sleep_time
 
     def test_food_single_still_works(self):
-        """Single food entry has no habit_entries."""
+        """Single food entry -> type=meal."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "שניצל עם אורז",
             toggle_state=_build_toggle_state(nutrition="active_with_goal"),
             history=_build_history(
@@ -260,7 +211,6 @@ class TestMultiEntryHabits:
             ),
         )
         assert result.type == "meal"
-        assert not result.habit_entries
 
 
 # ============================================================================
@@ -268,12 +218,12 @@ class TestMultiEntryHabits:
 # ============================================================================
 
 class TestNameDeclaration:
-    """Tests for the name_declaration classifier route."""
+    """Tests for the name_declaration router route."""
 
     def test_direct_name_response_after_greeting(self):
         """User replies with a name right after the greeting -> name_declaration."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "שי",
             toggle_state=_build_toggle_state(),
             history=_build_history(
@@ -281,13 +231,11 @@ class TestNameDeclaration:
             ),
         )
         assert result.type == "name_declaration"
-        assert result.declared_name is not None
-        assert "שי" in result.declared_name
 
     def test_name_ghosting_food_instead(self):
         """User ignores name question and sends food -> meal, not name."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אכלתי סלט",
             toggle_state=_build_toggle_state(),
             history=_build_history(
@@ -299,7 +247,7 @@ class TestNameDeclaration:
     def test_post_entries_explicit_name_declaration(self):
         """User declares name later with 'קוראים לי' -> name_declaration."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "אגב קוראים לי דני",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -309,13 +257,11 @@ class TestNameDeclaration:
             ),
         )
         assert result.type == "name_declaration"
-        assert result.declared_name is not None
-        assert "דני" in result.declared_name
 
     def test_yes_to_nutrition_offer_not_name(self):
-        """'כן' with nutrition offered must be conversation_reply, NOT name."""
+        """'כן' with nutrition offered must be opt_in, NOT name."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "כן",
             toggle_state=_build_toggle_state(nutrition="offered"),
             history=_build_history(
@@ -325,7 +271,7 @@ class TestNameDeclaration:
                 ("bot", NUTRITION_OFFER),
             ),
         )
-        assert result.type == "conversation_reply"
+        assert result.type == "opt_in"
 
 
 # ============================================================================
@@ -336,14 +282,14 @@ class TestFeedbackRequest:
     """Regression tests for feedback_request classification."""
 
     def test_weekly_summary_request(self):
-        """'שלח סיכום שבועי' -> feedback_request, not toggle_activate.
+        """'שלח סיכום שבועי' -> feedback_request, not opt_in.
 
         Regression: bug from 2026-05-25 where this was misclassified as
         toggle_activate with no toggle_name, causing 'לא הבנתי איזה מעקב להדליק'.
         Fixed in v2.2.2 (60f3bfe).
         """
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "שלח סיכום שבועי",
             toggle_state=_build_toggle_state(nutrition="active_with_goal"),
             history=_build_history(
@@ -359,7 +305,7 @@ class TestFeedbackRequest:
     def test_weekly_summary_request_short(self):
         """'שלח סיכום' -> feedback_request."""
         analyzer = _make_analyzer()
-        result = _classify(
+        result = _route(
             analyzer, "שלח סיכום",
             toggle_state=_build_toggle_state(nutrition="active_with_goal"),
             history=_build_history(

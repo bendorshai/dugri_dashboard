@@ -17,7 +17,7 @@ from repositories.feedback_repository import WeeklyFeedbackRepository
 from repositories.sleep_repository import SleepRepository
 from repositories.workout_repository import WorkoutRepository
 from repositories.self_care_repository import SelfCareRepository
-from analyzer import FoodAnalyzer, MessageClassification
+from analyzer import FoodAnalyzer
 
 
 def _make_profile(**kwargs):
@@ -41,25 +41,6 @@ def _make_feedback_service():
                           sleep_repo, workout_repo, self_care_repo)
     return svc, analyzer, food_repo, user_repo, feedback_repo
 
-
-class TestClassifierToggleTypes:
-    def test_toggle_cancel_type_exists(self):
-        mc = MessageClassification(type="toggle_cancel", toggle_name="weekly_summary")
-        assert mc.type == "toggle_cancel"
-        assert mc.toggle_name == "weekly_summary"
-
-    def test_toggle_activate_type_exists(self):
-        mc = MessageClassification(type="toggle_activate", toggle_name="sleep")
-        assert mc.type == "toggle_activate"
-        assert mc.toggle_name == "sleep"
-
-    def test_toggle_name_can_be_none(self):
-        mc = MessageClassification(type="meal")
-        assert mc.toggle_name is None
-
-    def test_feedback_reaction_type_exists(self):
-        mc = MessageClassification(type="feedback_reaction")
-        assert mc.type == "feedback_reaction"
 
 
 class TestFeedbackServiceShouldOfferWeekly:

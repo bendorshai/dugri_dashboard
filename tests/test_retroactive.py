@@ -103,25 +103,6 @@ class TestTimedFoodGroupModel:
         assert len(result.groups) == 1
 
 
-class TestMessageClassificationWithTimedMeal:
-    def test_classification_meal_field_accepts_timed_result(self):
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult, MessageClassification
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
-                temporal_label="עכשיו",
-                date="05/06/2026",
-                time="13:00",
-                items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
-                total_calories=400,
-                total_protein=30,
-            ),
-        ])
-        mc = MessageClassification(type="meal", meal=timed)
-        assert mc.type == "meal"
-        assert mc.meal is not None
-        assert len(mc.meal.groups) == 1
-
-
 # ---------------------------------------------------------------------------
 # Response formatting tests
 # ---------------------------------------------------------------------------
@@ -243,9 +224,7 @@ class TestHandleMessageRetroactive:
 
     @staticmethod
     def _set_meal_classification(handler, timed):
-        """Set both old and new classification mocks for a meal result."""
-        from analyzer import MessageClassification
-        handler.analyzer.classify_message.return_value = MessageClassification(type="meal", meal=timed)
+        """Set route_message mock for a meal result."""
         handler.analyzer.route_message.return_value = RouterClassification(type="meal", meal=timed)
 
     @pytest.mark.asyncio
@@ -256,7 +235,7 @@ class TestHandleMessageRetroactive:
     async def test_multi_group_creates_multiple_entries(self, mock_send, mock_react, mock_now, _kb):
         """When GPT returns multiple groups, handler should create one FoodEntry per group."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult, MessageClassification
+        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -328,7 +307,7 @@ class TestHandleMessageRetroactive:
     async def test_daily_totals_exclude_retroactive_entries(self, mock_send, mock_react, mock_now, _kb):
         """Daily summary should reflect only today's entries, not retroactive ones."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult, MessageClassification
+        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -387,7 +366,7 @@ class TestHandleMessageRetroactive:
     async def test_all_retro_shows_confirmation_no_daily_summary(self, mock_send, mock_react, mock_now, _kb):
         """When all entries are retroactive, show confirmation instead of daily summary."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult, MessageClassification
+        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -437,7 +416,7 @@ class TestHandleMessageRetroactive:
     async def test_single_group_today_backward_compatible(self, mock_send, mock_react, mock_now, _kb):
         """Single group for today should behave like the old flow."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult, MessageClassification
+        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -495,7 +474,7 @@ class TestHandleMessageRetroactive:
     async def test_last_entry_stores_latest_group(self, mock_send, mock_react, mock_now, _kb):
         """last_entry in chat_data should be the chronologically latest entry."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult, MessageClassification
+        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)

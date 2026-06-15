@@ -195,14 +195,9 @@ def _build_history(*messages) -> list[dict]:
     return result
 
 
-def _classify(analyzer, text, toggle_state=None,
-              history=None, reply_context=None):
-    """Convenience wrapper for classify_message with all context.
-
-    No pending_state is passed. The classifier infers the conversation step
-    from toggle_state + history alone.
-    """
-    return analyzer.classify_message(
+def _route(analyzer, text, toggle_state=None, history=None, reply_context=None):
+    """Convenience wrapper for route_message."""
+    return analyzer.route_message(
         text=text,
         today_str=datetime.now().strftime("%d/%m/%Y"),
         last_entry=None,

@@ -4,7 +4,7 @@ prompts.py - Centralized GPT system prompts with shared building blocks.
 Content is loaded from .txt files in content/prompts/.
 Building blocks are composed via {{include:filename}} directives in the .txt files.
 
-IMPORTANT: Before editing classifier_system_prompt.txt, read skills/heavy-classifier-prompting.md.
+IMPORTANT: Before editing router_system_prompt.txt, read skills/heavy-classifier-prompting.md.
 That prompt is complex (structure > content, rule ordering matters, GPT-4o-mini anchors on early
 patterns). The skill documents proven patterns, anti-patterns, and the testing procedure.
 

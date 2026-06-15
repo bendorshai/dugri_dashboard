@@ -601,19 +601,35 @@ class HealthHandlers:
             return
 
         if rtype == "correction" and last_entry:
-            # Re-analyze via old classifier for correction data
-            classification = self.analyzer.classify_message(
-                message.text, calendar_today, last_entry,
-                recent_messages=recent_messages[:-1] if recent_messages else [],
-                toggle_state=toggle_state,
-                reply_context=reply_context,
-                day_name=day_name,
+            entry_id = last_entry["entry_id"]
+            correction_history = context.chat_data.get("correction_histories", {}).get(entry_id, [])
+
+            # Re-download photo if available so the LLM has visual context
+            photo_b64 = None
+            photo_file_id = last_entry.get("photo_file_id")
+            if photo_file_id:
+                try:
+                    file = await context.bot.get_file(photo_file_id)
+                    photo_bytes = await file.download_as_bytearray()
+                    photo_b64 = base64.b64encode(photo_bytes).decode("utf-8")
+                except Exception:
+                    logger.warning("Failed to re-download photo %s for correction", photo_file_id)
+
+            correction = self.analyzer.analyze_correction(
+                original_description=last_entry["description"],
+                original_calories=last_entry["calories"],
+                original_protein=last_entry["protein"],
+                correction_history=correction_history,
+                new_correction=message.text,
+                today_str=calendar_today,
+                photo_base64=photo_b64,
             )
-            if classification.correction:
+            if correction:
                 await self._handle_correction(
-                    message, context, classification.correction, last_entry,
+                    message, context, correction, last_entry,
                     profile, calendar_today, tid,
                 )
+                context.chat_data.setdefault("correction_histories", {})[entry_id] = correction_history + [message.text]
                 return
 
         if rtype == "sleep" and self.message_router:
@@ -1072,304 +1088,28 @@ class HealthHandlers:
                 toggle_lines.append(f"- {label}: cancelled")
         toggle_state = "\n".join(toggle_lines) if toggle_lines else None
 
-        # Check pending states BEFORE classification - these have explicit context
-        # that would be lost if routed through the generic classifier.
+        # Pending correction from edit flow (must check before Router)
         if await self._handle_pending_correction(message, context, tid, profile):
             return
-        # Classify the user message.
-        # USE_ROUTER_V2 switches between old classifier and new modular Router.
-        from constants import USE_ROUTER_V2
 
+        # Classify the user message via Router.
         self._debug_classification = None
         self._debug_router_type = None
 
-        if USE_ROUTER_V2:
-            # New Router: slim classification + inline meal extraction
-            router_result = self.analyzer.route_message(
-                message.text, calendar_today, last_entry,
-                recent_messages=recent_messages[:-1],
-                toggle_state=toggle_state,
-                reply_context=reply_context,
-                day_name=day_name,
-            )
-            self._debug_router_type = router_result.type
-            self._debug_classification = router_result.type
-            await self._dispatch_v2(
-                message, context, tid, profile, router_result,
-                calendar_today, day_name, stats_date, time_str, within_window,
-                last_entry, recent_messages, toggle_state, reply_context,
-            )
-            return
-
-        # Old classifier path (fallback when USE_ROUTER_V2=False)
-        classification = self.analyzer.classify_message(
+        router_result = self.analyzer.route_message(
             message.text, calendar_today, last_entry,
             recent_messages=recent_messages[:-1],
             toggle_state=toggle_state,
             reply_context=reply_context,
             day_name=day_name,
         )
-        self._debug_classification = classification.type
-
-        # conversation_reply: user is responding to something the bot asked
-        if classification.type == "conversation_reply":
-            await self._handle_conversation_reply(
-                message, context, tid, profile, classification,
-            )
-            return
-
-        # Route non-food types through MessageRouterService
-        if classification.type == "correction" and classification.correction and last_entry:
-            await self._handle_correction(message, context, classification.correction, last_entry, profile, calendar_today, tid)
-            return
-
-        if classification.type == "sleep" and self.message_router:
-            if classification.habit_entries:
-                text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
-            else:
-                result = self.message_router.route_sleep(tid, classification.sleep_time or time_str, stats_date)
-                text = result.response_text
-            edu = self._get_education_intro(tid, "sleep", profile)
-            text = f"{text}\n\n{edu}" if edu else text
-            if classification.emotional_context and self.emotional_support_service:
-                inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
-                text = f"{inline}\n\n{text}"
-            await self._send(text, tid=tid, message=message)
-            return
-
-        if classification.type == "workout" and self.message_router:
-            if classification.habit_entries:
-                text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
-            else:
-                result = self.message_router.route_workout(tid, stats_date, classification.workout_note)
-                text = result.response_text
-            edu = self._get_education_intro(tid, "workouts", profile)
-            text = f"{text}\n\n{edu}" if edu else text
-            if classification.emotional_context and self.emotional_support_service:
-                inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
-                text = f"{inline}\n\n{text}"
-            await self._send(text, tid=tid, message=message)
-            return
-
-        if classification.type == "self_care" and self.message_router:
-            if classification.habit_entries:
-                text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
-            else:
-                from datetime import datetime as dt
-                week_id = dt.strptime(stats_date, "%d/%m/%Y").strftime("%G-W%V")
-                result = self.message_router.route_self_care(tid, classification.self_care_description or message.text, week_id)
-                text = result.response_text
-            edu = self._get_education_intro(tid, "self_care", profile)
-            text = f"{text}\n\n{edu}" if edu else text
-            if classification.emotional_context and self.emotional_support_service:
-                inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
-                text = f"{inline}\n\n{text}"
-            await self._send(text, tid=tid, message=message)
-            return
-
-        if classification.type == "help" and self.message_router:
-            result = self.message_router.route_help(
-                classification.question_text or message.text,
-                recent_messages=recent_messages,
-                telegram_user_id=tid,
-            )
-            await self._send(result.response_text, tid=tid, message=message, reply_markup=make_daily_summary_keyboard())
-            return
-
-        if classification.type == "answer_question" and self.message_router:
-            result = self.message_router.route_answer_question(
-                tid, classification.question_text or message.text,
-                calendar_today, self._target_cal(profile), self._target_prot(profile),
-            )
-            await self._send(result.response_text, tid=tid, message=message, reply_markup=make_daily_summary_keyboard())
-            return
-
-        if classification.type == "toggle_cancel":
-            await self._handle_toggle_cancel(message, context, tid, profile, classification)
-            return
-
-        if classification.type == "toggle_activate" and self.toggle_service:
-            toggle_name = classification.toggle_name
-            if toggle_name and toggle_name in {"sleep", "eating_window", "workouts", "self_care", "nutrition", "weekly_summary"}:
-                if self._is_toggle_in_flow(profile, toggle_name):
-                    logger.info("toggle_activate for %s rerouted to conversation_reply (toggle in flow)", toggle_name)
-                    await self._handle_conversation_reply(message, context, tid, profile, classification)
-                    return
-                # Goal update: toggle already active with goal set
-                toggle = getattr(profile.toggles, toggle_name, None)
-                if toggle and toggle.goal_status == "set" and self.goal_service:
-                    response = self.goal_service.handle_goal_update(tid, toggle_name, message.text, profile)
-                    if response:
-                        await self._send(response, tid=tid, message=message)
-                        return
-                self.toggle_service.activate_toggle(tid, toggle_name)
-                if self.goal_service and self.goal_service.should_offer_goal(profile, toggle_name):
-                    response = self.goal_service.offer_goal_with_shortcut(tid, toggle_name, message.text)
-                    await self._send(response, tid=tid, message=message)
-                else:
-                    import messages as M
-                    loop_close = M.LOOP_CLOSE_ACTIVATION.get(toggle_name, "")
-                    response = "יפה, נרשמתי. מעכשיו אני עוקב." + loop_close
-                    await self._send(response, tid=tid, message=message)
-            else:
-                await self._send("לא הבנתי איזה מעקב להדליק. נסה שוב?", tid=tid, message=message, save=False)
-            return
-
-        if classification.type == "name_declaration" and self.onboarding_service:
-            name = classification.declared_name or message.text.strip()
-            # Late = greeting is NOT the last bot message (user has been chatting)
-            recent = self.user_repo.get_recent_messages(tid, 5)
-            last_bot = next((m for m in reversed(recent) if m.get("role") == "bot"), None)
-            late = not (last_bot and "איך אתה רוצה שאקרא לך?" in last_bot.get("text", ""))
-            response = self.onboarding_service.handle_name_response(tid, name, late=late)
-            if response:
-                await self._send(response, tid=tid, message=message)
-            return
-
-        if classification.type == "gender_declaration" and self.onboarding_service:
-            gender = classification.declared_gender if classification.declared_gender else None
-            if not gender:
-                text_lower = message.text.strip()
-                if "בת" in text_lower:
-                    gender = "female"
-                elif "בן" in text_lower:
-                    gender = "male"
-            if gender:
-                response = self.onboarding_service.handle_gender_response(tid, gender)
-                if response:
-                    await self._send(response, tid=tid, message=message)
-            return
-
-        if classification.type == "feedback_request":
-            if self.feedback_service:
-                is_first = self.feedback_service.is_first_feedback(tid)
-                feedback_text = self.feedback_service.give_feedback(
-                    tid, stats_date, profile, is_first,
-                )
-                await self._send(feedback_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard())
-            elif self.message_router:
-                result = self.message_router.route_feedback_request()
-                await self._send(result.response_text, tid=tid, message=message, reply_markup=make_main_menu_keyboard())
-            return
-
-        if classification.type == "feedback_reaction":
-            if self.feedback_service:
-                steering = profile.feedback_steering_prompt if profile else None
-                response = self.feedback_service.process_reaction(tid, text, steering)
-                if response:
-                    await self._send(response, tid=tid, message=message)
-            return
-
-        if classification.type == "emotional" and self.emotional_support_service:
-            reflection = classification.empathy_reflection or ""
-            boundary = self.emotional_support_service.get_empathy_response()
-            empathy = f"{reflection}\n\n{boundary}" if reflection else boundary
-            context.chat_data["emotional_message"] = message.text
-            await self._send(
-                empathy, tid=tid, message=message,
-                reply_markup=make_emotional_support_keyboard(),
-            )
-            return
-
-        if classification.type == "unrelated":
-            response = classification.freeform_response or "מה נשמע?"
-            await self._send(response, tid=tid, message=message)
-            return
-
-        if classification.type == "none":
-            # Error fallback (429/timeout) - reroute if in active flow
-            if self._any_toggle_in_flow(profile):
-                logger.info("none (error fallback) rerouted to conversation_reply (toggle in flow)")
-                await self._handle_conversation_reply(message, context, tid, profile, classification)
-                return
-            await self._send("מה נשמע?", tid=tid, message=message)
-            return
-
-        # Default: treat as food (meal type or fallback)
-        from analyzer import TimedFoodAnalysisResult, TimedFoodGroup
-
-        if classification.type == "meal" and classification.meal and classification.meal.groups:
-            food_result = classification.meal
-        else:
-            food_result = self.analyzer.analyze_food_text(message.text, calendar_today, day_name)
-
-        if food_result is None or not food_result.groups:
-            await self._send("לא הצלחתי לזהות מאכל בהודעה. נסה שוב?", tid=tid, message=message, save=False)
-            return
-
-        # Create one FoodEntry per temporal group
-        saved_entries: list[tuple[TimedFoodGroup, FoodEntry]] = []
-        for group in food_result.groups:
-            combined_desc = ", ".join(item.description for item in group.items)
-            entry = FoodEntry(
-                telegram_user_id=tid,
-                date=group.date,
-                time=group.time,
-                description=combined_desc,
-                calories=group.total_calories,
-                protein=group.total_protein,
-                within_window=within_window if group.date == calendar_today else True,
-            )
-            saved = self.food_repo.add(entry)
-            saved_entries.append((group, saved))
-            logger.info("Recorded: %s [%s %s] (%d cal, %dg protein) -> id %s",
-                        combined_desc, group.date, group.time,
-                        group.total_calories, group.total_protein, saved.id)
-
-        # last_entry = chronologically latest (last group)
-        last_group, last_saved = saved_entries[-1]
-        last_desc = ", ".join(item.description for item in last_group.items)
-        context.chat_data["last_entry"] = {
-            "description": last_desc,
-            "calories": last_group.total_calories,
-            "protein": last_group.total_protein,
-            "entry_id": last_saved.id,
-        }
-
-        items_text = self._format_grouped_items_text(food_result.groups, calendar_today)
-
-        # Check if any group lands on the current eating day
-        today_groups = [g for g in food_result.groups if g.date == calendar_today]
-        if today_groups:
-            today_cal = sum(g.total_calories for g in today_groups)
-            today_prot = sum(g.total_protein for g in today_groups)
-            new_daily_cal, new_daily_prot = self.eating_day_svc.get_eating_day_totals(profile, stats_date)
-            prev_cal = new_daily_cal - today_cal
-            prev_protein = new_daily_prot - today_prot
-            alerts = self._check_crossing_alerts(prev_cal, prev_protein, new_daily_cal, new_daily_prot, profile)
-            response = self._build_food_response(items_text, new_daily_cal, new_daily_prot, profile)
-            if alerts:
-                response = f"{alerts}\n\n{response}"
-        else:
-            # All entries are retroactive - no daily summary
-            retro_labels = [g.temporal_label for g in food_result.groups]
-            response = f"{items_text}\n\n✅ נרשם ({', '.join(retro_labels)})"
-
-        last_entry_id = last_saved.id
-        if classification.emotional_context and self.emotional_support_service:
-            inline = classification.empathy_reflection or self.emotional_support_service.get_inline_empathy()
-            response = f"{inline}\n\n{response}"
-        await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))
-        await safe_react(message, OK_HAND)
-
-        # Mixed-type: process habit entries that came alongside the meal
-        if classification.habit_entries:
-            habit_text = self._process_habit_entries(tid, classification.habit_entries, stats_date)
-            if habit_text:
-                await self._send(habit_text, tid=tid, message=message)
-
-        # Protein education on first meal ever
-        if len(self.food_repo.get_all_for_user(tid)) == 1:
-            from dugri_messages import EDU_INTRO_FIRST_LOG
-            edu = EDU_INTRO_FIRST_LOG.get("protein")
-            if edu:
-                await self._send(edu, tid=tid, message=message, save=False)
-
-        # Recompute eating window from actual meal history
-        await self._recompute_eating_window(context, tid, profile)
-
-        # Inline conversation hooks: check if any hooks should fire after this meal
-        await self._check_inline_hooks(message, tid, profile)
+        self._debug_router_type = router_result.type
+        self._debug_classification = router_result.type
+        await self._dispatch_v2(
+            message, context, tid, profile, router_result,
+            calendar_today, day_name, stats_date, time_str, within_window,
+            last_entry, recent_messages, toggle_state, reply_context,
+        )
 
     # ------------------------------------------------------------------
     # Eating window auto-computation

@@ -136,11 +136,6 @@ SILENCE_DAY3_HOURS = 96
 SILENCE_PERMANENT_HOURS = 120
 """Elapsed hours of silence before permanent silencing."""
 
-USE_ROUTER_V2 = True
-"""When True, use the new slim Router for message classification instead of the old classifier.
-The new Router uses modular dispatch (opt_in, conversational, etc.) instead of the old
-15-type classifier. Set to False to revert to old classifier if issues arise."""
-
 # ---------------------------------------------------------------------------
 # Wisdom gems
 # ---------------------------------------------------------------------------
