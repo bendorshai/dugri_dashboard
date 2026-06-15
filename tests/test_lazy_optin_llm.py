@@ -65,6 +65,20 @@ Skip in CI: pytest -m "not integration"
 # regardless of toggle state. Dormant/cancelled toggles mean Dugri won't
 # proactively ask - but if the user volunteers a report, it gets logged.
 #
+# LOG CONFIRMATION vs TOGGLE OPT-IN (critical distinction)
+# ---------------------------------------------------------
+# When the conversational handler asks "want to log this as a workout?"
+# (or sleep/self_care), user confirmation ("כן", "יאללה") = the habit
+# type (workout/sleep/self_care), NOT opt_in. The user is confirming a
+# LOG action for a specific instance, not opting into a tracking toggle.
+# opt_in is ONLY for:
+#   - Formal toggle offers (WORKOUTS_OFFER, SLEEP_OFFER, etc.)
+#   - Goal value setting (active_goal_pending)
+#   - User-initiated tracking requests ("I want to track workouts")
+# The router distinguishes these by checking whether the bot's last
+# message asks about logging a specific activity vs offering ongoing
+# tracking.
+#
 # HABIT SEQUENCE (order of introduction)
 # ----------------------------------------
 # 1. NUTRITION
@@ -1343,3 +1357,67 @@ class TestUncertaintyDuringGoal:
             ),
         )
         assert result.type == "opt_in"
+
+
+# ============================================================================
+# LOG CONFIRMATION vs OPT-IN
+#
+# When the conversational handler suggests logging a specific activity
+# ("want to log this as a workout?"), user confirmation is a LOG action
+# (type=workout), NOT an opt_in. opt_in is only for formal toggle offers,
+# goal flows, and user-initiated tracking requests.
+#
+# Regression: user said "I walked 1.5hrs on Saturday", bot (conversational)
+# responded "great! want to log as workout?", user said "כן!" -
+# router misclassified as opt_in, activated toggle without logging.
+# ============================================================================
+
+class TestLogConfirmationVsOptIn:
+    """Confirmation of bot's logging suggestion = habit type, not opt_in.
+
+    The router uses last_bot_intent (enum field before type) to distinguish:
+    - log_suggestion: bot asked to log a specific activity -> workout/sleep/self_care
+    - toggle_offer: bot offered ongoing tracking -> opt_in
+    - goal_question: bot asked for goal values -> opt_in
+    """
+
+    def test_yes_to_log_workout_suggestion(self):
+        """User says 'כן!' after bot asks 'want to log as workout?' -> workout.
+
+        Exact production scenario: user mentioned walking, conversational
+        handler asked about logging, user confirmed. Toggle is dormant.
+        """
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer, "כן!",
+            toggle_state=_build_toggle_state(workouts="dormant"),
+            history=_build_history(
+                ("user", "אתה יודע שביום שבת הלכתי שעה וחצי ברגל?"),
+                ("bot", "מעולה, הליכה זה תמיד טוב! רוצה לדווח על זה כהתאמן השבוע?"),
+            ),
+        )
+        assert result.type == "workout", (
+            f"'כן!' after bot suggested logging workout misclassified as {result.type} "
+            f"(expected workout - log confirmation, not opt_in)"
+        )
+
+    def test_formal_workout_offer_still_optin(self):
+        """'כן' after formal WORKOUTS_OFFER (toggle offered) -> opt_in.
+
+        Distinguishes from log confirmation: this is a formal tracking
+        offer, not a suggestion to log a specific workout instance.
+        """
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer, "כן",
+            toggle_state=_build_toggle_state(workouts="offered"),
+            history=_build_history(
+                ("user", "שניצל עם אורז"),
+                ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", WORKOUTS_OFFER),
+            ),
+        )
+        assert result.type == "opt_in", (
+            f"'כן' after formal WORKOUTS_OFFER misclassified as {result.type} "
+            f"(expected opt_in)"
+        )
