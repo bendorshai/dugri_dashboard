@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.5.0"
-VERSION_NOTES = "Admin simulator: /internal/simulate endpoint for dashboard testing"
+VERSION = "10.5.1"
+VERSION_NOTES = "Fix simulate endpoint in polling mode (Railway)"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -214,23 +214,28 @@ def main():
                 webhook_url=webhook_url,
             )
     elif port:
-        # Railway without public domain - polling + health check server
-        import asyncio
-        from http.server import HTTPServer, BaseHTTPRequestHandler
+        # Railway without public domain - polling + Tornado server for
+        # health checks and internal API (simulate endpoint)
         import threading
+        import tornado.web
+        import tornado.ioloop
 
-        class _HealthHandler(BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"ok")
-            def log_message(self, *args):
-                pass  # suppress request logs
+        class _HealthHandler(tornado.web.RequestHandler):
+            def get(self):
+                self.write("ok")
 
         port_num = int(port)
-        health_server = HTTPServer(("0.0.0.0", port_num), _HealthHandler)
-        threading.Thread(target=health_server.serve_forever, daemon=True).start()
-        logger.info("Bot starting - polling mode + health check on port %d", port_num)
+        routes = [(r"/", _HealthHandler)]
+        if sim_route:
+            routes.append(sim_route)
+        http_app = tornado.web.Application(routes)
+        http_app.listen(port_num, address="0.0.0.0")
+
+        def _run_tornado():
+            tornado.ioloop.IOLoop.current().start()
+
+        threading.Thread(target=_run_tornado, daemon=True).start()
+        logger.info("Bot starting - polling mode + HTTP on port %d (health + simulate)", port_num)
         app.run_polling(drop_pending_updates=True)
     else:
         # Local dev - polling + simulate endpoint on separate port
