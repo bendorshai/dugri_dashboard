@@ -223,16 +223,33 @@ class TestDispatchV2Routing:
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)
-    async def test_dispatch_sleep(self, mock_send):
+    async def test_dispatch_sleep_uses_extracted_time(self, mock_send):
+        """When classifier extracts sleep_time, route_sleep must receive it, not wall-clock time."""
         h = _make_handler()
-        h.message_router.route_sleep.return_value = MagicMock(response_text="שינה נרשמה")
+        h.message_router.route_sleep.return_value = MagicMock(response_text="שינה נרשמה", entry_id="e1")
         profile = _make_profile()
-        rr = _make_router_result("sleep")
+        rr = _make_router_result("sleep", sleep_time="21:00")
 
         await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
-        h.message_router.route_sleep.assert_called_once()
+        call_args = h.message_router.route_sleep.call_args
+        assert call_args[0][1] == "21:00"  # extracted sleep_time, not wall-clock "14:00"
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_dispatch_sleep_falls_back_to_wall_clock(self, mock_send):
+        """When no sleep_time extracted, route_sleep gets wall-clock time."""
+        h = _make_handler()
+        h.message_router.route_sleep.return_value = MagicMock(response_text="שינה נרשמה", entry_id="e1")
+        profile = _make_profile()
+        rr = _make_router_result("sleep")  # no sleep_time
+
+        await h._handle_classified(
+            _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
+        )
+        call_args = h.message_router.route_sleep.call_args
+        assert call_args[0][1] == "14:00"  # falls back to time_str from _DISPATCH_PARAMS
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)

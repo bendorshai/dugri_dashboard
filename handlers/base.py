@@ -799,7 +799,8 @@ class HealthHandlers:
             date_label = None
             if effective_date != stats_date:
                 date_label = hebrew_day_name(datetime.strptime(effective_date, "%d/%m/%Y"))
-            result = self.message_router.route_sleep(tid, time_str, effective_date, date_label=date_label)
+            effective_time = router_result.sleep_time or time_str
+            result = self.message_router.route_sleep(tid, effective_time, effective_date, date_label=date_label)
             text = result.response_text
             text = self._prepend_empathy(text, router_result)
             edu = self._get_education_intro(tid, "sleep", profile)
