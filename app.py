@@ -169,6 +169,17 @@ def create_app(config: dict | None = None) -> Flask:
         bot_username = config.get("dugri_bot_username", "skinny_slimmy_bot")
         return render_template("404.html", bot_username=bot_username), 404
 
+    # Seed simulator test user
+    mongo_cfg = config.get("mongodb", {})
+    if mongo_cfg.get("uri"):
+        try:
+            from storage import DashboardStorage
+            storage = DashboardStorage(uri=mongo_cfg["uri"], db_name=mongo_cfg["db_name"])
+            if storage.seed_test_user():
+                logger.info("Simulator test user seeded: test@dugri.simulator")
+        except Exception:
+            logger.exception("Failed to seed simulator test user")
+
     return app
 
 

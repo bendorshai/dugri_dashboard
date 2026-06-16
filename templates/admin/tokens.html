@@ -1,6 +1,6 @@
 {% extends "dashboard/layout.html" %}
 
-{% block title %}Dugri — Token Analytics{% endblock %}
+{% block title %}Dugri - Token Analytics{% endblock %}
 
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -15,6 +15,7 @@
         <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
         <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
         <a href="{{ url_for('admin.tokens') }}" class="admin-tab active">Tokens</a>
+        <a href="{{ url_for('admin.simulator') }}" class="admin-tab">Simulator</a>
     </div>
 
     <!-- Date Range Picker -->

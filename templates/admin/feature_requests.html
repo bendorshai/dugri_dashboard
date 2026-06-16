@@ -1,6 +1,6 @@
 {% extends "dashboard/layout.html" %}
 
-{% block title %}Dugri — Feature Requests{% endblock %}
+{% block title %}Dugri - Feature Requests{% endblock %}
 
 {% block dashboard_content %}
 <div class="admin-dashboard">
@@ -11,31 +11,49 @@
         <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
         <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
         <a href="{{ url_for('admin.tokens') }}" class="admin-tab">Tokens</a>
+        <a href="{{ url_for('admin.simulator') }}" class="admin-tab">Simulator</a>
     </div>
 
     <!-- KPI Cards -->
-    <section class="admin-kpis" style="grid-template-columns: 1fr 1fr;">
+    <section class="admin-kpis" style="grid-template-columns: repeat(6, 1fr);">
         <div class="kpi-card">
-            <span class="kpi-label">Total Requests</span>
+            <span class="kpi-label">Total</span>
             <span class="kpi-value">{{ total_requests }}</span>
         </div>
         <div class="kpi-card">
             <span class="kpi-label">Unique Users</span>
             <span class="kpi-value">{{ unique_users }}</span>
         </div>
+        <div class="kpi-card">
+            <span class="kpi-label" style="color: #e74c3c;">Bugs</span>
+            <span class="kpi-value">{{ bugs }}</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label" style="color: #3498db;">Suggestions</span>
+            <span class="kpi-value">{{ suggestions }}</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label" style="color: #e67e22;">Habits</span>
+            <span class="kpi-value">{{ habits }}</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label" style="color: #95a5a6;">Knowledge Gaps</span>
+            <span class="kpi-value">{{ knowledge_gaps }}</span>
+        </div>
     </section>
 
     <!-- Feature Requests Table -->
     <section class="admin-leads" x-data="{ expanded: null }">
-        <h2>Knowledge Gaps</h2>
+        <h2>Feature Requests & Bug Reports</h2>
         <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
-            Questions Dugri couldn't fully answer from its self-knowledge doc.
+            Bug reports, feature suggestions, habit requests, and questions Dugri couldn't answer.
         </p>
         {% if feature_requests %}
         <table class="leads-table error-table">
             <thead>
                 <tr>
                     <th>Date</th>
+                    <th>Type</th>
                     <th>User</th>
                     <th>Question</th>
                     <th>Actions</th>
@@ -45,6 +63,17 @@
                 {% for fr in feature_requests %}
                 <tr class="error-row" @click="expanded = expanded === {{ loop.index0 }} ? null : {{ loop.index0 }}" style="cursor: pointer;">
                     <td>{{ fr.timestamp.strftime('%Y-%m-%d %H:%M') if fr.timestamp and fr.timestamp.strftime else (fr.timestamp[:16] if fr.timestamp is string else '-') }}</td>
+                    <td>
+                        {% if fr.request_type == 'bug_report' %}
+                            <span class="badge" style="background: #e74c3c; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">bug</span>
+                        {% elif fr.request_type == 'feature_request' %}
+                            <span class="badge" style="background: #3498db; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">suggestion</span>
+                        {% elif fr.request_type == 'habit_of_interest' %}
+                            <span class="badge" style="background: #e67e22; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">habit</span>
+                        {% else %}
+                            <span class="badge" style="background: #95a5a6; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">knowledge gap</span>
+                        {% endif %}
+                    </td>
                     <td>{{ fr.user_name }}</td>
                     <td class="error-msg-cell" title="{{ fr.question_text }}">{{ fr.question_text[:80] }}{% if fr.question_text|length > 80 %}...{% endif %}</td>
                     <td class="lead-actions" @click.stop>
@@ -52,9 +81,12 @@
                     </td>
                 </tr>
                 <tr x-show="expanded === {{ loop.index0 }}" x-transition>
-                    <td colspan="4" class="error-expand-cell">
+                    <td colspan="5" class="error-expand-cell">
                         <div class="error-meta">
                             <strong>Bot response:</strong>
+                            {% if fr.message_id %}
+                            <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 1rem;">msg_id: {{ fr.message_id }}</span>
+                            {% endif %}
                         </div>
                         <pre class="error-traceback" style="white-space: pre-wrap; direction: rtl; text-align: right;">{{ fr.bot_response }}</pre>
                     </td>
@@ -75,11 +107,13 @@ const featureRequests = {{ feature_requests | tojson }};
 function copyFeatureRequest(index) {
     const fr = featureRequests[index];
     const text = [
+        'Type: ' + (fr.request_type || 'knowledge_gap'),
         'User: ' + fr.user_name,
         'Question: ' + fr.question_text,
         'Bot Response: ' + fr.bot_response,
         'Date: ' + (fr.timestamp || '-'),
-    ].join('\n');
+        fr.message_id ? 'Message ID: ' + fr.message_id : '',
+    ].filter(Boolean).join('\n');
     navigator.clipboard.writeText(text).then(() => {
         showToast('Copied!');
     });

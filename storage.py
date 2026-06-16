@@ -48,7 +48,7 @@ class DashboardStorage:
             "birth_year": None,
             "height_cm": None,
             "weight_kg": None,
-            # Bot fields — defaults until bot onboarding populates them
+            # Bot fields - defaults until bot onboarding populates them
             "gender": None,
             "targets": {"calories": None, "protein": None, "sleep_time": None, "workouts_per_week": None},
             "eating_window": None,
@@ -457,3 +457,101 @@ class DashboardStorage:
             {"telegram_user_id": user["telegram_user_id"]},
         ).sort("created_at", -1).limit(limit)
         return list(cursor)
+
+    # -- Simulator (admin testing) --
+
+    def update_user_raw(self, email: str, fields: dict) -> bool:
+        """Set arbitrary fields on a user document. Admin-only."""
+        fields["updated_at"] = self._now()
+        result = self._users.update_one({"_id": email}, {"$set": fields})
+        return result.modified_count > 0
+
+    def delete_user_logs(self, email: str) -> dict:
+        """Delete all activity logs for a user. Returns counts per collection."""
+        tid = self._get_telegram_user_id(email)
+        if not tid:
+            return {}
+        counts = {}
+        for col_name in ("food_entries", "sleep_logs", "workout_logs", "self_care_logs"):
+            result = self._db[col_name].delete_many({"telegram_user_id": tid})
+            counts[col_name] = result.deleted_count
+        return counts
+
+    def seed_test_user(self) -> bool:
+        """Create the simulator test user if it doesn't already exist.
+
+        Returns True if the user was created, False if it already exists.
+        """
+        email = "test@dugri.simulator"
+        if self._users.find_one({"_id": email}):
+            return False
+
+        now = self._now()
+        fresh_toggle = {
+            "status": "dormant",
+            "revealed_at": None,
+            "activated_at": None,
+            "last_asked_at": None,
+            "consecutive_unanswered": 0,
+            "goal_status": "pending",
+            "goal_value": None,
+            "goal_remind_at": None,
+            "goal_offered_at": None,
+        }
+        doc = {
+            "_id": email,
+            "name": "Test User",
+            "photo_url": None,
+            "telegram_user_id": 999999999,
+            "signup_session_token": None,
+            "signup_session_token_expires_at": None,
+            "consents": {},
+            "trial_started_at": now,
+            "subscription_status": "trial_active",
+            "birth_year": None,
+            "height_cm": None,
+            "weight_kg": None,
+            "gender": None,
+            "targets": {
+                "calories": None, "protein": None,
+                "sleep_time": None, "workouts_per_week": None,
+                "weight_goal": None,
+            },
+            "eating_window": None,
+            "timezone": "Asia/Jerusalem",
+            "onboarding": {"name_collected": True, "habits": {}},
+            "feedback_steering_prompt": None,
+            "last_feedback_offered_at": None,
+            "toggles": {
+                "sleep": {**fresh_toggle},
+                "eating_window": {**fresh_toggle},
+                "workouts": {**fresh_toggle},
+                "self_care": {**fresh_toggle},
+                "nutrition": {**fresh_toggle},
+                "weekly_summary": {**fresh_toggle, "status": "active"},
+            },
+            "dashboard_intro_shown": False,
+            "target_retry_done": False,
+            "eating_window_retry_done": False,
+            "recent_messages": [],
+            "strikes": [],
+            "banned_at": None,
+            "discovered_patterns": [],
+            "gem_state": {
+                "used_gem_ids": [],
+                "cycle_number": 1,
+                "last_delivered_at": None,
+                "deliveries": [],
+                "feedbacks": [],
+                "threshold_adjustment": 0.0,
+                "week_start_iso": None,
+                "gem_delivered_this_week": False,
+                "silent_week": False,
+            },
+            "re_engagement_stage": "none",
+            "last_user_message_at": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._users.insert_one(doc)
+        return True

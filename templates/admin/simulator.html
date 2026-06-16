@@ -1,0 +1,382 @@
+{% extends "dashboard/layout.html" %}
+
+{% block title %}Dugri - Simulator{% endblock %}
+
+{% block dashboard_content %}
+<div class="admin-dashboard" x-data="simulator()">
+
+    <!-- Admin Sub-tabs -->
+    <div class="admin-tabs">
+        <a href="{{ url_for('admin.dashboard') }}" class="admin-tab">Dashboard</a>
+        <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
+        <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
+        <a href="{{ url_for('admin.tokens') }}" class="admin-tab">Tokens</a>
+        <a href="{{ url_for('admin.simulator') }}" class="admin-tab active">Simulator</a>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="sim-status" x-show="statusMsg" x-text="statusMsg"
+         :class="statusOk ? 'sim-status--ok' : 'sim-status--err'"
+         x-transition></div>
+
+    <div class="sim-layout">
+
+        <!-- LEFT: State Control Panel -->
+        <div class="sim-panel">
+            <h3 class="sim-panel-title">State Control</h3>
+
+            <!-- Trial & Subscription -->
+            <div class="sim-card">
+                <h4>Trial & Subscription</h4>
+                <div class="sim-field">
+                    <label>Status</label>
+                    <select x-model="state.subscription_status" @change="saveField('subscription_status', state.subscription_status)">
+                        <option value="trial_pending">trial_pending</option>
+                        <option value="trial_active">trial_active</option>
+                        <option value="trial_ended">trial_ended</option>
+                    </select>
+                </div>
+                <div class="sim-field">
+                    <label>Trial Started</label>
+                    <input type="datetime-local" x-model="trialStartedLocal"
+                           @change="saveTrialStarted()">
+                </div>
+                <div class="sim-quick-days">
+                    <button @click="setTrialDay(0)" class="sim-btn sim-btn--sm">Fresh</button>
+                    <button @click="setTrialDay(1)" class="sim-btn sim-btn--sm">D1</button>
+                    <button @click="setTrialDay(3)" class="sim-btn sim-btn--sm">D3</button>
+                    <button @click="setTrialDay(5)" class="sim-btn sim-btn--sm">D5</button>
+                    <button @click="setTrialDay(7)" class="sim-btn sim-btn--sm">D7</button>
+                    <button @click="setTrialDay(10)" class="sim-btn sim-btn--sm">D10</button>
+                    <button @click="setTrialDay(12)" class="sim-btn sim-btn--sm">D12</button>
+                </div>
+                <div class="sim-day-indicator" x-show="state.trial_started_at">
+                    Day <span x-text="currentDay"></span> of trial
+                </div>
+            </div>
+
+            <!-- Toggles -->
+            <div class="sim-card">
+                <h4>Toggles</h4>
+                <template x-for="name in toggleNames" :key="name">
+                    <div class="sim-toggle-row">
+                        <span class="sim-toggle-name" x-text="name"></span>
+                        <select :x-model="'state.toggles.' + name + '.status'"
+                                x-model="state.toggles[name].status"
+                                @change="saveToggle(name)">
+                            <option value="dormant">dormant</option>
+                            <option value="active">active</option>
+                            <option value="cancelled">cancelled</option>
+                        </select>
+                        <select x-model="state.toggles[name].goal_status"
+                                @change="saveToggle(name)"
+                                class="sim-select--sm">
+                            <option value="pending">goal: pending</option>
+                            <option value="set">goal: set</option>
+                            <option value="declined">goal: declined</option>
+                            <option value="remind">goal: remind</option>
+                        </select>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Moderation -->
+            <div class="sim-card">
+                <h4>Moderation</h4>
+                <div class="sim-field sim-field--row">
+                    <label>Banned</label>
+                    <input type="checkbox" :checked="!!state.banned_at"
+                           @change="toggleBan($event.target.checked)">
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Strikes</label>
+                    <span class="sim-strikes-count" x-text="(state.strikes || []).length"></span>
+                    <button @click="addStrike()" class="sim-btn sim-btn--xs">+1</button>
+                    <button @click="clearStrikes()" class="sim-btn sim-btn--xs sim-btn--muted">Clear</button>
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="sim-card sim-card--danger">
+                <h4>Danger Zone</h4>
+                <div class="sim-danger-buttons">
+                    <button @click="fullReset()" class="sim-btn sim-btn--danger"
+                            :disabled="loading">Full Reset</button>
+                    <button @click="clearLogs()" class="sim-btn sim-btn--warn"
+                            :disabled="loading">Clear Activity Logs</button>
+                </div>
+            </div>
+
+            <!-- Refresh -->
+            <button @click="refreshState()" class="sim-btn sim-btn--full" :disabled="loading">
+                Refresh State
+            </button>
+        </div>
+
+        <!-- RIGHT: Chat Simulator -->
+        <div class="sim-chat">
+            <h3 class="sim-panel-title">Chat Simulator</h3>
+
+            <div class="sim-chat-messages" x-ref="chatMessages">
+                <template x-for="(msg, i) in chatMessages" :key="i">
+                    <div :class="'sim-msg sim-msg--' + msg.role">
+                        <div class="sim-msg-bubble" x-text="msg.text"></div>
+                        <!-- Inline keyboard buttons -->
+                        <template x-if="msg.reply_markup && msg.reply_markup.inline_keyboard">
+                            <div class="sim-msg-keyboard">
+                                <template x-for="row in msg.reply_markup.inline_keyboard" :key="JSON.stringify(row)">
+                                    <div class="sim-keyboard-row">
+                                        <template x-for="btn in row" :key="btn.callback_data || btn.text">
+                                            <button class="sim-keyboard-btn"
+                                                    x-text="btn.text"
+                                                    @click="btn.callback_data ? sendCallback(btn.callback_data) : (btn.url ? window.open(btn.url) : null)"
+                                                    :disabled="!btn.callback_data && !btn.url">
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <div x-show="chatLoading" class="sim-msg sim-msg--bot">
+                    <div class="sim-msg-bubble sim-msg-typing">...</div>
+                </div>
+            </div>
+
+            <div class="sim-chat-input">
+                <input type="text" x-model="chatInput" placeholder="Type a message..."
+                       @keydown.enter="sendMessage()"
+                       :disabled="chatLoading"
+                       x-ref="chatInputField">
+                <button @click="sendMessage()" :disabled="chatLoading || !chatInput.trim()"
+                        class="sim-btn sim-btn--send">
+                    &gt;
+                </button>
+            </div>
+
+            <div class="sim-chat-note">
+                Messages go through the real Dugri pipeline (classifier, GPT, toggles, trial checks).
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function simulator() {
+    const rawUser = {{ sim_user | tojson }};
+    // Parse trial_started_at for the datetime-local input
+    let trialLocal = '';
+    if (rawUser.trial_started_at) {
+        try {
+            const d = new Date(rawUser.trial_started_at);
+            trialLocal = d.toISOString().slice(0, 16);
+        } catch(e) {}
+    }
+
+    return {
+        state: rawUser,
+        trialStartedLocal: trialLocal,
+        loading: false,
+        statusMsg: '',
+        statusOk: true,
+        chatMessages: (rawUser.recent_messages || []).map(m => ({
+            role: m.role === 'bot' ? 'bot' : 'user',
+            text: m.text || '',
+            reply_markup: m.reply_markup || null,
+        })),
+        chatInput: '',
+        chatLoading: false,
+        toggleNames: ['nutrition', 'sleep', 'eating_window', 'workouts', 'self_care', 'weekly_summary'],
+
+        get currentDay() {
+            if (!this.state.trial_started_at) return '-';
+            const started = new Date(this.state.trial_started_at);
+            const now = new Date();
+            return Math.floor((now - started) / (1000 * 60 * 60 * 24));
+        },
+
+        flash(msg, ok = true) {
+            this.statusMsg = msg;
+            this.statusOk = ok;
+            setTimeout(() => this.statusMsg = '', 3000);
+        },
+
+        async api(url, body = null) {
+            const opts = body
+                ? { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }
+                : { method: 'GET' };
+            const resp = await fetch(url, opts);
+            return resp.json();
+        },
+
+        async saveField(field, value) {
+            const data = {};
+            data[field] = value;
+            await this.api('/admin/simulator/state', data);
+            this.flash(field + ' updated');
+        },
+
+        async saveTrialStarted() {
+            if (!this.trialStartedLocal) return;
+            const isoVal = new Date(this.trialStartedLocal).toISOString();
+            this.state.trial_started_at = isoVal;
+            await this.saveField('trial_started_at', isoVal);
+        },
+
+        async setTrialDay(daysAgo) {
+            const d = new Date();
+            d.setDate(d.getDate() - daysAgo);
+            d.setHours(9, 0, 0, 0);
+            const isoVal = d.toISOString();
+            this.state.trial_started_at = isoVal;
+            this.trialStartedLocal = isoVal.slice(0, 16);
+            this.state.subscription_status = 'trial_active';
+            await this.api('/admin/simulator/state', {
+                trial_started_at: isoVal,
+                subscription_status: 'trial_active',
+            });
+            this.flash('Set to day ' + daysAgo);
+        },
+
+        async saveToggle(name) {
+            const toggle = this.state.toggles[name];
+            const data = {};
+            data['toggles.' + name + '.status'] = toggle.status;
+            data['toggles.' + name + '.goal_status'] = toggle.goal_status;
+            if (toggle.status === 'active' && !toggle.activated_at) {
+                data['toggles.' + name + '.activated_at'] = new Date().toISOString();
+            }
+            if (toggle.status !== 'dormant' && !toggle.revealed_at) {
+                data['toggles.' + name + '.revealed_at'] = new Date().toISOString();
+            }
+            await this.api('/admin/simulator/state', data);
+            this.flash(name + ' toggle updated');
+        },
+
+        async toggleBan(banned) {
+            const val = banned ? new Date().toISOString() : null;
+            this.state.banned_at = val;
+            await this.saveField('banned_at', val);
+        },
+
+        async addStrike() {
+            if (!this.state.strikes) this.state.strikes = [];
+            this.state.strikes.push({
+                reason: 'test_strike',
+                detail: 'Added by simulator',
+                source: 'simulator',
+                created_at: new Date().toISOString(),
+            });
+            await this.saveField('strikes', this.state.strikes);
+        },
+
+        async clearStrikes() {
+            this.state.strikes = [];
+            await this.api('/admin/simulator/state', { strikes: [], banned_at: null });
+            this.state.banned_at = null;
+            this.flash('Strikes and ban cleared');
+        },
+
+        async fullReset() {
+            this.loading = true;
+            const result = await this.api('/admin/simulator/reset');
+            this.chatMessages = [];
+            await this.refreshState();
+            this.loading = false;
+            this.flash('Full reset complete' + (result.greeting_sent ? ' (greeting sent)' : ''));
+        },
+
+        async clearLogs() {
+            this.loading = true;
+            const result = await this.api('/admin/simulator/clear-logs');
+            this.loading = false;
+            const total = Object.values(result.deleted || {}).reduce((a, b) => a + b, 0);
+            this.flash(total + ' log entries deleted');
+        },
+
+        async refreshState() {
+            this.loading = true;
+            const data = await this.api('/admin/simulator/state');
+            if (!data.error) {
+                this.state = data;
+                this.chatMessages = (data.recent_messages || []).map(m => ({
+                    role: m.role === 'bot' ? 'bot' : 'user',
+                    text: m.text || '',
+                    reply_markup: m.reply_markup || null,
+                }));
+                if (data.trial_started_at) {
+                    try {
+                        this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16);
+                    } catch(e) {}
+                }
+            }
+            this.loading = false;
+            this.flash('State refreshed');
+        },
+
+        async sendMessage() {
+            const text = this.chatInput.trim();
+            if (!text) return;
+            this.chatInput = '';
+            this.chatMessages.push({ role: 'user', text, reply_markup: null });
+            this.scrollChat();
+            this.chatLoading = true;
+
+            try {
+                const result = await this.api('/admin/simulator/send', { text });
+                if (result.responses) {
+                    for (const r of result.responses) {
+                        this.chatMessages.push({
+                            role: 'bot',
+                            text: r.text || '',
+                            reply_markup: r.reply_markup || null,
+                        });
+                    }
+                } else if (result.error) {
+                    this.chatMessages.push({ role: 'bot', text: '[Error: ' + result.error + ']', reply_markup: null });
+                }
+            } catch(e) {
+                this.chatMessages.push({ role: 'bot', text: '[Connection error]', reply_markup: null });
+            }
+            this.chatLoading = false;
+            this.scrollChat();
+            this.$refs.chatInputField.focus();
+        },
+
+        async sendCallback(callbackData) {
+            this.chatLoading = true;
+            this.chatMessages.push({ role: 'user', text: '[button: ' + callbackData + ']', reply_markup: null });
+            this.scrollChat();
+
+            try {
+                const result = await this.api('/admin/simulator/send', { callback_data: callbackData });
+                if (result.responses) {
+                    for (const r of result.responses) {
+                        this.chatMessages.push({
+                            role: 'bot',
+                            text: r.text || '',
+                            reply_markup: r.reply_markup || null,
+                        });
+                    }
+                } else if (result.error) {
+                    this.chatMessages.push({ role: 'bot', text: '[Error: ' + result.error + ']', reply_markup: null });
+                }
+            } catch(e) {
+                this.chatMessages.push({ role: 'bot', text: '[Connection error]', reply_markup: null });
+            }
+            this.chatLoading = false;
+            this.scrollChat();
+        },
+
+        scrollChat() {
+            this.$nextTick(() => {
+                const el = this.$refs.chatMessages;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        },
+    };
+}
+</script>
+{% endblock %}

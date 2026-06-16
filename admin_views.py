@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import Blueprint, render_template, current_app, request, jsonify
 
 from admin_storage import AdminStorage
+from storage import DashboardStorage
 from auth import admin_required
 
 logger = logging.getLogger(__name__)
@@ -125,11 +126,16 @@ def feature_requests():
     storage = _get_admin_storage()
     requests_list = storage.get_feature_requests()
     stats = storage.get_feature_request_stats()
+    by_type = stats.get("by_type", {})
     return render_template(
         "admin/feature_requests.html",
         feature_requests=requests_list,
         total_requests=stats["total"],
         unique_users=stats["unique_users"],
+        bugs=by_type.get("bug_report", 0),
+        suggestions=by_type.get("feature_request", 0),
+        habits=by_type.get("habit_of_interest", 0),
+        knowledge_gaps=by_type.get("knowledge_gap", 0),
         active_tab="admin",
         active_sub="feature_requests",
     )
@@ -175,6 +181,202 @@ def tokens():
         grand_total_cost=round(grand_total_cost, 4),
         grand_total_tokens=grand_total_tokens,
     )
+
+
+SIMULATOR_EMAIL = "test@dugri.simulator"
+
+
+def _get_dashboard_storage() -> DashboardStorage:
+    cfg = current_app.config["APP_CONFIG"]
+    mongo_cfg = cfg["mongodb"]
+    return DashboardStorage(uri=mongo_cfg["uri"], db_name=mongo_cfg["db_name"])
+
+
+@admin_bp.route("/simulator")
+@admin_required
+def simulator():
+    storage = _get_dashboard_storage()
+    user = storage.get_user(SIMULATOR_EMAIL)
+    if not user:
+        storage.seed_test_user()
+        user = storage.get_user(SIMULATOR_EMAIL)
+    return render_template(
+        "admin/simulator.html",
+        active_tab="admin",
+        active_sub="simulator",
+        sim_user=user,
+    )
+
+
+@admin_bp.route("/simulator/state", methods=["GET"])
+@admin_required
+def simulator_get_state():
+    storage = _get_dashboard_storage()
+    user = storage.get_user(SIMULATOR_EMAIL)
+    if not user:
+        return jsonify({"error": "test user not found"}), 404
+    user["_id"] = str(user["_id"])
+    return jsonify(user)
+
+
+@admin_bp.route("/simulator/state", methods=["POST"])
+@admin_required
+def simulator_update_state():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "no data"}), 400
+    storage = _get_dashboard_storage()
+    storage.update_user_raw(SIMULATOR_EMAIL, data)
+    return jsonify({"ok": True})
+
+
+@admin_bp.route("/simulator/reset", methods=["POST"])
+@admin_required
+def simulator_reset():
+    storage = _get_dashboard_storage()
+    user = storage.get_user(SIMULATOR_EMAIL)
+    if not user:
+        return jsonify({"error": "test user not found"}), 404
+
+    now = datetime.now(timezone.utc).isoformat()
+    fresh_toggle = {
+        "status": "dormant",
+        "revealed_at": None,
+        "activated_at": None,
+        "last_asked_at": None,
+        "consecutive_unanswered": 0,
+        "goal_status": "pending",
+        "goal_value": None,
+        "goal_remind_at": None,
+        "goal_offered_at": None,
+    }
+    reset_fields = {
+        "toggles": {
+            "sleep": {**fresh_toggle},
+            "eating_window": {**fresh_toggle},
+            "workouts": {**fresh_toggle},
+            "self_care": {**fresh_toggle},
+            "nutrition": {**fresh_toggle},
+            "weekly_summary": {**fresh_toggle, "status": "active"},
+        },
+        "targets": {
+            "calories": None, "protein": None,
+            "sleep_time": None, "workouts_per_week": None,
+            "weight_goal": None,
+        },
+        "eating_window": None,
+        "subscription_status": "trial_active",
+        "trial_started_at": now,
+        "recent_messages": [],
+        "dashboard_intro_shown": False,
+        "target_retry_done": False,
+        "eating_window_retry_done": False,
+        "name": "Test User",
+        "onboarding": {"name_collected": True, "habits": {}},
+        "birth_year": None,
+        "height_cm": None,
+        "weight_kg": None,
+        "gender": None,
+        "feedback_steering_prompt": None,
+        "last_feedback_offered_at": None,
+        "discovered_patterns": [],
+        "strikes": [],
+        "banned_at": None,
+        "gem_state": {
+            "used_gem_ids": [],
+            "cycle_number": 1,
+            "last_delivered_at": None,
+            "deliveries": [],
+            "feedbacks": [],
+            "threshold_adjustment": 0.0,
+            "week_start_iso": None,
+            "gem_delivered_this_week": False,
+            "silent_week": False,
+        },
+        "re_engagement_stage": "none",
+        "last_user_message_at": None,
+    }
+    storage.update_user_raw(SIMULATOR_EMAIL, reset_fields)
+
+    # Send greeting via Telegram Bot API
+    greeting_sent = False
+    cfg = current_app.config["APP_CONFIG"]
+    bot_token = cfg.get("telegram_bot_token")
+    tid = user.get("telegram_user_id")
+    if bot_token and tid:
+        greeting = (
+            "\u05d4\u05d9\u05d9, \u05d0\u05e0\u05d9 \u05d3\u05d5\u05d2\u05e8\u05d9 \U0001f44b\n\n"
+            "\u05d4\u05dc\u05d1 \u05e9\u05dc \u05de\u05d4 \u05e9\u05d0\u05e0\u05d9 \u05e2\u05d5\u05e9\u05d4"
+            " \u05d4\u05d5\u05d0 \u05de\u05d5\u05d3\u05e2\u05d5\u05ea \u05ea\u05d6\u05d5\u05e0\u05ea\u05d9\u05ea"
+            " \u2014 \u05e9\u05dc\u05d7 \u05dc\u05d9 \u05d0\u05ea \u05d4\u05d0\u05e8\u05d5\u05d7\u05d4"
+            " \u05d4\u05d1\u05d0\u05d4 \u05e9\u05dc\u05da \u05d1\u05db\u05de\u05d4 \u05de\u05d9\u05dc\u05d9\u05dd"
+            " \u05d5\u05d0\u05e0\u05d9 \u05d0\u05e2\u05e9\u05d4 \u05d0\u05ea \u05d4\u05d7\u05d9\u05e9\u05d5\u05d1.\n\n"
+            "\u05dc\u05e4\u05e0\u05d9 \u05e9\u05de\u05ea\u05d7\u05d9\u05dc\u05d9\u05dd,"
+            " \u05d0\u05d9\u05da \u05d0\u05ea\u05d4 \u05e8\u05d5\u05e6\u05d4 \u05e9\u05d0\u05e7\u05e8\u05d0 \u05dc\u05da?"
+        )
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id": tid, "text": greeting},
+                timeout=5,
+            )
+            greeting_sent = resp.ok
+        except Exception:
+            logger.exception("Failed to send simulator reset greeting")
+
+    # Also clear activity logs
+    storage.delete_user_logs(SIMULATOR_EMAIL)
+
+    return jsonify({"ok": True, "greeting_sent": greeting_sent})
+
+
+@admin_bp.route("/simulator/clear-logs", methods=["POST"])
+@admin_required
+def simulator_clear_logs():
+    storage = _get_dashboard_storage()
+    counts = storage.delete_user_logs(SIMULATOR_EMAIL)
+    return jsonify({"ok": True, "deleted": counts})
+
+
+@admin_bp.route("/simulator/send", methods=["POST"])
+@admin_required
+def simulator_send():
+    """Proxy a message to the bot's /internal/simulate endpoint."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "no data"}), 400
+
+    cfg = current_app.config["APP_CONFIG"]
+    bot_url = cfg.get("bot_internal_url", "")
+    secret = cfg.get("internal_secret", "")
+
+    if not bot_url:
+        return jsonify({"error": "bot_internal_url not configured"}), 500
+
+    payload = {"email": SIMULATOR_EMAIL}
+    if data.get("text"):
+        payload["text"] = data["text"]
+    elif data.get("callback_data"):
+        payload["callback_data"] = data["callback_data"]
+    else:
+        return jsonify({"error": "text or callback_data required"}), 400
+
+    try:
+        resp = requests.post(
+            f"{bot_url}/internal/simulate",
+            json=payload,
+            headers={"X-Internal-Secret": secret},
+            timeout=30,
+        )
+        if resp.ok:
+            return jsonify(resp.json())
+        logger.error("Bot simulate error: %s %s", resp.status_code, resp.text)
+        return jsonify({"error": "bot returned error", "status": resp.status_code}), 502
+    except requests.Timeout:
+        return jsonify({"error": "bot timeout"}), 504
+    except Exception:
+        logger.exception("Failed to reach bot simulate endpoint")
+        return jsonify({"error": "bot unreachable"}), 502
 
 
 @admin_bp.route("/outreach", methods=["POST"])
