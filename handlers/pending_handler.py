@@ -339,7 +339,9 @@ class PendingHandler:
                 from models.self_care import SelfCareLog
                 new_log = SelfCareLog(telegram_user_id=tid, date=entry_date, description=new_note)
                 target_repo.insert(new_log)
-            await self.ctx._send("✅ עודכן.", tid=tid, message=message, save=False)
+            from messages import build_habit_correction_msg
+            confirm = build_habit_correction_msg(habit_type, result, entry_date)
+            await self.ctx._send(confirm, tid=tid, message=message, save=False)
             await safe_react(message, OK_HAND)
             return True
 
@@ -363,6 +365,9 @@ class PendingHandler:
         if habit_type == "sleep" and result.corrected_time and not result.corrected_date:
             repo.update_by_id(ObjectId(entry_id), {"sleep_time": result.corrected_time})
 
-        await self.ctx._send("✅ עודכן.", tid=tid, message=message, save=False)
+        from messages import build_habit_correction_msg
+        effective_date = result.corrected_date or entry.get("date", calendar_today)
+        confirm = build_habit_correction_msg(habit_type, result, effective_date)
+        await self.ctx._send(confirm, tid=tid, message=message, save=False)
         await safe_react(message, OK_HAND)
         return True
