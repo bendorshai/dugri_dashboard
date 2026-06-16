@@ -144,15 +144,24 @@ def build_fake_update(telegram_user_id: int, text: str | None = None,
             },
         }
     else:
+        msg = {
+            "message_id": update_id % 99999,
+            "date": int(datetime.now(timezone.utc).timestamp()),
+            "chat": chat_dict,
+            "from": user_dict,
+            "text": text or "",
+        }
+        # Add bot_command entity so PTB's CommandHandler matches /commands
+        if text and text.startswith("/"):
+            cmd = text.split()[0]
+            msg["entities"] = [{
+                "type": "bot_command",
+                "offset": 0,
+                "length": len(cmd),
+            }]
         return {
             "update_id": update_id,
-            "message": {
-                "message_id": update_id % 99999,
-                "date": int(datetime.now(timezone.utc).timestamp()),
-                "chat": chat_dict,
-                "from": user_dict,
-                "text": text or "",
-            },
+            "message": msg,
         }
 
 
