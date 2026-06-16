@@ -34,6 +34,19 @@ from handlers.pending_handler import PendingHandler
 logger = logging.getLogger(__name__)
 
 
+def _validate_resolved_date(date_str: str | None) -> str | None:
+    """Return date_str if valid DD/MM/YYYY and not in the future, else None."""
+    if not date_str:
+        return None
+    try:
+        dt = datetime.strptime(date_str, "%d/%m/%Y")
+        if dt.date() > datetime.now().date():
+            return None
+        return date_str
+    except ValueError:
+        return None
+
+
 class HealthHandlers:
     def __init__(
         self,
@@ -751,7 +764,11 @@ class HealthHandlers:
             return
 
         if rtype == "sleep" and self.message_router:
-            result = self.message_router.route_sleep(tid, time_str, stats_date)
+            effective_date = _validate_resolved_date(router_result.resolved_date) or stats_date
+            date_label = None
+            if effective_date != stats_date:
+                date_label = hebrew_day_name(datetime.strptime(effective_date, "%d/%m/%Y"))
+            result = self.message_router.route_sleep(tid, time_str, effective_date, date_label=date_label)
             text = result.response_text
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
@@ -761,7 +778,11 @@ class HealthHandlers:
             return
 
         if rtype == "workout" and self.message_router:
-            result = self.message_router.route_workout(tid, stats_date, router_result.workout_note)
+            effective_date = _validate_resolved_date(router_result.resolved_date) or stats_date
+            date_label = None
+            if effective_date != stats_date:
+                date_label = hebrew_day_name(datetime.strptime(effective_date, "%d/%m/%Y"))
+            result = self.message_router.route_workout(tid, effective_date, router_result.workout_note, date_label=date_label)
             text = result.response_text
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
@@ -771,7 +792,11 @@ class HealthHandlers:
             return
 
         if rtype == "self_care" and self.message_router:
-            result = self.message_router.route_self_care(tid, message.text, stats_date)
+            effective_date = _validate_resolved_date(router_result.resolved_date) or stats_date
+            date_label = None
+            if effective_date != stats_date:
+                date_label = hebrew_day_name(datetime.strptime(effective_date, "%d/%m/%Y"))
+            result = self.message_router.route_self_care(tid, message.text, effective_date, date_label=date_label)
             text = result.response_text
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{text}\n\n{edu}" if edu else text

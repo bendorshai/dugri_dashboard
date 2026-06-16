@@ -46,26 +46,37 @@ class MessageRouterService:
 
     def route_sleep(
         self, telegram_user_id: int, sleep_time: str, date: str,
+        date_label: str | None = None,
     ) -> RouteResult:
         saved = self._habit.log_sleep(telegram_user_id, sleep_time, date)
+        if date_label:
+            text = f"רשמתי שינה ב-{sleep_time} ביום {date_label}."
+        else:
+            text = f"רשמתי שינה ב-{sleep_time}."
         return RouteResult(
-            response_text=f"רשמתי שינה ב-{sleep_time}. (אם התכוונת למשהו אחר, תכתוב לי.)",
+            response_text=text,
             light_confirmation=True,
             entry_id=saved.id,
         )
 
     def route_workout(
         self, telegram_user_id: int, date: str, note: str | None = None,
+        date_label: str | None = None,
     ) -> RouteResult:
         saved = self._habit.log_workout(telegram_user_id, date, note)
+        if date_label:
+            text = f"רשמתי אימון ביום {date_label}."
+        else:
+            text = "רשמתי אימון."
         return RouteResult(
-            response_text="רשמתי אימון. (אם התכוונת למשהו אחר, תכתוב לי.)",
+            response_text=text,
             light_confirmation=True,
             entry_id=saved.id,
         )
 
     def route_self_care(
         self, telegram_user_id: int, description: str, date: str,
+        date_label: str | None = None,
     ) -> RouteResult:
         saved = self._habit.log_self_care(telegram_user_id, description, date)
 
@@ -74,8 +85,12 @@ class MessageRouterService:
             if normalized:
                 self._user_repo.increment_activity(telegram_user_id, normalized)
 
+        if date_label:
+            text = f"יפה. רשמתי 'משהו לעצמי' ביום {date_label}."
+        else:
+            text = "יפה. רשמתי 'משהו לעצמי' השבוע."
         return RouteResult(
-            response_text="יפה. רשמתי 'משהו לעצמי' השבוע.",
+            response_text=text,
             light_confirmation=True,
             entry_id=saved.id,
         )

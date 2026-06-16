@@ -2,23 +2,39 @@
 סווג את ההודעה לסוג הרגל ספציפי וחלץ את הנתונים הרלוונטיים.
 ההודעה כבר זוהתה כתיעוד הרגל. תפקידך לזהות איזה הרגל ולחלץ פרטים.
 
+התאריך של היום: {today_str} (יום {day_name})
+
 סוגים:
 - sleep: דיווח שעת שינה. חלץ את השעה לשדה sleep_time (פורמט HH:MM).
 - workout: דיווח אימון. חלץ סוג אימון לשדה workout_note כשם עצם ("אימון ריצה", "אימון יוגה", "אימון כושר"). אם לא צוין סוג: "אימון".
 - self_care: פעילות לנפש (ים, ספר, טיפול, טיול). חלץ תיאור לשדה self_care_description.
 - correction: תיקון רשומה קודמת ('בלי אורז', 'היה יותר קטן', 'חצי מנה').
 
+חילוץ תאריך (resolved_date):
+- אם המשתמש מציין זמן (אתמול, שלשום, בשבת, ביום ראשון וכו'), חשב את התאריך בפורמט DD/MM/YYYY והחזר בשדה resolved_date.
+- "אתמול" = יום אחד לפני היום
+- "שלשום" = יומיים לפני היום
+- "בשבת" / "ביום שבת" = שבת האחרונה
+- שם יום (ביום ראשון, ביום שני, ביום שלישי וכו') = היום האחרון עם השם הזה (תמיד לעבר)
+- "היום" / "עכשיו" / "הבוקר" / בלי סמן זמן = resolved_date יהיה null
+- תמיד פתור סמני זמן לעבר (המשתמש מדווח על מה שכבר עשה).
+
 דוגמאות:
-  'הלכתי לישון ב-23' → sleep, sleep_time: "23:00"
-  'נרדמתי באחת בלילה' → sleep, sleep_time: "01:00"
-  'אתמול ישנתי ב-22, שלשום ב-21' → sleep, sleep_time: "22:00"
-  'התאמנתי היום' → workout, workout_note: "אימון"
-  'רצתי הבוקר' → workout, workout_note: "אימון ריצה"
-  'עשיתי יוגה' → workout, workout_note: "אימון יוגה"
-  'רכבתי על אופניים' → workout, workout_note: "אימון רכיבה על אופניים"
-  'הלכתי לחדר כושר' → workout, workout_note: "אימון כושר"
-  'הלכתי לים' → self_care, self_care_description: "הליכה לים"
-  'קראתי ספר' → self_care, self_care_description: "קריאת ספר"
+  'הלכתי לישון ב-23' → sleep, sleep_time: "23:00", resolved_date: null
+  'נרדמתי באחת בלילה' → sleep, sleep_time: "01:00", resolved_date: null
+  'אתמול ישנתי ב-22' → sleep, sleep_time: "22:00", resolved_date: (אתמול DD/MM/YYYY)
+  'בשבת הלכתי לישון באחת' → sleep, sleep_time: "01:00", resolved_date: (שבת האחרונה DD/MM/YYYY)
+  'התאמנתי היום' → workout, workout_note: "אימון", resolved_date: null
+  'רצתי הבוקר' → workout, workout_note: "אימון ריצה", resolved_date: null
+  'אתמול התאמנתי' → workout, workout_note: "אימון", resolved_date: (אתמול DD/MM/YYYY)
+  'בשבת הלכתי שעה וחצי ברגל' → workout, workout_note: "אימון הליכה", resolved_date: (שבת האחרונה DD/MM/YYYY)
+  'ביום ראשון רצתי' → workout, workout_note: "אימון ריצה", resolved_date: (יום ראשון האחרון DD/MM/YYYY)
+  'עשיתי יוגה' → workout, workout_note: "אימון יוגה", resolved_date: null
+  'רכבתי על אופניים' → workout, workout_note: "אימון רכיבה על אופניים", resolved_date: null
+  'הלכתי לחדר כושר' → workout, workout_note: "אימון כושר", resolved_date: null
+  'הלכתי לים' → self_care, self_care_description: "הליכה לים", resolved_date: null
+  'אתמול הייתי בים' → self_care, self_care_description: "הליכה לים", resolved_date: (אתמול DD/MM/YYYY)
+  'קראתי ספר' → self_care, self_care_description: "קריאת ספר", resolved_date: null
   'בלי אורז' → correction
   'היה יותר קטן' → correction
 

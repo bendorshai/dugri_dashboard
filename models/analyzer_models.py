@@ -100,6 +100,8 @@ class RouterClassification(BaseModel):
     toggle_name: str | None = None
     declared_gender: Literal["male", "female", "other"] | None = None
     workout_note: str | None = None
+    self_care_description: str | None = None
+    resolved_date: str | None = None  # DD/MM/YYYY from temporal extraction
 
 
 class HabitCorrectionResult(BaseModel):
@@ -125,6 +127,7 @@ class HabitLoggerClassification(BaseModel):
     sleep_time: str | None = None
     workout_note: str | None = None
     self_care_description: str | None = None
+    resolved_date: str | None = None  # DD/MM/YYYY from temporal marker, None = today
 
 
 class GoalValues(BaseModel):
