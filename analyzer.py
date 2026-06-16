@@ -202,11 +202,11 @@ class FoodAnalyzer:
             result = response.choices[0].message.parsed
             if result is None:
                 logger.warning("GPT tier1 router returned None for: %s", text[:80])
-                return Tier1Classification(type="other")
+                return Tier1Classification(type="conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else")
             return result
         except Exception:
             logger.exception("GPT tier1 router failed for: %s", text[:80])
-            return Tier1Classification(type="other")
+            return Tier1Classification(type="conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else")
 
     def route_tier2_habit_logger(
         self, text: str,
@@ -362,7 +362,7 @@ class FoodAnalyzer:
             # Map goals_talk sub-types back to opt_in for dispatch
             return RouterClassification(type="opt_in", toggle_name=t2.toggle_name)
 
-        if t1.type == "other":
+        if t1.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else":
             # Tier 2: sub-classify other
             t2 = self.route_tier2_other(
                 text, recent_messages=recent_messages,

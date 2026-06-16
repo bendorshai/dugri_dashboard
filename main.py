@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.0.0"
-VERSION_NOTES = "Date/time correction for all habits, edit buttons on all habit logs, cross-habit reclassification"
+VERSION = "10.1.0"
+VERSION_NOTES = "Fix tier 1 meal misclassification: rename catch-all type to prevent food messages being swallowed"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

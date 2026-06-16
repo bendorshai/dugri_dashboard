@@ -12,7 +12,7 @@ test_tier1_router_llm.py - TDD tests for the Tier 1 Intent Router.
 # but receives NO toggle state. Toggle state is deferred to tier 2.
 #
 # OUTPUT MODEL: Tier1Classification
-#   type: "meal" | "habit_logger" | "goals_talk" | "other"
+#   type: "meal" | "habit_logger" | "goals_talk" | "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 #   (classification only, no extraction - meal extraction is tier 2)
 #
 # TYPES:
@@ -123,6 +123,50 @@ class TestTier1Meal:
     def test_hamburger(self):
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "המבורגר עם צ'יפס")
+        assert result.type == "meal"
+
+    def test_meal_after_onboarding_history(self):
+        """Regression: clear multi-item meal after onboarding must be meal.
+
+        Production bug 2026-06-16: user completed onboarding (name + gender)
+        then sent a detailed meal. Tier 1 classified as 'other' instead of
+        'meal', causing the bot to discuss the food conversationally without
+        logging it. The 5-message onboarding history biased the classifier.
+        """
+        analyzer = _make_analyzer()
+        onboarding_history = _build_history(
+            ("bot", "היי, אני דוגרי 👋\n\nהלב של מה שאני עושה הוא מודעות תזונתית - שלח לי את הארוחה הבאה שלך בכמה מילים ואני אעשה את החישוב.\n\nלפני שמתחילים, איך אתה רוצה שאקרא לך?"),
+            ("user", "שי"),
+            ("bot", "נעים להכיר, שי. בן או בת?"),
+            ("user", "בן"),
+            ("bot", "מעכשיו, כל מה שתשלח לי - טקסט או תמונה של אוכל - אני אחשב קלוריות וחלבון.\n\nאני כאן, מחכה לארוחה הבאה שלך"),
+        )
+        result = _tier1(
+            analyzer,
+            "אכלתי עכשיו 2 סנדוויצים גדולים\nאחד עם שניצל ורטבים והשני עם גבינות ונקניקין. ואז שתיתי 2 כוסות קפה על חלב שיבולת שועל",
+            history=onboarding_history,
+        )
+        assert result.type == "meal"
+
+    def test_meal_with_long_conversational_history(self):
+        """Meal classification must survive longer conversation history."""
+        analyzer = _make_analyzer()
+        long_history = _build_history(
+            ("bot", "היי, אני דוגרי 👋 לפני שמתחילים, איך אתה רוצה שאקרא לך?"),
+            ("user", "דני"),
+            ("bot", "נעים להכיר, דני. בן או בת?"),
+            ("user", "בן"),
+            ("bot", "מעכשיו, כל מה שתשלח לי אני אחשב קלוריות וחלבון."),
+            ("user", "מה אתה יודע לעשות?"),
+            ("bot", "אני עוקב אחרי הרגלי בריאות - תזונה, שינה, אימונים. שלח לי ארוחה ואני אחשב."),
+            ("user", "מגניב"),
+            ("bot", "אני כאן, מחכה לארוחה הבאה שלך"),
+        )
+        result = _tier1(
+            analyzer,
+            "אכלתי פיצה עם זיתים וקולה",
+            history=long_history,
+        )
         assert result.type == "meal"
 
 
@@ -343,44 +387,44 @@ class TestTier1Other:
     def test_question_about_data(self):
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "כמה אכלתי השבוע?")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_general_chat(self):
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "מה דעתך על צום לסירוגין?")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_pure_emotion(self):
         """Pure emotion without specific food = other (not meal)."""
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "יום קשה היום")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_vague_eating_emotion(self):
         """'Ate a lot' with no food item = other (emotional)."""
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "אכלתי המון")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_name_declaration(self):
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "קוראים לי שי")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_feature_request(self):
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "אפשר להוסיף מעקב שתיית מים?")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_feedback_request(self):
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "תן לי סיכום שבועי")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_inappropriate(self):
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "לך תזדיין")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_negotiation_after_suggestion(self):
         """Pushback without values = other (conversational), not opt_in."""
@@ -389,7 +433,7 @@ class TestTier1Other:
             analyzer, "2000 נשמע הרבה",
             history=_build_history(("bot", NUTRITION_SUGGESTION)),
         )
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_question_after_suggestion(self):
         """Question about suggestion = other, not opt_in."""
@@ -398,7 +442,7 @@ class TestTier1Other:
             analyzer, "למה 1800?",
             history=_build_history(("bot", NUTRITION_SUGGESTION)),
         )
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_proactive_tracking_request(self):
         """User-initiated 'I want to track sleep' with no prior offer = other.
@@ -414,7 +458,7 @@ class TestTier1Other:
             analyzer, "תודה",
             reply_context=FOOD_RESPONSE_SCHNITZEL,
         )
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_new_food_as_reply_to_confirmation(self):
         """New food item as reply to food confirmation = meal (always wins)."""
@@ -437,4 +481,4 @@ class TestTier1MultiIntent:
         """Food + sleep in same message = other (multi-intent)."""
         analyzer = _make_analyzer()
         result = _tier1(analyzer, "אכלתי המבורגר, גם הלכתי לישון ב-23")
-        assert result.type == "other"
+        assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
