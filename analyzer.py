@@ -360,6 +360,7 @@ class FoodAnalyzer:
                 type=t2.type,
                 workout_note=t2.workout_note,
                 self_care_description=t2.self_care_description,
+                sleep_time=t2.sleep_time,
                 resolved_date=t2.resolved_date,
                 emotional_context=t2.emotional_context,
                 empathy_reflection=t2.empathy_reflection,

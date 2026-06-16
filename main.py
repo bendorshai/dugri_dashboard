@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.0.3"
-VERSION_NOTES = "Simulate: allow unlinked users with fallback tid for /start token linking flow"
+VERSION = "11.0.4"
+VERSION_NOTES = "Fix sleep_time extraction: use user-stated time instead of wall-clock"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
