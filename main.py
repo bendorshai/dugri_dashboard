@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.4.2"
-VERSION_NOTES = "Remove redundant ROTATING_PROMPT_COUNT; replace em dashes with hyphens across codebase"
+VERSION = "10.5.0"
+VERSION_NOTES = "Admin simulator: /internal/simulate endpoint for dashboard testing"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -152,16 +152,67 @@ def main():
     webhook_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
     port = os.environ.get("PORT", "")
 
+    # Simulator endpoint setup
+    internal_secret = cfg.get("internal_secret", "")
+    sim_route = None
+    try:
+        from simulate import make_simulate_handler
+        sim_route = make_simulate_handler(
+            app, mongo_uri, mongo_cfg["db_name"], internal_secret,
+        )
+        logger.info("Simulator endpoint registered at /internal/simulate")
+    except Exception:
+        logger.exception("Failed to set up simulator endpoint")
+
     if webhook_domain:
         port_num = int(port or 8443)
         webhook_url = f"https://{webhook_domain}/webhook"
         logger.info("Bot starting - webhook mode at %s (port %d)", webhook_url, port_num)
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=port_num,
-            url_path="webhook",
-            webhook_url=webhook_url,
-        )
+
+        if sim_route:
+            # Manual webhook setup to add custom routes alongside the PTB webhook
+            import asyncio
+
+            async def _run_webhook_with_simulate():
+                await app.initialize()
+                await app.bot.set_webhook(url=webhook_url)
+                await app.start()
+
+                from telegram.ext._utils.webhookhandler import WebhookAppClass, WebhookServer
+                webhook_app = WebhookAppClass("/webhook", app.bot, app.update_queue)
+                # Add simulator route to the Tornado app
+                webhook_app.add_handlers(r".*", [sim_route])
+
+                httpd = WebhookServer("0.0.0.0", port_num, webhook_app, None)
+                await httpd.serve_forever()
+
+                try:
+                    await app.post_init(app)
+                except Exception:
+                    logger.exception("post_init failed")
+
+                # Block until stop signal
+                stop_event = asyncio.Event()
+                import signal
+                for sig in (signal.SIGINT, signal.SIGTERM):
+                    try:
+                        asyncio.get_event_loop().add_signal_handler(sig, stop_event.set)
+                    except NotImplementedError:
+                        pass  # Windows
+                await stop_event.wait()
+
+                await httpd.shutdown()
+                await app.stop()
+                await app.shutdown()
+
+            asyncio.run(_run_webhook_with_simulate())
+        else:
+            app.run_webhook(
+                listen="0.0.0.0",
+                port=port_num,
+                url_path="webhook",
+                webhook_url=webhook_url,
+            )
     elif port:
         # Railway without public domain - polling + health check server
         import asyncio
@@ -182,6 +233,21 @@ def main():
         logger.info("Bot starting - polling mode + health check on port %d", port_num)
         app.run_polling(drop_pending_updates=True)
     else:
+        # Local dev - polling + simulate endpoint on separate port
+        if sim_route:
+            import asyncio
+            import threading
+            import tornado.web
+            import tornado.ioloop
+
+            def _start_simulate_server():
+                sim_app = tornado.web.Application([sim_route])
+                sim_app.listen(8081)
+                logger.info("Simulator endpoint available at http://localhost:8081/internal/simulate")
+                tornado.ioloop.IOLoop.current().start()
+
+            threading.Thread(target=_start_simulate_server, daemon=True).start()
+
         logger.info("Bot starting - polling mode (local)")
         app.run_polling(drop_pending_updates=True)
 
