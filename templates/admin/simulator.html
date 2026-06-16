@@ -286,11 +286,11 @@ function simulator() {
             this.loading = true;
             try {
                 this.chatMessages = [];
-                const resetResult = await this.api('/admin/simulator/reset');
-                // Send a first message to trigger the bot's organic greeting
-                await this.api('/admin/simulator/send', { text: '\u05d4\u05d9\u05d9' });
+                await this.api('/admin/simulator/reset');
+                // Trigger the bot's organic greeting via /start
+                await this.api('/admin/simulator/send', { text: '/start' });
                 await this._loadState();
-                this.flash('Reset done (msgs after reset: ' + (resetResult.messages_after_reset ?? '?') + ', chat now: ' + this.chatMessages.length + ')');
+                this.flash('Full reset complete');
             } finally {
                 this.loading = false;
             }
