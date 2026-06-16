@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "9.1.1"
-VERSION_NOTES = "Fix: sanitize dots in model names to prevent MongoDB nested field corruption"
+VERSION = "10.0.0"
+VERSION_NOTES = "Date/time correction for all habits, edit buttons on all habit logs, cross-habit reclassification"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
