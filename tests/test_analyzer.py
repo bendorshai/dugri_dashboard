@@ -48,12 +48,6 @@ correct prompts, models, and structured output formats are used.
 # -------------------------------------
 # - Sends question with week_csv and targets context
 #
-# MESSAGE PARSING (parse_message / route_message)
-# ---------------------------------------------------
-# - Returns MessageParseResult with type="food" + FoodAnalysisResult
-#   or type="correction" + CorrectionResult
-# - Includes last_entry data in system message for correction context
-# - Returns type="unknown" on failure
 #
 # TARGET SUGGESTION (suggest_targets)
 # ------------------------------------
@@ -78,8 +72,7 @@ import pytest
 
 from analyzer import (
     FoodAnalyzer, FoodItem, FoodAnalysisResult, FoodPhotoResult,
-    MessageParseResult, CorrectionFoodItem,
-    CorrectionResult,
+    CorrectionFoodItem, CorrectionResult,
     WeeklyFeedbackResult, TimedFoodAnalysisResult,
 )
 
@@ -390,64 +383,6 @@ class TestAnswerQuestion:
         call_args = mock_client.chat.completions.create.call_args
         user_msg = call_args[1]["messages"][1]["content"]
         assert "כמה חלבון אכלתי?" in user_msg
-
-
-class TestParseMessage:
-    def test_returns_food_type(self, analyzer):
-        fa, mock_client = analyzer
-        food_result = FoodAnalysisResult(
-            items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
-            total_calories=400, total_protein=30,
-        )
-        expected = MessageParseResult(type="food", food=food_result)
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.parsed = expected
-        mock_client.beta.chat.completions.parse.return_value = mock_response
-
-        result = fa.parse_message("שניצל", "05/05/2026")
-        assert result.type == "food"
-        assert result.food.total_calories == 400
-
-    def test_returns_correction_type(self, analyzer):
-        fa, mock_client = analyzer
-        correction = CorrectionResult(
-            items=[CorrectionFoodItem(description="המבורגר 300 גרם", estimated_grams=300, calories=600, protein=45)],
-            corrected_description="המבורגר 300 גרם",
-            corrected_calories=600, corrected_protein=45,
-        )
-        expected = MessageParseResult(type="correction", correction=correction)
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.parsed = expected
-        mock_client.beta.chat.completions.parse.return_value = mock_response
-
-        last_entry = {"description": "המבורגר 150 גרם", "calories": 300, "protein": 25}
-        result = fa.parse_message("ההמבורגר היה 300 גרם", "05/05/2026", last_entry)
-        assert result.type == "correction"
-        assert result.correction.corrected_calories == 600
-
-    def test_includes_last_entry_in_prompt(self, analyzer):
-        fa, mock_client = analyzer
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.parsed = MessageParseResult(type="unknown")
-        mock_client.beta.chat.completions.parse.return_value = mock_response
-
-        last_entry = {"description": "שניצל", "calories": 400, "protein": 30}
-        fa.parse_message("תתקן", "05/05/2026", last_entry)
-
-        call_args = mock_client.beta.chat.completions.parse.call_args
-        system_msg = call_args[1]["messages"][0]["content"]
-        assert "שניצל" in system_msg
-        assert "400" in system_msg
-
-    def test_handles_failure(self, analyzer):
-        fa, mock_client = analyzer
-        mock_client.beta.chat.completions.parse.side_effect = Exception("API error")
-
-        result = fa.parse_message("test", "05/05/2026")
-        assert result.type == "unknown"
 
 
 class TestSuggestTargets:
