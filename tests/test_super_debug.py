@@ -232,17 +232,19 @@ class TestDebugButton:
             h._prepare_debug(999, f"msg {i}")
         assert len(h._debug_store) == 200
 
-    @pytest.mark.asyncio
-    async def test_debug_toggle_command(self):
-        h = self._make_handlers(admin_chat_id=999)
-        assert h._debug_mode is False
-        update = MagicMock()
-        update.effective_user.id = 999
-        update.message.reply_text = AsyncMock()
-        await h.handle_debug_command(update, MagicMock())
-        assert h._debug_mode is True
-        await h.handle_debug_command(update, MagicMock())
-        assert h._debug_mode is False
+    def test_debug_mode_reads_from_constant(self):
+        """HandlerContext reads DEBUG_MODE from constants at init time."""
+        import constants
+        original = constants.DEBUG_MODE
+        try:
+            constants.DEBUG_MODE = True
+            h = self._make_handlers(admin_chat_id=999)
+            assert h._debug_mode is True
+            constants.DEBUG_MODE = False
+            h2 = self._make_handlers(admin_chat_id=999)
+            assert h2._debug_mode is False
+        finally:
+            constants.DEBUG_MODE = original
 
     @pytest.mark.asyncio
     async def test_debug_callback_returns_metadata(self):

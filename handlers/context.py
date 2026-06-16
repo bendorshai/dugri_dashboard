@@ -96,7 +96,8 @@ class HandlerContext:
         self.token_log_repo = token_log_repo
         self._debug_classification = None
         self._debug_router_type = None
-        self._debug_mode = False
+        from constants import DEBUG_MODE
+        self._debug_mode = DEBUG_MODE
         self._debug_store: OrderedDict = OrderedDict()
 
     # ------------------------------------------------------------------

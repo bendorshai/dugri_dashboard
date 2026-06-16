@@ -375,14 +375,6 @@ class HealthHandlers:
     # Command handlers
     # ------------------------------------------------------------------
 
-    async def handle_debug_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        tid = update.effective_user.id
-        if tid != self.admin_chat_id:
-            return
-        self._debug_mode = not self._debug_mode
-        status = "ON 🔍" if self._debug_mode else "OFF"
-        await update.message.reply_text(f"Debug mode: {status}")
-
     async def handle_start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = update.effective_message
         if not message:

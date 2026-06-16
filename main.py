@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "9.0.0"
-VERSION_NOTES = "Trial expiry rework: configurable trial days, 19:00 cutoff, conversational-only after trial, proactive celebration message"
+VERSION = "9.1.0"
+VERSION_NOTES = "Debug mode as constant: replace /debug command with DEBUG_MODE in constants.py"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

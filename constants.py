@@ -163,3 +163,10 @@ GEM_THRESHOLD_CEILING = 0.30
 
 GEM_FLOOR_OF_WEEK_DAY = 4
 """Gem-week day (0=Sun) from which floor-of-week general gems can fire."""
+
+# ---------------------------------------------------------------------------
+# Debug
+# ---------------------------------------------------------------------------
+
+DEBUG_MODE = True
+"""When True, every bot message to the admin includes a debug metadata button."""
