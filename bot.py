@@ -102,6 +102,7 @@ def create_bot(
     admin_chat_id: int = 0,
     token_log_repo=None,
     emotional_support_config: dict | None = None,
+    inappropriate_log_repo=None,
 ) -> Application:
     app = Application.builder().token(token).build()
 
@@ -147,6 +148,12 @@ def create_bot(
     )
     re_engagement_service = ReEngagementService(user_repo, food_repo, analyzer)
 
+    # Inappropriate strike service
+    inappropriate_service = None
+    if inappropriate_log_repo:
+        from services.inappropriate_service import InappropriateService
+        inappropriate_service = InappropriateService(user_repo, inappropriate_log_repo)
+
     # Wisdom gems
     from services.pattern_detector import PatternDetector
     from services.gem_service import GemService
@@ -168,6 +175,7 @@ def create_bot(
         emotional_support_service=emotional_support_service,
         conversational_service=conversational_service,
         re_engagement_service=re_engagement_service,
+        inappropriate_service=inappropriate_service,
         landing_page_url=landing_page_url,
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,

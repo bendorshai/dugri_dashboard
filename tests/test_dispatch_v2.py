@@ -83,6 +83,7 @@ def _make_handler(**overrides):
     h.sleep_repo = MagicMock()
     h.workout_repo = MagicMock()
     h.self_care_repo = MagicMock()
+    h.inappropriate_service = MagicMock()
     h.landing_page_url = "https://test.com"
     h.admin_chat_id = 0
     h._debug_mode = False
@@ -159,17 +160,43 @@ class TestDispatchV2Routing:
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)
-    async def test_dispatch_inappropriate(self, mock_send):
+    async def test_dispatch_inappropriate_records_strike(self, mock_send):
         h = _make_handler()
+        h.inappropriate_service.record_strike.return_value = {"action": "strike", "strike_number": 1}
         profile = _make_profile()
         rr = _make_router_result("inappropriate")
 
         await h._dispatch_v2(
-            _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
+            _make_message("לך תזדיין"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
+        h.inappropriate_service.record_strike.assert_called_once_with(123, "לך תזדיין", profile)
         mock_send.assert_called_once()
         sent_text = mock_send.call_args[0][1]
         assert "הרגלי בריאות" in sent_text
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_dispatch_inappropriate_ban_sends_ban_message(self, mock_send):
+        h = _make_handler()
+        h.inappropriate_service.record_strike.return_value = {
+            "action": "ban",
+            "logs": [
+                {"message_text": "msg1", "created_at": "2026-06-10"},
+                {"message_text": "msg2", "created_at": "2026-06-11"},
+                {"message_text": "msg3", "created_at": "2026-06-12"},
+            ],
+        }
+        h.inappropriate_service.format_ban_message.return_value = "ban message with list"
+        profile = _make_profile(gender="male")
+        rr = _make_router_result("inappropriate")
+
+        await h._dispatch_v2(
+            _make_message("third offense"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
+        )
+        h.inappropriate_service.format_ban_message.assert_called_once()
+        mock_send.assert_called_once()
+        sent_text = mock_send.call_args[0][1]
+        assert sent_text == "ban message with list"
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)
@@ -1266,3 +1293,47 @@ class TestClassificationMetadata:
 
         result = await h._send("test", tid=123, message=_make_message())
         assert result == 42
+
+
+# ---------------------------------------------------------------------------
+# Banned user tests
+# ---------------------------------------------------------------------------
+
+class TestBannedUser:
+    """Banned users get a canned response; no routing or LLM calls."""
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_banned_user_gets_canned_response(self, mock_send):
+        h = _make_handler()
+        h._get_profile = MagicMock(return_value=_make_profile(
+            banned_at=datetime(2026, 6, 12, tzinfo=timezone.utc),
+        ))
+        msg = _make_message("שלום")
+        update = MagicMock()
+        update.effective_message = msg
+        update.effective_user.id = 123
+        ctx = _make_context()
+
+        await h.handle_message(update, ctx)
+
+        mock_send.assert_called_once()
+        sent_text = mock_send.call_args[0][1]
+        assert "שירות" in sent_text
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_banned_user_no_routing(self, mock_send):
+        h = _make_handler()
+        h._get_profile = MagicMock(return_value=_make_profile(
+            banned_at=datetime(2026, 6, 12, tzinfo=timezone.utc),
+        ))
+        msg = _make_message("אכלתי פיצה")
+        update = MagicMock()
+        update.effective_message = msg
+        update.effective_user.id = 123
+        ctx = _make_context()
+
+        await h.handle_message(update, ctx)
+
+        h.analyzer.route_tiered.assert_not_called()

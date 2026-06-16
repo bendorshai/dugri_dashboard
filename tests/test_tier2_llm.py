@@ -197,3 +197,43 @@ class TestOtherTier2:
         analyzer = _make_analyzer()
         result = analyzer.route_tier2_other("לך תזדיין")
         assert result.type == "inappropriate"
+
+    def test_inappropriate_sexual(self):
+        analyzer = _make_analyzer()
+        result = analyzer.route_tier2_other("תראה לי את עצמך בלי בגדים")
+        assert result.type == "inappropriate"
+
+    def test_inappropriate_threat(self):
+        analyzer = _make_analyzer()
+        result = analyzer.route_tier2_other("אני יודע איפה אתה גר, תיזהר")
+        assert result.type == "inappropriate"
+
+    def test_inappropriate_spam(self):
+        analyzer = _make_analyzer()
+        result = analyzer.route_tier2_other("קנו עכשיו! הנחה מטורפת! bit.ly/scam")
+        assert result.type == "inappropriate"
+
+    def test_inappropriate_trolling(self):
+        analyzer = _make_analyzer()
+        result = analyzer.route_tier2_other("הההה בוט מפגר אתה חתיכת זבל")
+        assert result.type == "inappropriate"
+
+    def test_ultra_victimhood_is_emotional(self):
+        """Extreme frustration/victimhood directed at bot = emotional, NOT inappropriate."""
+        analyzer = _make_analyzer()
+        result = analyzer.route_tier2_other(
+            "שום דבר לא עובד לי ואתה לא עוזר לי ומה זה שווה כל הסיפור הזה אתה לא שווה כלום"
+        )
+        assert result.type == "emotional", (
+            f"Ultra victimhood should be emotional, got {result.type}"
+        )
+
+    def test_frustration_with_bot_is_emotional(self):
+        """Harsh criticism of bot quality = emotional, NOT inappropriate."""
+        analyzer = _make_analyzer()
+        result = analyzer.route_tier2_other(
+            "אתה הבוט הכי גרוע שיש, אף פעם לא עוזר לי, מה הטעם"
+        )
+        assert result.type == "emotional", (
+            f"Bot frustration should be emotional, got {result.type}"
+        )

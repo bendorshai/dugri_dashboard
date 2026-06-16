@@ -68,6 +68,7 @@ class HandlerContext:
         emotional_support_service=None,
         conversational_service=None,
         re_engagement_service=None,
+        inappropriate_service=None,
         landing_page_url: str = "https://www.dugri.life",
         admin_chat_id: int = 0,
         token_log_repo=None,
@@ -93,6 +94,7 @@ class HandlerContext:
         self.emotional_support_service = emotional_support_service
         self.conversational_service = conversational_service
         self.re_engagement_service = re_engagement_service
+        self.inappropriate_service = inappropriate_service
         self.gem_service = None  # set externally after construction
         self.admin_chat_id = admin_chat_id
         self.token_log_repo = token_log_repo
