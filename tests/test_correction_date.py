@@ -1,5 +1,5 @@
 """
-test_correction_date — TDD tests for date/time correction in food entries.
+test_correction_date - TDD tests for date/time correction in food entries.
 
 Expected behavior:
 - CorrectionResult can include corrected_date and corrected_time (optional)

@@ -1,5 +1,5 @@
 """
-test_toggle_model — TDD tests for the toggle system data model.
+test_toggle_model - TDD tests for the toggle system data model.
 
 Tests ToggleState, Toggles, and User model integration with toggles.
 """
@@ -55,7 +55,7 @@ class TestTogglesDefaults:
         assert toggles.nutrition.status == "dormant"
 
     def test_weekly_summary_starts_active(self):
-        """Weekly summary is opt-out default — born active."""
+        """Weekly summary is opt-out default - born active."""
         toggles = Toggles()
         assert toggles.weekly_summary.status == "active"
 
@@ -199,7 +199,7 @@ class TestToggleMigration:
             },
         }
         user = User.from_mongo_dict(doc)
-        # toggles field takes precedence — sleep stays active, not cancelled
+        # toggles field takes precedence - sleep stays active, not cancelled
         assert user.toggles.sleep.status == "active"
 
     def test_migration_maps_nutrition_habit_to_nutrition_toggle(self):

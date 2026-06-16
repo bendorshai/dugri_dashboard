@@ -1,5 +1,5 @@
 """
-main.py — נקודת כניסה של בוט דוגרי.
+main.py - נקודת כניסה של בוט דוגרי.
 
 טוען קונפיג, מאתחל repositories ו-services, ומריץ את הבוט.
 """
@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.4.1"
-VERSION_NOTES = "Fix startup crash: wire inappropriate_service through HealthHandlers; add sanity test suite"
+VERSION = "10.4.2"
+VERSION_NOTES = "Remove redundant ROTATING_PROMPT_COUNT; replace em dashes with hyphens across codebase"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -82,7 +82,7 @@ def main():
     mongo_client = MongoClient(mongo_uri)
     db = mongo_client[mongo_cfg["db_name"]]
 
-    # Repositories — single "users" collection for both dashboard and bot
+    # Repositories - single "users" collection for both dashboard and bot
     user_repo = UserRepository(db["users"])
     food_repo = FoodRepository(db["food_entries"])
     feedback_repo = WeeklyFeedbackRepository(db["weekly_feedback"])
@@ -146,7 +146,7 @@ def main():
 
     app.post_init = post_init
 
-    # Startup — webhook if public domain is set, polling otherwise.
+    # Startup - webhook if public domain is set, polling otherwise.
     # On Railway (PORT set) without a public domain, we still need to
     # bind the port so Railway's health check doesn't kill the process.
     webhook_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
@@ -155,7 +155,7 @@ def main():
     if webhook_domain:
         port_num = int(port or 8443)
         webhook_url = f"https://{webhook_domain}/webhook"
-        logger.info("Bot starting — webhook mode at %s (port %d)", webhook_url, port_num)
+        logger.info("Bot starting - webhook mode at %s (port %d)", webhook_url, port_num)
         app.run_webhook(
             listen="0.0.0.0",
             port=port_num,
@@ -163,7 +163,7 @@ def main():
             webhook_url=webhook_url,
         )
     elif port:
-        # Railway without public domain — polling + health check server
+        # Railway without public domain - polling + health check server
         import asyncio
         from http.server import HTTPServer, BaseHTTPRequestHandler
         import threading
@@ -179,10 +179,10 @@ def main():
         port_num = int(port)
         health_server = HTTPServer(("0.0.0.0", port_num), _HealthHandler)
         threading.Thread(target=health_server.serve_forever, daemon=True).start()
-        logger.info("Bot starting — polling mode + health check on port %d", port_num)
+        logger.info("Bot starting - polling mode + health check on port %d", port_num)
         app.run_polling(drop_pending_updates=True)
     else:
-        logger.info("Bot starting — polling mode (local)")
+        logger.info("Bot starting - polling mode (local)")
         app.run_polling(drop_pending_updates=True)
 
 

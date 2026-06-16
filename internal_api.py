@@ -1,5 +1,5 @@
 """
-internal_api.py — Internal webhook endpoint for dashboard-to-bot notifications.
+internal_api.py - Internal webhook endpoint for dashboard-to-bot notifications.
 
 Handles target change notifications from the dashboard. When a user updates
 their targets on the dashboard, this endpoint receives the old and new values,

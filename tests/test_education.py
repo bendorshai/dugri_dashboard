@@ -1,5 +1,5 @@
 """
-test_education — TDD tests for the education feature.
+test_education - TDD tests for the education feature.
 
 Tests static education texts, the edu_intro_shown flag on ToggleState,
 and the _get_education_intro helper logic.

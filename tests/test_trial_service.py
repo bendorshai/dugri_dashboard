@@ -1,5 +1,5 @@
 """
-test_trial_service — Tests for trial expiry logic.
+test_trial_service - Tests for trial expiry logic.
 
 Covers:
 - Config loading: trial_periods.yaml cohort matching, default fallback

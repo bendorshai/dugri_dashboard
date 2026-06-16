@@ -1,5 +1,5 @@
 """
-workout.py — מודל תיעוד אימון.
+workout.py - מודל תיעוד אימון.
 
 תלוי ב: pydantic.
 נצרך על ידי: repositories/workout_repository, services/habit_service.

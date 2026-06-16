@@ -1,5 +1,5 @@
 """
-hook_prompt_service.py — personalized hook prompt selection.
+hook_prompt_service.py - personalized hook prompt selection.
 
 Picks self-care hook prompts based on user's activity histogram.
 If the user has logged activities before, 75% of the time Dugri asks

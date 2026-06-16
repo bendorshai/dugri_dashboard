@@ -1,5 +1,5 @@
 """
-test_user_model — TDD tests for the unified User model.
+test_user_model - TDD tests for the unified User model.
 
 Tests the new User model where PK is email and telegram_user_id is optional.
 """

@@ -1,8 +1,8 @@
 """
-constants.py — All numeric and timing parameters for Dugri.
+constants.py - All numeric and timing parameters for Dugri.
 
 Every magic number or timing constant lives here. Logic code reads from this
-file — never hard-codes values. This makes tuning Dugri's cadence and
+file - never hard-codes values. This makes tuning Dugri's cadence and
 behavior a one-file change without touching logic.
 
 Depends on: nothing.
@@ -65,7 +65,7 @@ HOOK_CONFIG = {
 
 # ---------------------------------------------------------------------------
 # Backward-compatible aliases (derived from HOOK_CONFIG)
-# Existing code imports these — do not remove.
+# Existing code imports these - do not remove.
 # ---------------------------------------------------------------------------
 
 WORKOUTS_ANCHOR_DAY = HOOK_CONFIG["workouts"]["anchor_day"]
@@ -107,9 +107,6 @@ DASHBOARD_INTRO_DAY = 16
 
 EXIT_DOOR_UNANSWERED_THRESHOLD = 2
 """Consecutive unanswered hooks before showing the exit door message (once)."""
-
-ROTATING_PROMPT_COUNT = 5
-"""Number of rotating phrasings per hook type (defined in messages.py)."""
 
 MAX_RECENT_MESSAGES = 12
 """Maximum recent messages stored per user for classifier context."""

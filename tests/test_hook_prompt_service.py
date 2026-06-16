@@ -1,5 +1,5 @@
 """
-test_hook_prompt_service — TDD tests for personalized self-care hook prompts.
+test_hook_prompt_service - TDD tests for personalized self-care hook prompts.
 
 Expected behavior:
 - No past activities -> always returns a generic prompt from the pool

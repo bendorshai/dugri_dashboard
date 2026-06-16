@@ -1,5 +1,5 @@
 """
-test_onboarding_v2 — TDD tests for the rewritten OnboardingService.
+test_onboarding_v2 - TDD tests for the rewritten OnboardingService.
 
 The new onboarding is minimal: name collection + post-meal target offer.
 Habit reveals (sleep, workouts, self-care, eating window) are handled by

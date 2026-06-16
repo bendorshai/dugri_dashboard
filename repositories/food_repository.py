@@ -1,5 +1,5 @@
 """
-food_repository.py — גישה לקולקציית food_entries במונגו.
+food_repository.py - גישה לקולקציית food_entries במונגו.
 
 מחליף את כל הגישה ל-Google Sheets. כל רשומת אוכל מזוהה לפי ObjectId.
 

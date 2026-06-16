@@ -1,5 +1,5 @@
 """
-test_phase3 — TDD tests for Phase 3: habits, classifier, routing.
+test_phase3 - TDD tests for Phase 3: habits, classifier, routing.
 """
 
 import sys

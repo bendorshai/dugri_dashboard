@@ -1,5 +1,5 @@
 """
-self_care.py — מודל תיעוד "משהו לעצמי".
+self_care.py - מודל תיעוד "משהו לעצמי".
 
 תלוי ב: pydantic.
 נצרך על ידי: repositories/self_care_repository, services/habit_service.
@@ -26,7 +26,7 @@ class SelfCareLog(BaseModel):
     id: str | None = None
     telegram_user_id: int
     date: str | None = None  # DD/MM/YYYY
-    week_id: str | None = None  # e.g., "2026-W21" — auto-computed from date
+    week_id: str | None = None  # e.g., "2026-W21" - auto-computed from date
     description: str
     user_message_id: int | None = None
     bot_message_id: int | None = None

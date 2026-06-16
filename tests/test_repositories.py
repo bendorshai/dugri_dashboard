@@ -1,5 +1,5 @@
 """
-test_repositories — TDD tests for all repository classes.
+test_repositories - TDD tests for all repository classes.
 
 Uses mock pymongo collections (same pattern as existing test_storage.py).
 Includes multi-user isolation tests.

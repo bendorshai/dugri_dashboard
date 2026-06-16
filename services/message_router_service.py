@@ -1,5 +1,5 @@
 """
-message_router_service.py — מנתב הודעות מסווגות ל-service הנכון.
+message_router_service.py - מנתב הודעות מסווגות ל-service הנכון.
 
 מקבל תוצאת-סיווג מהמסווג ומנתב ל-service הנכון. זה ה-glue
 שמתרגם type -> פעולה.

@@ -1,5 +1,5 @@
 """
-test_self_knowledge — TDD tests for self-knowledge feature.
+test_self_knowledge - TDD tests for self-knowledge feature.
 
 Tests HelpService (knowledge doc + conversation history + structured response),
 FeatureRequestRepository (knowledge gap logging),
@@ -234,7 +234,7 @@ class TestFeatureRequestRepository:
 
 
 # ---------------------------------------------------------------------------
-# MessageRouterService — route_help integration
+# MessageRouterService - route_help integration
 # ---------------------------------------------------------------------------
 
 class TestRouteHelpIntegration:

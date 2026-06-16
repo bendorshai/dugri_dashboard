@@ -1,14 +1,12 @@
 """
-test_messages — TDD tests for the messages module.
+test_messages - TDD tests for the messages module.
 
-Verifies all expected message groups exist with correct counts,
-and that rotating prompt pools have exactly ROTATING_PROMPT_COUNT entries.
+Verifies all expected message groups exist with correct structure and content.
 """
 
 import pytest
 
 import messages as M
-from constants import ROTATING_PROMPT_COUNT
 
 
 class TestOnboardingMessages:
@@ -28,7 +26,7 @@ class TestOnboardingMessages:
 
 
 class TestToggleRevealMessages:
-    """One-time reveal messages — one per toggle."""
+    """One-time reveal messages - one per toggle."""
 
     def test_sleep_reveal(self):
         assert isinstance(M.REVEAL_SLEEP, str)
@@ -48,16 +46,7 @@ class TestToggleRevealMessages:
 
 
 class TestRotatingPrompts:
-    """Each toggle's recurring hook has exactly ROTATING_PROMPT_COUNT phrasings."""
-
-    def test_sleep_prompts_count(self):
-        assert len(M.HOOK_SLEEP_PROMPTS) == ROTATING_PROMPT_COUNT
-
-    def test_workouts_prompts_count(self):
-        assert len(M.HOOK_WORKOUTS_PROMPTS) == ROTATING_PROMPT_COUNT
-
-    def test_self_care_prompts_count(self):
-        assert len(M.HOOK_SELF_CARE_PROMPTS) == ROTATING_PROMPT_COUNT
+    """Rotating hook prompt pools must be non-empty lists of strings."""
 
     def test_all_prompts_are_nonempty_strings(self):
         for pool in [
@@ -65,6 +54,7 @@ class TestRotatingPrompts:
             M.HOOK_WORKOUTS_PROMPTS,
             M.HOOK_SELF_CARE_PROMPTS,
         ]:
+            assert len(pool) > 0
             for prompt in pool:
                 assert isinstance(prompt, str)
                 assert len(prompt) > 0

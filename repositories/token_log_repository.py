@@ -1,5 +1,5 @@
 """
-token_log_repository.py — daily per-model token usage aggregates.
+token_log_repository.py - daily per-model token usage aggregates.
 
 Each document represents one (user, model, date) combination.
 Uses $inc with upsert for atomic accumulation.

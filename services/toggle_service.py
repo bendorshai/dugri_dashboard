@@ -1,5 +1,5 @@
 """
-toggle_service.py — Central service for habit toggle state management.
+toggle_service.py - Central service for habit toggle state management.
 
 Handles all toggle state transitions (dormant/active/cancelled), gate logic,
 reveal timing, exit door mechanics, unanswered tracking, and goal state helpers.

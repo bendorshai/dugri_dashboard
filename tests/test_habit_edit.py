@@ -1,5 +1,5 @@
 """
-test_habit_edit — TDD tests for edit/delete flow on sleep, workout, self_care.
+test_habit_edit - TDD tests for edit/delete flow on sleep, workout, self_care.
 
 Expected behavior:
 - New keyboard builders create edit + delete buttons for each habit

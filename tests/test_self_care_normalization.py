@@ -1,5 +1,5 @@
 """
-test_self_care_normalization — TDD tests for GPT-based activity name normalization.
+test_self_care_normalization - TDD tests for GPT-based activity name normalization.
 
 Expected behavior:
 - normalize_self_care_activity() calls GPT and returns a normalized noun-form activity name

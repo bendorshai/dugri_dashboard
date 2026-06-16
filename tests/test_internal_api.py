@@ -1,5 +1,5 @@
 """
-test_internal_api — TDD tests for the internal webhook module.
+test_internal_api - TDD tests for the internal webhook module.
 """
 
 import pytest

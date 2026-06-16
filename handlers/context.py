@@ -295,6 +295,6 @@ class HandlerContext:
         if prev_protein < target_prot <= new_protein:
             alerts.append("🎉 כל הכבוד! הגעת ליעד גרם החלבון היומי!")
         if prev_cal <= target_cal < new_cal:
-            alerts.append("⚠️ שים לב — עברת את יעד הקלוריות היומי.")
+            alerts.append("⚠️ שים לב - עברת את יעד הקלוריות היומי.")
 
         return "\n".join(alerts)

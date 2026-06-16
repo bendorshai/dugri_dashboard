@@ -1,5 +1,5 @@
 """
-test_linking — TDD tests for LinkingService and StartHandler.
+test_linking - TDD tests for LinkingService and StartHandler.
 
 After the merge, LinkingService operates on a single 'users' collection
 via UserRepository. No separate dashboard_users_collection.

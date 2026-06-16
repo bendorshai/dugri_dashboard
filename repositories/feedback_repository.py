@@ -1,5 +1,5 @@
 """
-feedback_repository.py — גישה לקולקציית weekly_feedback במונגו.
+feedback_repository.py - גישה לקולקציית weekly_feedback במונגו.
 
 שומר ושולף פידבקים שבועיים שנוצרו על ידי GPT.
 

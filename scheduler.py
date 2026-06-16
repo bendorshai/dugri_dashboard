@@ -1,5 +1,5 @@
 """
-scheduler.py — single unified polling loop for all scheduled behaviors.
+scheduler.py - single unified polling loop for all scheduled behaviors.
 
 All proactive messages (hooks, eating window, goal reminders) run on one
 28-minute polling loop. Each tick loads fresh user data from MongoDB, so

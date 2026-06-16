@@ -1,5 +1,5 @@
 """
-test_route_self_care_histogram — TDD tests for histogram update on self-care logging.
+test_route_self_care_histogram - TDD tests for histogram update on self-care logging.
 
 Expected behavior:
 - route_self_care normalizes the description via GPT and increments the histogram

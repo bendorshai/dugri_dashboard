@@ -1,5 +1,5 @@
 """
-sleep.py — מודל תיעוד שעת שינה.
+sleep.py - מודל תיעוד שעת שינה.
 
 תלוי ב: pydantic.
 נצרך על ידי: repositories/sleep_repository, services/habit_service.

@@ -413,7 +413,7 @@ class CallbackHandler:
         for i, e in enumerate(entries, 1):
             total_cal += e.calories
             total_prot += e.protein
-            lines.append(f"{i}. {e.description} — {e.calories} קל׳ | {e.protein} גרם חלבון ({e.time})")
+            lines.append(f"{i}. {e.description} - {e.calories} קל׳ | {e.protein} גרם חלבון ({e.time})")
 
         status = format_daily_status(total_cal, total_prot, self.ctx._target_cal(profile), self.ctx._target_prot(profile))
         text = "\n".join(lines) + status
@@ -463,7 +463,7 @@ class CallbackHandler:
             entries = self.ctx.eating_day_svc.get_eating_day_entries(profile, ds)
 
             if not entries and ds not in workout_by_date and ds not in sleep_by_date:
-                lines.append(f"📆 {day_label}  —  אין נתונים")
+                lines.append(f"📆 {day_label}  -  אין נתונים")
                 continue
 
             day_lines = [f"📆 {day_label}"]

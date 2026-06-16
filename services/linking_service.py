@@ -1,5 +1,5 @@
 """
-linking_service.py — קישור חשבון טלגרם לפרופיל שנוצר באתר.
+linking_service.py - קישור חשבון טלגרם לפרופיל שנוצר באתר.
 
 מטפל ב-/start <token>: מוצא את המשתמש לפי טוקן, מקשר את telegram_user_id,
 ומתחיל trial.

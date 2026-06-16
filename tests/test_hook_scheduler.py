@@ -1,5 +1,5 @@
 """
-test_hook_scheduler — TDD tests for the hook scheduling system.
+test_hook_scheduler - TDD tests for the hook scheduling system.
 
 Tests the hook scheduling, random time generation, inline hook detection,
 and hook callback behavior.

@@ -1,5 +1,5 @@
 """
-profile.py — מודל המשתמש המאוחד של דוגרי.
+profile.py - מודל המשתמש המאוחד של דוגרי.
 
 הקובץ הזה מגדיר את User ותתי-המודלים שלו. המשתמש נוצר באתר (PK=email)
 ומתעדכן מהבוט כשמקשרים telegram_user_id.
@@ -94,13 +94,13 @@ class DiscoveredPattern(BaseModel):
 
 
 class HabitState(BaseModel):
-    """Legacy habit state — kept for backward compatibility during migration."""
+    """Legacy habit state - kept for backward compatibility during migration."""
     state: Literal["offered", "active", "declined", "pending"] = "pending"
     last_prompted_at: datetime | None = None
 
 
 class OnboardingHabits(BaseModel):
-    """Legacy onboarding habits — kept for backward compatibility during migration."""
+    """Legacy onboarding habits - kept for backward compatibility during migration."""
     nutrition: HabitState = Field(default_factory=HabitState)
     eating_window: HabitState = Field(default_factory=HabitState)
     sleep: HabitState = Field(default_factory=HabitState)
@@ -335,5 +335,5 @@ class User(BaseModel):
         return cls.model_validate(doc)
 
 
-# Backward-compat alias — will be removed after all imports are updated
+# Backward-compat alias - will be removed after all imports are updated
 UserProfile = User

@@ -1,5 +1,5 @@
 """
-self_care_repository.py — גישה לקולקציית self_care_logs.
+self_care_repository.py - גישה לקולקציית self_care_logs.
 """
 
 from __future__ import annotations

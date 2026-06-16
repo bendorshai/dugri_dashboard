@@ -1,5 +1,5 @@
 """
-test_content_loader — TDD tests for the content loader.
+test_content_loader - TDD tests for the content loader.
 
 Verifies loading .txt files into a namespace with correct format detection,
 include resolution, and error handling.

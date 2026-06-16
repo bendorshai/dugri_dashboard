@@ -1,5 +1,5 @@
 """
-user_repository.py — גישה לקולקציית users במונגו.
+user_repository.py - גישה לקולקציית users במונגו.
 
 כל משתמש מזוהה לפי email שהוא ה-_id של המסמך.
 הבוט מחפש לפי telegram_user_id (אינדקס ייחודי).
@@ -28,11 +28,11 @@ class UserRepository(BaseRepository[User]):
             logger.warning("Could not create telegram_user_id index (disk space?)")
 
     def get(self, telegram_user_id: int) -> User | None:
-        """Bot's primary lookup — queries by telegram_user_id field."""
+        """Bot's primary lookup - queries by telegram_user_id field."""
         return self.find_one({"telegram_user_id": telegram_user_id})
 
     def get_by_email(self, email: str) -> User | None:
-        """Dashboard lookup — queries by _id (email)."""
+        """Dashboard lookup - queries by _id (email)."""
         return self.get_by_id(email)
 
     def get_by_signup_token(self, token: str) -> User | None:

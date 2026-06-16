@@ -1,5 +1,5 @@
 """
-test_eating_day_logic — characterization tests for eating day behavior.
+test_eating_day_logic - characterization tests for eating day behavior.
 
 These tests document the exact behavior of eating-day filtering and stats-date
 logic BEFORE the refactor. They must pass against both the old code and the new

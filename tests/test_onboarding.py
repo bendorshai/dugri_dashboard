@@ -1,5 +1,5 @@
 """
-test_onboarding — Legacy test file, replaced by test_onboarding_v2.py.
+test_onboarding - Legacy test file, replaced by test_onboarding_v2.py.
 
 Kept for backward compatibility verification of the constructor signature.
 Full onboarding tests are in test_onboarding_v2.py.

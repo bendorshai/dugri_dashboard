@@ -1,5 +1,5 @@
 """
-base.py — BaseRepository: לוגיקת CRUD משותפת מול קולקציה אחת.
+base.py - BaseRepository: לוגיקת CRUD משותפת מול קולקציה אחת.
 
 מונע כפילות בין ה-repositories ומרכז את ההמרה dict<->model במקום אחד.
 

@@ -1,5 +1,5 @@
 """
-sleep_repository.py — גישה לקולקציית sleep_logs.
+sleep_repository.py - גישה לקולקציית sleep_logs.
 """
 
 from __future__ import annotations

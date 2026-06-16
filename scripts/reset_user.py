@@ -1,5 +1,5 @@
 """
-reset_user.py — Reset a user's opt-in/goal state for testing.
+reset_user.py - Reset a user's opt-in/goal state for testing.
 
 Usage:
     python scripts/reset_user.py <email>
@@ -32,7 +32,7 @@ MONGO_URI = "mongodb://mongo:CeIVOLCoGytTovcrdPkcKLVdgjeoFchP@junction.proxy.rlw
 
 ONBOARDING_GREETING = (
     "היי, אני דוגרי 👋\n\n"
-    "הלב של מה שאני עושה הוא מודעות תזונתית — "
+    "הלב של מה שאני עושה הוא מודעות תזונתית - "
     "שלח לי את הארוחה הבאה שלך בכמה מילים ואני אעשה את החישוב.\n\n"
     "לפני שמתחילים, איך אתה רוצה שאקרא לך?"
 )

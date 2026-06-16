@@ -1,8 +1,8 @@
 """
-migrate_toggles.py — One-time migration: add toggles field to existing users.
+migrate_toggles.py - One-time migration: add toggles field to existing users.
 
 Converts old onboarding.habits states to new toggles format.
-Safe to run multiple times — skips users that already have toggles.
+Safe to run multiple times - skips users that already have toggles.
 
 Usage:
     python scripts/migrate_toggles.py [--dry-run]
@@ -109,7 +109,7 @@ def main():
 
     print(f"\nTotal: {total}, Migrated: {migrated}, Skipped (already have toggles): {skipped}")
     if args.dry_run:
-        print("(dry run — no changes written)")
+        print("(dry run - no changes written)")
 
 
 if __name__ == "__main__":

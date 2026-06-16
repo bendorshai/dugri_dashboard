@@ -1,5 +1,5 @@
 """
-test_goal_service.py — Unit tests for GoalService.
+test_goal_service.py - Unit tests for GoalService.
 
 Tests the nutrition confirmation flow (partial adjustment, targets sync)
 and user-initiated goal updates.

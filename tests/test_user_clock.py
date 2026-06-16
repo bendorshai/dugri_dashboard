@@ -1,5 +1,5 @@
 """
-test_user_clock — Tests for UserClock timezone-safe date comparison.
+test_user_clock - Tests for UserClock timezone-safe date comparison.
 
 Covers the critical bug: last_asked_at stored in UTC compared against
 user's local date. Between midnight and 3am Israel time, UTC date is

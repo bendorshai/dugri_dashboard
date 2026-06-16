@@ -1,8 +1,8 @@
 """
-models — מודלי הדומיין של דוגרי.
+models - מודלי הדומיין של דוגרי.
 
 כל ישות דומיין היא מחלקת Pydantic שמספקת ולידציה אוטומטית וטייפינג חזק.
-ה-repositories מקבלות ומחזירות מודלים מכאן — לא מילונים חשופים.
+ה-repositories מקבלות ומחזירות מודלים מכאן - לא מילונים חשופים.
 """
 
 from models.profile import User, UserProfile, Targets, EatingWindow

@@ -1,5 +1,5 @@
 """
-feedback_service.py — weekly feedback with all-habit coverage and pattern detection.
+feedback_service.py - weekly feedback with all-habit coverage and pattern detection.
 
 Generates feedback for the last 7 days in the context of the last 30 days.
 Covers food, eating window, sleep, workouts, and self-care.

@@ -1,5 +1,5 @@
 """
-test_repository_move — TDD tests for move() on all repositories.
+test_repository_move - TDD tests for move() on all repositories.
 
 Expected behavior:
 - FoodRepository.move() updates date, optionally time and within_window

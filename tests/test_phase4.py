@@ -1,5 +1,5 @@
 """
-test_phase4 — TDD tests for Phase 4: feedback, trial, tone.
+test_phase4 - TDD tests for Phase 4: feedback, trial, tone.
 """
 
 import sys

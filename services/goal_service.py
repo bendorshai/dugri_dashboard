@@ -1,5 +1,5 @@
 """
-goal_service.py — per-habit goal lifecycle orchestration.
+goal_service.py - per-habit goal lifecycle orchestration.
 
 Handles the multi-step goal conversation for each habit:
   activate tracking -> offer goal -> collect value -> set/decline/remind

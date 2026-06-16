@@ -1,5 +1,5 @@
 """
-onboarding_service.py — Minimal onboarding: name collection only.
+onboarding_service.py - Minimal onboarding: name collection only.
 
 The onboarding collects the user's name after Telegram linking.
 Goal and habit reveals are handled by GoalService and the hook system.

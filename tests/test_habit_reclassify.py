@@ -1,5 +1,5 @@
 """
-test_habit_reclassify — TDD tests for cross-habit reclassification.
+test_habit_reclassify - TDD tests for cross-habit reclassification.
 
 Expected behavior:
 - HabitCorrectionResult can include reclassify_to field

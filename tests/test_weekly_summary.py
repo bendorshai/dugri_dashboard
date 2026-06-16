@@ -1,5 +1,5 @@
 """
-test_weekly_summary — TDD tests for the enhanced weekly summary.
+test_weekly_summary - TDD tests for the enhanced weekly summary.
 
 Tests the proactive offer path and the all-habit feedback structure.
 """

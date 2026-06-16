@@ -1,5 +1,5 @@
 """
-error_repository.py — גישה לקולקציית error_logs במונגו.
+error_repository.py - גישה לקולקציית error_logs במונגו.
 
 שומר שגיאות עם TTL של 30 יום.
 

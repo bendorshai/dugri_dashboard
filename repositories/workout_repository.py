@@ -1,5 +1,5 @@
 """
-workout_repository.py — גישה לקולקציית workout_logs.
+workout_repository.py - גישה לקולקציית workout_logs.
 """
 
 from __future__ import annotations

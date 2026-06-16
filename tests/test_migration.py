@@ -1,5 +1,5 @@
 """
-test_migration — Tests for the toggles migration logic.
+test_migration - Tests for the toggles migration logic.
 """
 
 import sys

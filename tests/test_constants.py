@@ -1,5 +1,5 @@
 """
-test_constants — TDD tests for the constants module.
+test_constants - TDD tests for the constants module.
 
 Verifies all expected constants exist with valid values.
 """
@@ -72,6 +72,3 @@ class TestExitDoor:
         assert C.EXIT_DOOR_UNANSWERED_THRESHOLD > 0
 
 
-class TestRotatingPromptCount:
-    def test_rotating_prompt_count(self):
-        assert C.ROTATING_PROMPT_COUNT == 5

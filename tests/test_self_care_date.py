@@ -1,5 +1,5 @@
 """
-test_self_care_date — TDD tests for SelfCareLog date field.
+test_self_care_date - TDD tests for SelfCareLog date field.
 
 Expected behavior:
 - SelfCareLog with date auto-computes week_id
