@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.4.0"
-VERSION_NOTES = "Inappropriate strikes system: 3-strike ban, permanent logging, expanded classification"
+VERSION = "10.4.1"
+VERSION_NOTES = "Fix startup crash: wire inappropriate_service through HealthHandlers; add sanity test suite"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
