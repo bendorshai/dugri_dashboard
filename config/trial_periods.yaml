@@ -1,0 +1,14 @@
+# Trial period configuration.
+# Cohorts are matched in order by trial_started_at date.
+# The first matching cohort (where trial_started_at falls within [start_date, end_date)) wins.
+# A cohort with no start_date/end_date is the default fallback.
+#
+# Example with date range:
+#   - start_date: "2026-06-01"
+#     end_date: "2026-07-01"
+#     trial_days: 14
+#
+# Trial ends at 19:00 local time on the Nth day after trial_started_at.
+
+cohorts:
+  - trial_days: 12

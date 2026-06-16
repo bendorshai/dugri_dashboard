@@ -15,7 +15,7 @@ for mod in [
     sys.modules.setdefault(mod, MagicMock())
 
 from models.profile import UserProfile, Targets, ToggleState, Toggles
-from services.trial_service import TrialService, TRIAL_DAYS
+from services.trial_service import TrialService
 from services.feedback_service import FeedbackService
 from repositories.user_repository import UserRepository
 from repositories.food_repository import FoodRepository
@@ -36,30 +36,11 @@ def _make_profile(**kwargs):
 # ---------------------------------------------------------------------------
 
 class TestTrialService:
+    """Legacy trial tests - comprehensive tests are in test_trial_service.py."""
+
     def _make_service(self):
         repo = MagicMock(spec=UserRepository)
         return TrialService(repo), repo
-
-    def test_expire_after_21_days(self):
-        svc, repo = self._make_service()
-        started = datetime.now(timezone.utc) - timedelta(days=22)
-        profile = _make_profile(subscription_status="trial_active", trial_started_at=started)
-        now = datetime.now(timezone.utc)
-
-        result = svc.check_and_expire(profile, now)
-        assert result is True
-        repo.update_fields.assert_called_once()
-        assert repo.update_fields.call_args[0][1]["subscription_status"] == "trial_ended"
-
-    def test_no_expire_before_21_days(self):
-        svc, repo = self._make_service()
-        started = datetime.now(timezone.utc) - timedelta(days=10)
-        profile = _make_profile(subscription_status="trial_active", trial_started_at=started)
-        now = datetime.now(timezone.utc)
-
-        result = svc.check_and_expire(profile, now)
-        assert result is False
-        repo.update_fields.assert_not_called()
 
     def test_is_blocked_when_trial_ended(self):
         svc, _ = self._make_service()
@@ -81,11 +62,6 @@ class TestTrialService:
         profile = _make_profile(subscription_status="paid")
         result = svc.check_and_expire(profile, datetime.now(timezone.utc))
         assert result is False
-
-    def test_blocked_message_contains_price(self):
-        svc, _ = self._make_service()
-        msg = svc.get_blocked_message()
-        assert "47" in msg
 
 
 # ---------------------------------------------------------------------------

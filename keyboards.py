@@ -152,3 +152,10 @@ def make_gem_feedback_keyboard(gem_id: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton("\U0001F44D", callback_data=f"{CB_GEM}like_{gem_id}"),
         InlineKeyboardButton("\U0001F44E", callback_data=f"{CB_GEM}dislike_{gem_id}"),
     ]])
+
+
+def make_trial_cta_keyboard(dashboard_url: str = "") -> InlineKeyboardMarkup:
+    base = dashboard_url.rstrip("/") if dashboard_url else "https://www.dugri.life"
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("לתוכניות המנוי", url=f"{base}/plans"),
+    ]])
