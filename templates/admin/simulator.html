@@ -287,6 +287,8 @@ function simulator() {
             try {
                 this.chatMessages = [];
                 await this.api('/admin/simulator/reset');
+                // Send a first message to trigger the bot's organic greeting
+                await this.api('/admin/simulator/send', { text: '\u05d4\u05d9\u05d9' });
                 await this._loadState();
                 this.flash('Full reset complete');
             } finally {
