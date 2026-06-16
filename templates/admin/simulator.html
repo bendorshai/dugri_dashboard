@@ -284,32 +284,28 @@ function simulator() {
 
         async fullReset() {
             this.loading = true;
-            this.chatMessages = [];
-            await this.api('/admin/simulator/reset');
-
-            // Trigger bot greeting via simulate endpoint
             try {
-                await this.api('/admin/simulator/send', { text: '/start' });
-            } catch(e) {
-                // Bot may not be running
+                this.chatMessages = [];
+                await this.api('/admin/simulator/reset');
+                await this._loadState();
+                this.flash('Full reset complete');
+            } finally {
+                this.loading = false;
             }
-
-            // Reload everything from DB
-            await this.refreshState();
-            this.loading = false;
-            this.flash('Full reset complete');
         },
 
         async clearLogs() {
             this.loading = true;
-            const result = await this.api('/admin/simulator/clear-logs');
-            this.loading = false;
-            const total = Object.values(result.deleted || {}).reduce((a, b) => a + b, 0);
-            this.flash(total + ' log entries deleted');
+            try {
+                const result = await this.api('/admin/simulator/clear-logs');
+                const total = Object.values(result.deleted || {}).reduce((a, b) => a + b, 0);
+                this.flash(total + ' log entries deleted');
+            } finally {
+                this.loading = false;
+            }
         },
 
-        async refreshState() {
-            this.loading = true;
+        async _loadState() {
             const data = await this.api('/admin/simulator/state');
             if (!data.error) {
                 this.state = data;
@@ -322,8 +318,17 @@ function simulator() {
                     } catch(e) {}
                 }
             }
-            this.loading = false;
-            this.flash('State refreshed');
+            this.scrollChat();
+        },
+
+        async refreshState() {
+            this.loading = true;
+            try {
+                await this._loadState();
+                this.flash('State refreshed');
+            } finally {
+                this.loading = false;
+            }
         },
 
         async reloadChat() {
@@ -341,23 +346,21 @@ function simulator() {
             if (!text) return;
             this.chatInput = '';
             this.chatLoading = true;
-
             try {
                 await this.api('/admin/simulator/send', { text });
+                await this.reloadChat();
             } catch(e) {}
             this.chatLoading = false;
-            await this.reloadChat();
             this.$refs.chatInputField.focus();
         },
 
         async sendCallback(callbackData) {
             this.chatLoading = true;
-
             try {
                 await this.api('/admin/simulator/send', { callback_data: callbackData });
+                await this.reloadChat();
             } catch(e) {}
             this.chatLoading = false;
-            await this.reloadChat();
         },
 
         scrollChat() {
