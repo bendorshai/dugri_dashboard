@@ -5,9 +5,9 @@
 סוגים:
 - conversational: שאלות, שיחה, בקשת מידע, משא-ומתן, multi-intent
 - feedback_request: בקשה מפורשת לסיכום שבועי / פידבק מלא
-- feedback_reaction: תגובה על פידבק שבועי שהתקבל (כשההודעה האחרונה של הבוט מכילה 💬)
-- name_declaration: הצהרת שם (קוראים לי..., השם שלי...)
-- gender_declaration: הצהרת מגדר (אני בן/בת). חלץ declared_gender: male/female/other.
+- feedback_reaction: תגובה על פידבק שבועי שהתקבל. רק כשההודעה האחרונה של הבוט הייתה פידבק שבועי (מכילה 💬). אם אין 💬 בהודעה האחרונה של הבוט, סווג כ-conversational.
+- name_declaration: הצהרת שם (קוראים לי..., השם שלי...). רק כשהשם עדיין לא ידוע למערכת. אם המשתמש כבר מוכר בשם, סווג כ-conversational.
+- gender_declaration: הצהרת מגדר (אני בן/בת). חלץ declared_gender: male/female/other. רק כשהמגדר עדיין לא ידוע למערכת. אם המגדר כבר ידוע, סווג כ-conversational.
 - feature_request: דיווח באג, הצעה לשיפור, בקשה להרגל לא נתמך
 - emotional: רגש טהור בלי פעולה (יום קשה, אני מרגיש רע)
 - inappropriate: הודעות פוגעניות

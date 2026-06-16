@@ -80,9 +80,13 @@ def _make_handler(**overrides):
     h.emotional_support_service = MagicMock()
     h.conversational_service = MagicMock()
     h.token_log_repo = None
+    h.sleep_repo = MagicMock()
+    h.workout_repo = MagicMock()
+    h.self_care_repo = MagicMock()
     h.landing_page_url = "https://test.com"
     h.admin_chat_id = 0
     h._debug_mode = False
+    h._current_classification = None
     for k, v in overrides.items():
         setattr(h, k, v)
     return h
@@ -91,6 +95,7 @@ def _make_handler(**overrides):
 def _make_message(text="test"):
     msg = AsyncMock()
     msg.text = text
+    msg.message_id = 12345
     msg.reply_to_message = None
     return msg
 
@@ -265,8 +270,13 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("feedback_reaction")
 
+        # Guardrail requires recent feedback in last 2 messages
+        params = {**_DISPATCH_PARAMS, "recent_messages": [
+            {"role": "bot", "text": "💬 הנה הסיכום השבועי שלך...", "classification": "feedback_request"},
+            {"role": "user", "text": "מעניין, תודה"},
+        ]}
         await h._dispatch_v2(
-            _make_message("מעניין, תודה"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
+            _make_message("מעניין, תודה"), _make_context(), 123, profile, rr, **params,
         )
         h.feedback_service.process_reaction.assert_called_once()
 
@@ -923,3 +933,336 @@ class TestDispatchV2NameDeclaration:
 
         call_kwargs = h.onboarding_service.handle_name_response.call_args
         assert call_kwargs.kwargs.get("late") is True or call_kwargs[1].get("late") is True
+
+
+# ---------------------------------------------------------------------------
+# Class: TestGuardrailIntegration
+# ---------------------------------------------------------------------------
+
+class TestGuardrailIntegration:
+    """Test guardrails integrated at the _dispatch_v2 level."""
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_feedback_reaction_without_feedback_goes_conversational(self, mock_send):
+        """feedback_reaction without recent feedback is redirected to conversational."""
+        h = _make_handler()
+        h.conversational_service.respond.return_value = "בכיף"
+        h.eating_day_svc.resolve_eating_day.return_value = "13/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (0, 0)
+        profile = _make_profile()
+        rr = _make_router_result("feedback_reaction")
+
+        # No feedback in recent messages -> should route to conversational
+        params = {**_DISPATCH_PARAMS, "recent_messages": [
+            {"role": "bot", "text": "שווארמה ≈ 720 קל׳, 38 ג' חלבון", "classification": "meal"},
+            {"role": "user", "text": "תודה דוגרי"},
+        ]}
+        await h._dispatch_v2(
+            _make_message("תודה דוגרי"), _make_context(), 123, profile, rr, **params,
+        )
+        h.conversational_service.respond.assert_called_once()
+        h.feedback_service.process_reaction.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_without_last_entry_goes_conversational(self, mock_send):
+        """correction without last_entry should NOT fall through to meal handler."""
+        h = _make_handler()
+        h.conversational_service.respond.return_value = "כדי לתקן, תגיב על ההודעה המקורית"
+        h.eating_day_svc.resolve_eating_day.return_value = "13/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (0, 0)
+        profile = _make_profile()
+        rr = _make_router_result("correction")
+
+        # No correctable context and no last_entry -> conversational
+        await h._dispatch_v2(
+            _make_message("בלי אורז"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
+        )
+        h.conversational_service.respond.assert_called_once()
+        h.analyzer.analyze_food_text.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_name_declaration_blocked_when_name_set(self, mock_send):
+        """name_declaration when name is already set -> goes to conversational."""
+        h = _make_handler()
+        h.conversational_service.respond.return_value = "אפשר לשנות שם באתר"
+        h.eating_day_svc.resolve_eating_day.return_value = "13/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (0, 0)
+        profile = _make_profile(name="שי")
+        rr = _make_router_result("name_declaration")
+
+        await h._dispatch_v2(
+            _make_message("קוראים לי דני"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
+        )
+        h.conversational_service.respond.assert_called_once()
+        h.onboarding_service.handle_name_response.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_gender_declaration_blocked_when_gender_set(self, mock_send):
+        """gender_declaration when gender is already set -> goes to conversational."""
+        h = _make_handler()
+        h.conversational_service.respond.return_value = "אפשר לשנות מגדר באתר"
+        h.eating_day_svc.resolve_eating_day.return_value = "13/06/2026"
+        h.eating_day_svc.get_eating_day_totals.return_value = (0, 0)
+        profile = _make_profile(gender="male")
+        rr = _make_router_result("gender_declaration", declared_gender="female")
+
+        await h._dispatch_v2(
+            _make_message("אני בת"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
+        )
+        h.conversational_service.respond.assert_called_once()
+        h.onboarding_service.handle_gender_response.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_with_recent_meal_allowed(self, mock_send):
+        """correction when meal was in last 2 messages -> allowed through guardrail."""
+        h = _make_handler()
+        last = {"entry_id": "abc", "description": "שווארמה", "calories": 720, "protein": 38}
+        h.analyzer.analyze_correction.return_value = MagicMock()
+        h._handle_correction = AsyncMock()
+        profile = _make_profile()
+        rr = _make_router_result("correction")
+
+        params = {**_DISPATCH_PARAMS,
+            "last_entry": last,
+            "recent_messages": [
+                {"role": "bot", "text": "שווארמה ≈ 720 קל׳, 38 ג' חלבון", "classification": "meal"},
+                {"role": "user", "text": "בלי אורז"},
+            ],
+        }
+        await h._dispatch_v2(
+            _make_message("בלי אורז"), _make_context(), 123, profile, rr, **params,
+        )
+        h.analyzer.analyze_correction.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_correction_with_reply_context_allowed(self, mock_send):
+        """correction via Telegram reply -> allowed even without recent meal in history."""
+        h = _make_handler()
+        last = {"entry_id": "abc", "description": "שווארמה", "calories": 720, "protein": 38}
+        h.analyzer.analyze_correction.return_value = MagicMock()
+        h._handle_correction = AsyncMock()
+        profile = _make_profile()
+        rr = _make_router_result("correction")
+
+        params = {**_DISPATCH_PARAMS,
+            "last_entry": last,
+            "reply_context": "שווארמה ≈ 720 קל׳, 38 ג' חלבון",
+            "recent_messages": [],  # empty history, but reply_context is set
+        }
+        await h._dispatch_v2(
+            _make_message("בלי אורז"), _make_context(), 123, profile, rr, **params,
+        )
+        h.analyzer.analyze_correction.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Class: TestFindEntryByMessageId
+# ---------------------------------------------------------------------------
+
+class TestFindEntryByMessageId:
+    """Test _find_entry_by_message_id which looks up entries across all collections."""
+
+    def test_finds_food_by_bot_message_id(self):
+        h = _make_handler()
+        h.food_repo._collection.find_one.return_value = {
+            "_id": "food123",
+            "description": "שווארמה",
+            "calories": 720,
+            "protein": 38,
+            "photo_file_id": None,
+            "bot_message_id": 999,
+        }
+
+        result = h._find_entry_by_message_id(tid=123, message_id=999)
+        assert result is not None
+        assert result["entry_id"] == "food123"
+        assert result["entry_type"] == "food"
+        assert result["calories"] == 720
+
+    def test_finds_food_by_user_message_id(self):
+        h = _make_handler()
+        h.food_repo._collection.find_one.return_value = {
+            "_id": "food456",
+            "description": "סלט",
+            "calories": 200,
+            "protein": 5,
+            "user_message_id": 888,
+        }
+
+        result = h._find_entry_by_message_id(tid=123, message_id=888)
+        assert result is not None
+        assert result["entry_id"] == "food456"
+        assert result["entry_type"] == "food"
+
+    def test_finds_sleep_entry(self):
+        h = _make_handler()
+        h.food_repo._collection.find_one.return_value = None  # not food
+        h.sleep_repo._collection.find_one.return_value = {
+            "_id": "sleep789",
+            "sleep_time": "23:00",
+            "bot_message_id": 777,
+        }
+
+        result = h._find_entry_by_message_id(tid=123, message_id=777)
+        assert result is not None
+        assert result["entry_id"] == "sleep789"
+        assert result["entry_type"] == "sleep"
+        assert result["description"] == "23:00"
+
+    def test_finds_workout_entry(self):
+        h = _make_handler()
+        h.food_repo._collection.find_one.return_value = None
+        h.sleep_repo._collection.find_one.return_value = None
+        h.workout_repo._collection.find_one.return_value = {
+            "_id": "workout101",
+            "note": "אימון ריצה",
+            "bot_message_id": 666,
+        }
+
+        result = h._find_entry_by_message_id(tid=123, message_id=666)
+        assert result is not None
+        assert result["entry_id"] == "workout101"
+        assert result["entry_type"] == "workout"
+        assert result["description"] == "אימון ריצה"
+
+    def test_finds_self_care_entry(self):
+        h = _make_handler()
+        h.food_repo._collection.find_one.return_value = None
+        h.sleep_repo._collection.find_one.return_value = None
+        h.workout_repo._collection.find_one.return_value = None
+        h.self_care_repo._collection.find_one.return_value = {
+            "_id": "sc202",
+            "description": "הלכתי לים",
+            "bot_message_id": 555,
+        }
+
+        result = h._find_entry_by_message_id(tid=123, message_id=555)
+        assert result is not None
+        assert result["entry_id"] == "sc202"
+        assert result["entry_type"] == "self_care"
+        assert result["description"] == "הלכתי לים"
+
+    def test_returns_none_when_not_found(self):
+        h = _make_handler()
+        h.food_repo._collection.find_one.return_value = None
+        h.sleep_repo._collection.find_one.return_value = None
+        h.workout_repo._collection.find_one.return_value = None
+        h.self_care_repo._collection.find_one.return_value = None
+
+        result = h._find_entry_by_message_id(tid=123, message_id=999)
+        assert result is None
+
+    def test_returns_none_when_no_repos(self):
+        h = _make_handler(food_repo=None, sleep_repo=None, workout_repo=None, self_care_repo=None)
+
+        result = h._find_entry_by_message_id(tid=123, message_id=999)
+        assert result is None
+
+    def test_queries_with_correct_filter(self):
+        """Verify the MongoDB query uses $or for both user_message_id and bot_message_id."""
+        h = _make_handler()
+        h.food_repo._collection.find_one.return_value = None
+        h.sleep_repo._collection.find_one.return_value = None
+        h.workout_repo._collection.find_one.return_value = None
+        h.self_care_repo._collection.find_one.return_value = None
+
+        h._find_entry_by_message_id(tid=123, message_id=999)
+
+        query = h.food_repo._collection.find_one.call_args[0][0]
+        assert query["telegram_user_id"] == 123
+        assert "$or" in query
+        assert {"user_message_id": 999} in query["$or"]
+        assert {"bot_message_id": 999} in query["$or"]
+
+
+# ---------------------------------------------------------------------------
+# Class: TestStoreMessageIds
+# ---------------------------------------------------------------------------
+
+class TestStoreMessageIds:
+    """Test _store_message_ids stores Telegram message IDs on entries."""
+
+    def test_stores_both_ids(self):
+        from bson import ObjectId
+        h = _make_handler()
+        h._store_message_ids(h.food_repo, "abc123abc123abc123abc123", 111, 222)
+        h.food_repo.update_by_id.assert_called_once()
+        call_args = h.food_repo.update_by_id.call_args
+        assert call_args[0][1] == {"user_message_id": 111, "bot_message_id": 222}
+
+    def test_stores_only_user_id_when_bot_is_none(self):
+        h = _make_handler()
+        h._store_message_ids(h.food_repo, "abc123abc123abc123abc123", 111, None)
+        call_args = h.food_repo.update_by_id.call_args
+        assert call_args[0][1] == {"user_message_id": 111}
+
+    def test_stores_only_bot_id_when_user_is_none(self):
+        h = _make_handler()
+        h._store_message_ids(h.food_repo, "abc123abc123abc123abc123", None, 222)
+        call_args = h.food_repo.update_by_id.call_args
+        assert call_args[0][1] == {"bot_message_id": 222}
+
+    def test_no_op_when_entry_id_is_none(self):
+        h = _make_handler()
+        h._store_message_ids(h.food_repo, None, 111, 222)
+        h.food_repo.update_by_id.assert_not_called()
+
+    def test_no_op_when_repo_is_none(self):
+        h = _make_handler()
+        # Should not raise
+        h._store_message_ids(None, "abc123abc123abc123abc123", 111, 222)
+
+    def test_no_op_when_both_ids_none(self):
+        h = _make_handler()
+        h._store_message_ids(h.food_repo, "abc123abc123abc123abc123", None, None)
+        h.food_repo.update_by_id.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Class: TestClassificationMetadata
+# ---------------------------------------------------------------------------
+
+class TestClassificationMetadata:
+    """Test that classification metadata is stored on bot messages."""
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_bot_message_includes_classification(self, mock_send):
+        """_save_bot_message should include classification from _current_classification."""
+        h = _make_handler()
+        h._current_classification = "meal"
+        h._save_bot_message(123, "שווארמה ≈ 720 קל׳")
+
+        call_args = h.user_repo.push_messages.call_args
+        msg = call_args[0][1][0]  # first message in list
+        assert msg["role"] == "bot"
+        assert msg["classification"] == "meal"
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_bot_message_no_classification_when_not_set(self, mock_send):
+        """_save_bot_message without _current_classification should not include field."""
+        h = _make_handler()
+        h._current_classification = None
+        h._save_bot_message(123, "שווארמה ≈ 720 קל׳")
+
+        call_args = h.user_repo.push_messages.call_args
+        msg = call_args[0][1][0]
+        assert "classification" not in msg
+
+    @pytest.mark.asyncio
+    @patch("handlers.base.send_long_text", new_callable=AsyncMock)
+    async def test_send_returns_message_id(self, mock_send):
+        """_send should return the message_id from send_long_text."""
+        mock_send.return_value = 42  # send_long_text returns message_id
+        h = _make_handler()
+        h._current_classification = "meal"
+
+        result = await h._send("test", tid=123, message=_make_message())
+        assert result == 42

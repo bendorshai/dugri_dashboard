@@ -29,20 +29,25 @@ async def safe_react(message, emoji: str) -> None:
         logger.debug("Could not set reaction %s", emoji)
 
 
-async def send_long_text(message, text: str, reply_markup=None) -> None:
-    """Send text that may exceed Telegram's 4096-char limit, splitting into chunks."""
+async def send_long_text(message, text: str, reply_markup=None) -> int | None:
+    """Send text that may exceed Telegram's 4096-char limit, splitting into chunks.
+
+    Returns the message_id of the last sent chunk, or None on failure.
+    """
     if len(text) <= MAX_TG_LENGTH:
-        await message.reply_text(text, reply_markup=reply_markup)
-        return
+        sent = await message.reply_text(text, reply_markup=reply_markup)
+        return getattr(sent, "message_id", None)
+    last_sent = None
     while text:
         if len(text) <= MAX_TG_LENGTH:
-            await message.reply_text(text, reply_markup=reply_markup)
+            last_sent = await message.reply_text(text, reply_markup=reply_markup)
             break
         split_at = text.rfind("\n", 0, MAX_TG_LENGTH)
         if split_at <= 0:
             split_at = MAX_TG_LENGTH
         await message.reply_text(text[:split_at])
         text = text[split_at:].lstrip("\n")
+    return getattr(last_sent, "message_id", None)
 
 
 TOGGLE_GATE_DAYS_MAP = {
@@ -113,17 +118,22 @@ def format_debug_metadata(
     return "\n".join(lines)
 
 
-async def send_long_bot(bot, tid: int, text: str, reply_markup=None) -> None:
-    """Send text via bot.send_message, splitting if it exceeds Telegram's 4096-char limit."""
+async def send_long_bot(bot, tid: int, text: str, reply_markup=None) -> int | None:
+    """Send text via bot.send_message, splitting if it exceeds Telegram's 4096-char limit.
+
+    Returns the message_id of the last sent chunk, or None on failure.
+    """
     if len(text) <= MAX_TG_LENGTH:
-        await bot.send_message(chat_id=tid, text=text, reply_markup=reply_markup)
-        return
+        sent = await bot.send_message(chat_id=tid, text=text, reply_markup=reply_markup)
+        return getattr(sent, "message_id", None)
+    last_sent = None
     while text:
         if len(text) <= MAX_TG_LENGTH:
-            await bot.send_message(chat_id=tid, text=text, reply_markup=reply_markup)
+            last_sent = await bot.send_message(chat_id=tid, text=text, reply_markup=reply_markup)
             break
         split_at = text.rfind("\n", 0, MAX_TG_LENGTH)
         if split_at <= 0:
             split_at = MAX_TG_LENGTH
         await bot.send_message(chat_id=tid, text=text[:split_at])
         text = text[split_at:].lstrip("\n")
+    return getattr(last_sent, "message_id", None)

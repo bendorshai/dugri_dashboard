@@ -156,6 +156,72 @@ class HealthHandlers:
     # Core methods (kept on HealthHandlers for backward compat with tests)
     # ------------------------------------------------------------------
 
+    def _find_entry_by_message_id(self, tid: int, message_id: int) -> dict | None:
+        """Search all entry collections for an entry linked to a Telegram message ID.
+
+        Checks both user_message_id and bot_message_id across food_entries,
+        sleep_logs, workout_logs, and self_care_logs. Returns a last_entry-
+        compatible dict if found, or None.
+        """
+        query = {
+            "telegram_user_id": tid,
+            "$or": [
+                {"user_message_id": message_id},
+                {"bot_message_id": message_id},
+            ],
+        }
+
+        # Check food entries
+        if self.food_repo:
+            doc = self.food_repo._collection.find_one(query)
+            if doc:
+                entry_id = str(doc["_id"])
+                return {
+                    "entry_id": entry_id,
+                    "description": doc.get("description", ""),
+                    "calories": doc.get("calories", 0),
+                    "protein": doc.get("protein", 0),
+                    "photo_file_id": doc.get("photo_file_id"),
+                    "entry_type": "food",
+                }
+
+        # Check habit logs
+        for repo, entry_type in [
+            (getattr(self, "sleep_repo", None), "sleep"),
+            (getattr(self, "workout_repo", None), "workout"),
+            (getattr(self, "self_care_repo", None), "self_care"),
+        ]:
+            if not repo:
+                continue
+            doc = repo._collection.find_one(query)
+            if doc:
+                entry_id = str(doc["_id"])
+                return {
+                    "entry_id": entry_id,
+                    "entry_type": entry_type,
+                    "description": doc.get("note") or doc.get("description") or doc.get("sleep_time", ""),
+                    "calories": 0,
+                    "protein": 0,
+                }
+
+        return None
+
+    def _store_message_ids(self, repo, entry_id: str | None, user_msg_id: int | None, bot_msg_id: int | None) -> None:
+        """Store Telegram message IDs on an entry for reply-based correction lookup."""
+        if not repo or not entry_id:
+            return
+        fields = {}
+        if user_msg_id is not None:
+            fields["user_message_id"] = user_msg_id
+        if bot_msg_id is not None:
+            fields["bot_message_id"] = bot_msg_id
+        if fields:
+            from bson import ObjectId
+            try:
+                repo.update_by_id(ObjectId(entry_id), fields)
+            except Exception:
+                logger.debug("Failed to store message IDs on entry %s", entry_id)
+
     def _save_bot_message(self, tid: int, text: str) -> None:
         from constants import MAX_RECENT_MESSAGES
         from datetime import timezone as tz
@@ -164,19 +230,23 @@ class HealthHandlers:
             "text": text[:500],
             "timestamp": datetime.now(tz.utc).isoformat(),
         }
+        classification = getattr(self, "_current_classification", None)
+        if classification:
+            msg["classification"] = classification
         self.user_repo.push_messages(tid, [msg], MAX_RECENT_MESSAGES)
 
     async def _send(self, text: str, *, tid: int, message=None, context=None,
-                    reply_markup=None, save=True):
+                    reply_markup=None, save=True) -> int | None:
         if save:
             self._save_bot_message(tid, text)
 
         send_text, final_markup = self._prepare_debug(tid, text, reply_markup)
 
         if message:
-            await send_long_text(message, send_text, reply_markup=final_markup)
+            return await send_long_text(message, send_text, reply_markup=final_markup)
         elif context:
-            await send_long_bot(context.bot, tid, send_text, reply_markup=final_markup)
+            return await send_long_bot(context.bot, tid, send_text, reply_markup=final_markup)
+        return None
 
     def _prepare_debug(self, tid: int, text: str, reply_markup=None):
         if not self._debug_mode or tid != getattr(self, "admin_chat_id", 0):
@@ -479,22 +549,22 @@ class HealthHandlers:
 
         last_entry = context.chat_data.get("last_entry")
 
-        # Save user message and fetch conversation history
         from constants import MAX_RECENT_MESSAGES
         from datetime import timezone as tz
 
         reply_context = None
+        reply_message_id = None
         if message.reply_to_message and message.reply_to_message.text:
             reply_context = message.reply_to_message.text[:300]
+            reply_message_id = message.reply_to_message.message_id
 
-        user_msg = {
-            "role": "user",
-            "text": message.text[:500],
-            "timestamp": datetime.now(tz.utc).isoformat(),
-        }
-        if reply_context:
-            user_msg["replying_to"] = reply_context
-        self.user_repo.push_messages(tid, [user_msg], MAX_RECENT_MESSAGES)
+        # If replying to a specific message and no last_entry in memory,
+        # try to find the entry by the replied-to message's Telegram ID.
+        if reply_message_id and not last_entry:
+            found = self._find_entry_by_message_id(tid, reply_message_id)
+            if found:
+                last_entry = found
+                context.chat_data["last_entry"] = found
 
         # Track last user message and handle re-engagement return
         self.user_repo.update_fields(tid, {
@@ -505,6 +575,10 @@ class HealthHandlers:
             if welcome_back_msg:
                 await self._send(welcome_back_msg, tid=tid, context=context)
 
+        # Fetch history BEFORE pushing current user message (so it doesn't
+        # include the current message - classifier and guardrails need the
+        # prior context only). The current message is pushed after
+        # classification, with the classification type as metadata.
         recent_messages = self.user_repo.get_recent_messages(tid, MAX_RECENT_MESSAGES)
 
         # Build toggle state summary
@@ -550,13 +624,25 @@ class HealthHandlers:
 
         router_result = self.analyzer.route_tiered(
             message.text, calendar_today, last_entry,
-            recent_messages=recent_messages[:-1],
+            recent_messages=recent_messages,
             toggle_state=toggle_state,
             reply_context=reply_context,
             day_name=day_name,
         )
         self._debug_router_type = router_result.type
         self._debug_classification = router_result.type
+        self._current_classification = router_result.type
+
+        # Now push the user message with classification metadata
+        user_msg = {
+            "role": "user",
+            "text": message.text[:500],
+            "timestamp": datetime.now(tz.utc).isoformat(),
+            "classification": router_result.type,
+        }
+        if reply_context:
+            user_msg["replying_to"] = reply_context
+        self.user_repo.push_messages(tid, [user_msg], MAX_RECENT_MESSAGES)
 
         await self._dispatch_v2(
             message, context, tid, profile, router_result,
@@ -580,6 +666,21 @@ class HealthHandlers:
         # Trial ended: force all routes to conversational
         if trial_ended and rtype != "conversational":
             rtype = "conversational"
+
+        # Apply context-aware guardrails
+        if not trial_ended:
+            from classification_guardrails import validate_classification
+            validated = validate_classification(
+                router_result,
+                recent_messages=recent_messages,
+                last_entry=last_entry,
+                reply_context=reply_context,
+                name=profile.name if profile else None,
+                gender=profile.gender if profile else None,
+            )
+            if validated.type != rtype:
+                self._current_classification = validated.type
+                rtype = validated.type
 
         if rtype == "opt_in":
             # Check for log-confirmation misclassification: when toggle is
@@ -638,13 +739,25 @@ class HealthHandlers:
                 context.chat_data.setdefault("correction_histories", {})[entry_id] = correction_history + [message.text]
                 return
 
+        if rtype == "correction" and not last_entry:
+            # Defense-in-depth: guardrail should have caught this, but if a
+            # reply-based correction passed the guardrail yet last_entry is
+            # missing (e.g. bot restarted), fall back to conversational.
+            logger.warning("Correction without last_entry for tid=%s, falling back to conversational", tid)
+            await self._handle_conversational(
+                message, tid, profile, toggle_state, recent_messages,
+                calendar_today, day_name,
+            )
+            return
+
         if rtype == "sleep" and self.message_router:
             result = self.message_router.route_sleep(tid, time_str, stats_date)
             text = result.response_text
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
             kb = make_sleep_entry_keyboard(result.entry_id) if result.entry_id else None
-            await self._send(text, tid=tid, message=message, reply_markup=kb)
+            bot_msg_id = await self._send(text, tid=tid, message=message, reply_markup=kb)
+            self._store_message_ids(self.sleep_repo, result.entry_id, message.message_id, bot_msg_id)
             return
 
         if rtype == "workout" and self.message_router:
@@ -653,7 +766,8 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
             kb = make_workout_entry_keyboard(result.entry_id) if result.entry_id else None
-            await self._send(text, tid=tid, message=message, reply_markup=kb)
+            bot_msg_id = await self._send(text, tid=tid, message=message, reply_markup=kb)
+            self._store_message_ids(self.workout_repo, result.entry_id, message.message_id, bot_msg_id)
             return
 
         if rtype == "self_care" and self.message_router:
@@ -662,7 +776,8 @@ class HealthHandlers:
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{text}\n\n{edu}" if edu else text
             kb = make_self_care_entry_keyboard(result.entry_id) if result.entry_id else None
-            await self._send(text, tid=tid, message=message, reply_markup=kb)
+            bot_msg_id = await self._send(text, tid=tid, message=message, reply_markup=kb)
+            self._store_message_ids(self.self_care_repo, result.entry_id, message.message_id, bot_msg_id)
             return
 
         if rtype == "name_declaration" and self.onboarding_service:
@@ -797,7 +912,8 @@ class HealthHandlers:
             response = f"{items_text}\n\n✅ נרשם ({', '.join(retro_labels)})"
 
         last_entry_id = last_saved.id
-        await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))
+        bot_msg_id = await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))
+        self._store_message_ids(self.food_repo, last_entry_id, message.message_id, bot_msg_id)
         await safe_react(message, OK_HAND)
 
         # Protein education on first meal ever

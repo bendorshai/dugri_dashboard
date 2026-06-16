@@ -28,6 +28,8 @@ class SelfCareLog(BaseModel):
     date: str | None = None  # DD/MM/YYYY
     week_id: str | None = None  # e.g., "2026-W21" — auto-computed from date
     description: str
+    user_message_id: int | None = None
+    bot_message_id: int | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("date")
