@@ -352,6 +352,8 @@ function simulator() {
             const text = this.chatInput.trim();
             if (!text) return;
             this.chatInput = '';
+            this.chatMessages = [...this.chatMessages, mkMsg('user', text)];
+            this.scrollChat();
             this.chatLoading = true;
             try {
                 await this.api('/admin/simulator/send', { text });
