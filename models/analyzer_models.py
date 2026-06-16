@@ -96,7 +96,7 @@ class Tier1Classification(BaseModel):
 
     Purely contextual (no toggle state). Four categories, no extraction.
     """
-    type: Literal["meal", "habit_logger", "goals_talk", "other"]
+    type: Literal["meal", "habit_logger", "goals_talk", "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"]
 
 
 class HabitLoggerClassification(BaseModel):
