@@ -29,11 +29,14 @@ from models.analyzer_models import (  # noqa: E402, F401
     FoodPhotoResult,
     CorrectionFoodItem,
     CorrectionResult,
-    MessageParseResult,
     WeeklyFeedbackResult,
     NormalizedActivity,
     HabitEntry,
     RouterClassification,
+    Tier1Classification,
+    HabitLoggerClassification,
+    GoalsTalkClassification,
+    OtherClassification,
 )
 
 
@@ -49,9 +52,11 @@ from prompts import (
     FOOD_TEXT_SYSTEM_PROMPT,
     GEM_DRESSING_PROMPT,
     MEAL_SUGGESTION_SYSTEM_PROMPT,
-    PARSE_MESSAGE_SYSTEM_PROMPT,
     QA_SYSTEM_PROMPT,
-    ROUTER_SYSTEM_PROMPT,
+    TIER1_ROUTER_PROMPT,
+    TIER2_HABIT_LOGGER_PROMPT,
+    TIER2_GOALS_TALK_PROMPT,
+    TIER2_OTHER_PROMPT,
     TARGET_SUGGESTION_SYSTEM_PROMPT,
     ENHANCED_WEEKLY_SUMMARY_PROMPT,
     NORMALIZE_SELF_CARE_PROMPT,
@@ -135,54 +140,18 @@ class FoodAnalyzer:
             logger.exception("GPT food analysis failed for: %s", text[:80])
             return None
 
-    def parse_message(
-        self, text: str, today_str: str, last_entry: dict | None = None,
-        on_usage: TokenCallback | None = None,
-    ) -> MessageParseResult:
-        """Classify a message as new food or correction to last entry."""
-        system = PARSE_MESSAGE_SYSTEM_PROMPT + f"\nהתאריך של היום: {today_str}\n"
-        if last_entry:
-            system += (
-                f"\nהרשומה האחרונה שנרשמה:\n"
-                f"תיאור: {last_entry.get('description', '')}\n"
-                f"קלוריות: {last_entry.get('calories', 0)}\n"
-                f"חלבון: {last_entry.get('protein', 0)}\n"
-            )
-        else:
-            system += "\nאין רשומה קודמת. התייחס לכל הודעה כ-food חדש.\n"
-
-        try:
-            response = self._parse(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": text},
-                ],
-                response_format=MessageParseResult,
-                temperature=0,
-                on_usage=on_usage,
-            )
-            result = response.choices[0].message.parsed
-            if result is None:
-                logger.warning("GPT parse_message returned None for: %s", text[:80])
-                return MessageParseResult(type="unknown")
-            return result
-        except Exception:
-            logger.exception("GPT parse_message failed for: %s", text[:80])
-            return MessageParseResult(type="unknown")
-
-    def route_message(
+    def route_tier1(
         self, text: str, today_str: str, last_entry: dict | None = None,
         recent_messages: list[dict] | None = None,
-        toggle_state: str | None = None,
         reply_context: str | None = None,
         day_name: str = "",
         on_usage: TokenCallback | None = None,
-    ) -> RouterClassification:
-        """Route a message using the slim Router prompt.
+    ) -> Tier1Classification:
+        """Tier 1 Intent Router - broad category classification.
 
-        Classifies message type and extracts meal data inline for type=meal.
-        For all other types, only type and optional toggle_name are returned.
+        Purely contextual: uses message text and conversation history.
+        NO toggle state. Returns one of: meal, habit_logger, goals_talk, other.
+        For type=meal, extracts food data inline.
         """
         system = ""
 
@@ -196,10 +165,7 @@ class FoodAnalyzer:
             else:
                 system += f"ההודעה הנוכחית היא תגובה ישירה להודעת הבוט:\n\"{reply_context}\"\n\n"
 
-        if toggle_state:
-            system += f"מצב ההרגלים של המשתמש:\n{toggle_state}\n\n"
-
-        system += ROUTER_SYSTEM_PROMPT
+        system += TIER1_ROUTER_PROMPT
         date_line = f"\nהתאריך של היום: {today_str}"
         if day_name:
             date_line += f" (יום {day_name})"
@@ -213,7 +179,7 @@ class FoodAnalyzer:
                 f"חלבון: {last_entry.get('protein', 0)}\n"
             )
         else:
-            system += "\nאין רשומה קודמת. תיקון → food חדש.\n"
+            system += "\nאין רשומה קודמת. תיקון → לא רלוונטי.\n"
 
         if recent_messages:
             system += "\nהיסטוריית שיחה אחרונה (מהישנה לחדשה):\n"
@@ -224,23 +190,189 @@ class FoodAnalyzer:
 
         try:
             response = self._parse(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": text},
                 ],
-                response_format=RouterClassification,
+                response_format=Tier1Classification,
                 temperature=0,
                 on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
-                logger.warning("GPT router returned None for: %s", text[:80])
-                return RouterClassification(type="conversational")
+                logger.warning("GPT tier1 router returned None for: %s", text[:80])
+                return Tier1Classification(type="other")
             return result
         except Exception:
-            logger.exception("GPT router failed for: %s", text[:80])
-            return RouterClassification(type="conversational")
+            logger.exception("GPT tier1 router failed for: %s", text[:80])
+            return Tier1Classification(type="other")
+
+    def route_tier2_habit_logger(
+        self, text: str,
+        recent_messages: list[dict] | None = None,
+        last_entry: dict | None = None,
+        on_usage: TokenCallback | None = None,
+    ) -> HabitLoggerClassification:
+        """Tier 2 Habit Logger - sub-classify into sleep/workout/self_care/correction."""
+        system = TIER2_HABIT_LOGGER_PROMPT
+
+        if last_entry:
+            system += (
+                f"\nהרשומה האחרונה שנרשמה:\n"
+                f"תיאור: {last_entry.get('description', '')}\n"
+                f"קלוריות: {last_entry.get('calories', 0)}\n"
+                f"חלבון: {last_entry.get('protein', 0)}\n"
+            )
+
+        if recent_messages:
+            system += "\nהיסטוריית שיחה אחרונה:\n"
+            for msg in recent_messages:
+                role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
+                system += f"[{role_label}]: {msg.get('text', '')}\n"
+
+        try:
+            response = self._parse(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text},
+                ],
+                response_format=HabitLoggerClassification,
+                temperature=0,
+                on_usage=on_usage,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                return HabitLoggerClassification(type="correction")
+            return result
+        except Exception:
+            logger.exception("GPT tier2 habit_logger failed for: %s", text[:80])
+            return HabitLoggerClassification(type="correction")
+
+    def route_tier2_goals_talk(
+        self, text: str,
+        recent_messages: list[dict] | None = None,
+        toggle_state: str | None = None,
+        on_usage: TokenCallback | None = None,
+    ) -> GoalsTalkClassification:
+        """Tier 2 Goals Talk - sub-classify into accept/refuse/goal_value/cancel/hesitation."""
+        system = TIER2_GOALS_TALK_PROMPT.replace("{toggle_state}", toggle_state or "לא זמין")
+
+        if recent_messages:
+            system += "\nהיסטוריית שיחה אחרונה:\n"
+            for msg in recent_messages:
+                role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
+                system += f"[{role_label}]: {msg.get('text', '')}\n"
+
+        try:
+            response = self._parse(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text},
+                ],
+                response_format=GoalsTalkClassification,
+                temperature=0,
+                on_usage=on_usage,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                return GoalsTalkClassification(type="accept")
+            return result
+        except Exception:
+            logger.exception("GPT tier2 goals_talk failed for: %s", text[:80])
+            return GoalsTalkClassification(type="accept")
+
+    def route_tier2_other(
+        self, text: str,
+        recent_messages: list[dict] | None = None,
+        on_usage: TokenCallback | None = None,
+    ) -> OtherClassification:
+        """Tier 2 Other - sub-classify into conversational/emotional/name/etc."""
+        system = TIER2_OTHER_PROMPT
+
+        if recent_messages:
+            system += "\nהיסטוריית שיחה אחרונה:\n"
+            for msg in recent_messages:
+                role_label = "בוט" if msg.get("role") == "bot" else "משתמש"
+                system += f"[{role_label}]: {msg.get('text', '')}\n"
+
+        try:
+            response = self._parse(
+                model="gpt-4.1-mini",
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text},
+                ],
+                response_format=OtherClassification,
+                temperature=0,
+                on_usage=on_usage,
+            )
+            result = response.choices[0].message.parsed
+            if result is None:
+                return OtherClassification(type="conversational")
+            return result
+        except Exception:
+            logger.exception("GPT tier2 other failed for: %s", text[:80])
+            return OtherClassification(type="conversational")
+
+    def route_tiered(
+        self, text: str, today_str: str, last_entry: dict | None = None,
+        recent_messages: list[dict] | None = None,
+        toggle_state: str | None = None,
+        reply_context: str | None = None,
+        day_name: str = "",
+        on_usage: TokenCallback | None = None,
+    ) -> RouterClassification:
+        """Tiered router: tier 1 classifies, tier 2 sub-classifies.
+
+        Returns a RouterClassification for backward compatibility with
+        _dispatch_v2. The tiered internals are hidden from the caller.
+        """
+        # Tier 1: classify
+        t1 = self.route_tier1(
+            text, today_str, last_entry=last_entry,
+            recent_messages=recent_messages,
+            reply_context=reply_context,
+            day_name=day_name,
+            on_usage=on_usage,
+        )
+
+        if t1.type == "meal":
+            # Tier 2: meal extraction using existing method
+            meal_result = self.analyze_food_text(text, today_str, day_name, on_usage=on_usage)
+            return RouterClassification(type="meal", meal=meal_result)
+
+        if t1.type == "habit_logger":
+            # Tier 2: sub-classify habit
+            t2 = self.route_tier2_habit_logger(
+                text, recent_messages=recent_messages,
+                last_entry=last_entry, on_usage=on_usage,
+            )
+            result = RouterClassification(type=t2.type, workout_note=t2.workout_note)
+            return result
+
+        if t1.type == "goals_talk":
+            # Tier 2: sub-classify goal response
+            t2 = self.route_tier2_goals_talk(
+                text, recent_messages=recent_messages,
+                toggle_state=toggle_state, on_usage=on_usage,
+            )
+            # Map goals_talk sub-types back to opt_in for dispatch
+            return RouterClassification(type="opt_in", toggle_name=t2.toggle_name)
+
+        if t1.type == "other":
+            # Tier 2: sub-classify other
+            t2 = self.route_tier2_other(
+                text, recent_messages=recent_messages,
+                on_usage=on_usage,
+            )
+            return RouterClassification(
+                type=t2.type, declared_gender=t2.declared_gender,
+            )
+
+        return RouterClassification(type="conversational")
 
     def analyze_correction(
         self,

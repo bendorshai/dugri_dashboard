@@ -56,13 +56,6 @@ class CorrectionResult(BaseModel):
     corrected_protein: int
 
 
-class MessageParseResult(BaseModel):
-    type: Literal["food", "correction", "unknown"]
-    food: FoodAnalysisResult | None = None
-    correction: CorrectionResult | None = None
-
-
-
 class WeeklyFeedbackResult(BaseModel):
     feedback_text: str
     discovered_pattern: str | None = None
@@ -96,3 +89,44 @@ class RouterClassification(BaseModel):
     toggle_name: str | None = None
     declared_gender: Literal["male", "female", "other"] | None = None
     workout_note: str | None = None
+
+
+class Tier1Classification(BaseModel):
+    """Tier 1 Intent Router - broad category classification only.
+
+    Purely contextual (no toggle state). Four categories, no extraction.
+    """
+    type: Literal["meal", "habit_logger", "goals_talk", "other"]
+
+
+class HabitLoggerClassification(BaseModel):
+    """Tier 2 Habit Logger sub-classifier output."""
+    type: Literal["sleep", "workout", "self_care", "correction"]
+    sleep_time: str | None = None
+    workout_note: str | None = None
+    self_care_description: str | None = None
+
+
+class GoalValues(BaseModel):
+    """Extracted goal values."""
+    calories: int | None = None
+    protein: int | None = None
+    sleep_time: str | None = None
+    workout_count: int | None = None
+
+
+class GoalsTalkClassification(BaseModel):
+    """Tier 2 Goals Talk sub-classifier output."""
+    type: Literal["accept", "refuse", "goal_value", "cancel", "hesitation"]
+    toggle_name: str | None = None
+    goal_values: GoalValues | None = None
+
+
+class OtherClassification(BaseModel):
+    """Tier 2 Other sub-classifier output."""
+    type: Literal[
+        "conversational", "feedback_request", "feedback_reaction",
+        "name_declaration", "gender_declaration", "feature_request",
+        "emotional", "inappropriate",
+    ]
+    declared_gender: Literal["male", "female", "other"] | None = None

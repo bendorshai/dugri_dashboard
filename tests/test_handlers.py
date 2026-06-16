@@ -1023,7 +1023,7 @@ class TestEditFlowIntegration:
         assert call_kwargs["new_correction"] == "השניצל היה 200 גרם לא 100"
 
         # Router/classifier was NOT called
-        h.analyzer.route_message.assert_not_called()
+        h.analyzer.route_tiered.assert_not_called()
         h.analyzer.classify_message.assert_not_called()
 
         # pending_correction was consumed
@@ -1121,7 +1121,7 @@ class TestEditFlowIntegration:
         h.user_repo.get_recent_messages.return_value = []
 
         # Router returns conversational so we don't need meal extraction mocks
-        h.analyzer.route_message.return_value = RouterClassification(type="conversational")
+        h.analyzer.route_tiered.return_value = RouterClassification(type="conversational")
         h._handle_conversational = AsyncMock()
 
         message = AsyncMock()
@@ -1137,7 +1137,7 @@ class TestEditFlowIntegration:
         await h.handle_message(update, context)
 
         # Router WAS called (no pending state to intercept)
-        h.analyzer.route_message.assert_called_once()
+        h.analyzer.route_tiered.assert_called_once()
         # analyze_correction was NOT called
         h.analyzer.analyze_correction.assert_not_called()
 

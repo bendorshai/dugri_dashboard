@@ -128,6 +128,25 @@ This creates a double-check: the routing rules say it first, and the type defini
 6. Run twice to confirm stability (LLM variance)
 7. Also run `python -m pytest tests/test_retroactive.py -v --tb=short`
 
+### "Prompt length kills edge-case accuracy" (session 2026-06-16)
+**Symptom:** GPT-4o-mini ignores explicit examples for a specific edge case (log confirmation vs goal offer), no matter where the examples are placed in the prompt. The same examples work perfectly with a ~400 char prompt but fail at ~3800+ chars.
+**Root cause:** GPT-4o-mini has limited attention for structured output classification. As prompt length grows, the model's ability to follow fine-grained examples degrades. Tested systematically:
+- Ultra-minimal prompt (~400 chars): correct classification
+- Medium prompt (~800 chars): wrong classification
+- Full prompt with food extraction rules (~5000 chars): consistently wrong
+- Same full prompt with GPT-4o: correct classification
+**Key finding:** It's not about WHERE in the prompt the examples are - it's about total prompt length. The food extraction rules (~1500 chars of quantity/accuracy/hebrew/temporal rules) added enough volume to push the model past its attention threshold, even though the rules are clearly labeled "for meal only" and placed at the end.
+**Implication for tiered routing:** Classification and inline extraction should use separate prompts. Combining "classify into 4 types" with "extract food data for meals" in one prompt degrades classification accuracy on edge cases. The tier 1 router should classify only; meal extraction should be a separate call.
+
+### "Type names shape classification" (session 2026-06-16)
+Renaming `opt_in` to `goals_talk` and `logger` to `habit_logger` improved accuracy because the LLM uses the type name as semantic signal. `opt_in` is an internal implementation term; `goals_talk` tells the LLM what the category means. Similarly, `logger` is generic; `habit_logger` clarifies it's about habits, not logging in general.
+
+### "Domain framing prevents cross-contamination" (session 2026-06-16)
+Adding "each habit has a logging aspect AND a goals aspect" before the categories prevented the LLM from conflating workout-related words with goals_talk. Without this framing, "אימון" in a user message triggered goals_talk because the goals_talk definition mentioned workouts. The framing taught the LLM that the SAME word can belong to different categories depending on context.
+
+### "Same-habit multi-date vs multi-intent" (session 2026-06-16)
+"Sleep at 22 yesterday, 21 day before" = same habit, multiple dates = habit_logger. "Hamburger + sleep at 23" = different habit types = multi-intent = other. LLMs can't infer this distinction without explicit examples of both patterns side by side.
+
 ## Anti-patterns (things that made it worse)
 
 1. **Over-abstracting word lists** - replacing inline examples with "תשובה חיובית קצרה" lost the LLM

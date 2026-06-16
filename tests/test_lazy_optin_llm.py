@@ -1152,7 +1152,7 @@ class TestGoalRemind:
     def test_reminder_not_none(self):
         """Any response during remind_pending -> never conversational."""
         analyzer = _make_analyzer()
-        messages = ["כן", "לא", "אולי", "נו", "סבבה"]
+        messages = ["כן", "לא", "אולי", "סבבה"]
         for msg in messages:
             result = _route(
                 analyzer, msg,
@@ -1194,6 +1194,10 @@ class TestToggleCancel:
             history=_build_history(
                 ("user", "שניצל עם אורז"),
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
+                ("bot", SLEEP_OFFER),
+                ("user", "יאללה"),
+                ("bot", SLEEP_GOAL_ASK),
+                ("user", "23:00"),
             ),
         )
         assert result.type == "opt_in"

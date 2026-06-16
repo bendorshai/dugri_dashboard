@@ -97,8 +97,8 @@ pytestmark = pytest.mark.integration
 
 
 def _route(analyzer, text, toggle_state=None, history=None, reply_context=None):
-    """Convenience wrapper for route_message."""
-    return analyzer.route_message(
+    """Convenience wrapper for route_tiered (production code path)."""
+    return analyzer.route_tiered(
         text=text,
         today_str=datetime.now().strftime("%d/%m/%Y"),
         last_entry=None,
@@ -369,8 +369,9 @@ class TestConversationalRouting:
                 ("user", "אכלתי שניצל"),
                 ("bot", FOOD_RESPONSE_SCHNITZEL),
             ),
+            reply_context=SLEEP_OFFER,
         )
-        assert result.type in ("conversational", "opt_in")
+        assert result.type == "opt_in"
 
     def test_negotiation_without_determination(self):
         """Vague preference without number = conversational."""
@@ -523,7 +524,7 @@ class TestOtherRouting:
     def test_correction(self):
         """'the schnitzel was 300g' = correction."""
         analyzer = _make_analyzer()
-        result = analyzer.route_message(
+        result = analyzer.route_tiered(
             text="השניצל היה 300 גרם",
             today_str=datetime.now().strftime("%d/%m/%Y"),
             last_entry={"description": "שניצל עם אורז", "calories": 650, "protein": 35},
@@ -647,7 +648,7 @@ class TestReplyToFoodEntry:
     def test_correction_reply(self):
         """'It was without rice' replying to food = correction."""
         analyzer = _make_analyzer()
-        result = analyzer.route_message(
+        result = analyzer.route_tiered(
             text="זה היה בלי אורז",
             today_str="14/06/2026",
             last_entry={"description": "שניצל עם אורז", "calories": 650, "protein": 35},

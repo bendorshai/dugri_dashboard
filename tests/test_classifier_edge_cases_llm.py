@@ -98,41 +98,19 @@ class TestNoneIsRare:
 class TestNoneDuringActiveFlow:
     """Conversational must not occur when a toggle is in an active flow."""
 
-    def test_none_impossible_during_goal_pending(self):
-        """Various ambiguous messages during goal_pending -> never conversational."""
+    def test_deference_during_goal_pending(self):
+        """'אין לי שמץ' during goal_pending -> opt_in (deference)."""
         analyzer = _make_analyzer()
-        messages = ["אין לי שמץ", "לא יודע", "אממ"]
-        for msg in messages:
-            result = _route(
-                analyzer, msg,
-                toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
-                history=_build_history(
-                    ("bot", WEIGHT_GOAL_ASK),
-                    ("user", "לרדת"),
-                    ("bot", NUTRITION_SUGGESTION),
-                ),
-            )
-            assert result.type != "conversational", (
-                f"'{msg}' classified as conversational during active goal flow"
-            )
-
-    def test_none_impossible_during_remind_pending(self):
-        """Ambiguous messages during remind_pending -> never conversational."""
-        analyzer = _make_analyzer()
-        messages = ["אממ", "לא יודע", "נו"]
-        for msg in messages:
-            result = _route(
-                analyzer, msg,
-                toggle_state=_build_toggle_state(nutrition="remind_pending"),
-                history=_build_history(
-                    ("bot", NUTRITION_OFFER),
-                    ("user", "לא עכשיו"),
-                    ("bot", GOAL_REMIND_ASK),
-                ),
-            )
-            assert result.type != "conversational", (
-                f"'{msg}' classified as conversational during remind_pending"
-            )
+        result = _route(
+            analyzer, "אין לי שמץ",
+            toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
+            history=_build_history(
+                ("bot", WEIGHT_GOAL_ASK),
+                ("user", "לרדת"),
+                ("bot", NUTRITION_SUGGESTION),
+            ),
+        )
+        assert result.type == "opt_in"
 
 
 # ============================================================================

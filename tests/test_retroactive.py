@@ -224,8 +224,8 @@ class TestHandleMessageRetroactive:
 
     @staticmethod
     def _set_meal_classification(handler, timed):
-        """Set route_message mock for a meal result."""
-        handler.analyzer.route_message.return_value = RouterClassification(type="meal", meal=timed)
+        """Set route_tiered mock for a meal result."""
+        handler.analyzer.route_tiered.return_value = RouterClassification(type="meal", meal=timed)
 
     @pytest.mark.asyncio
     @patch("handlers.base.make_food_entry_keyboard", return_value="kb")

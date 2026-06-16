@@ -525,11 +525,11 @@ class HealthHandlers:
         if await self._handle_pending_correction(message, context, tid, profile):
             return
 
-        # Classify via Router v2
+        # Classify via Tiered Router
         self._debug_classification = None
         self._debug_router_type = None
 
-        router_result = self.analyzer.route_message(
+        router_result = self.analyzer.route_tiered(
             message.text, calendar_today, last_entry,
             recent_messages=recent_messages[:-1],
             toggle_state=toggle_state,
