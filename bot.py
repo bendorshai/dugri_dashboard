@@ -117,7 +117,10 @@ def create_bot(
         qa_service = QaService(analyzer, food_repo)
         help_service = HelpService(analyzer, knowledge_path=knowledge_path)
         from services.conversational_service import ConversationalService
-        conversational_service = ConversationalService(analyzer, knowledge_path=knowledge_path)
+        trial_sales_path = Path(__file__).parent / "knowledge" / "dugri-trial-sales.md"
+        conversational_service = ConversationalService(
+            analyzer, knowledge_path=knowledge_path, trial_sales_path=trial_sales_path,
+        )
         message_router = MessageRouterService(
             habit_service, qa_service, help_service, feature_request_repo,
             analyzer=analyzer, user_repo=user_repo,
@@ -215,6 +218,9 @@ def create_bot(
         re_engagement_service=re_engagement_service,
         gem_service=gem_service,
         admin_chat_id=admin_chat_id,
+        trial_service=trial_service,
+        feedback_service=feedback_service,
+        landing_page_url=landing_page_url,
     )
 
     return app

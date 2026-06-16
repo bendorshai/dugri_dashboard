@@ -100,6 +100,9 @@ def schedule_global_poller(
     re_engagement_service=None,
     gem_service=None,
     admin_chat_id: int = 0,
+    trial_service=None,
+    feedback_service=None,
+    landing_page_url: str = "",
 ):
     """Schedule the single unified polling loop.
 
@@ -108,6 +111,7 @@ def schedule_global_poller(
     - Eating window warnings and close summaries
     - Goal reminders
     - Re-engagement nudges (food nudge, silence pipeline)
+    - Trial expiry proactive messages
     All data is read fresh from MongoDB each tick.
     """
     job_name = "global_poller"
@@ -129,6 +133,9 @@ def schedule_global_poller(
             "re_engagement_service": re_engagement_service,
             "gem_service": gem_service,
             "admin_chat_id": admin_chat_id,
+            "trial_service": trial_service,
+            "feedback_service": feedback_service,
+            "landing_page_url": landing_page_url,
         },
     )
     logger.info(
@@ -159,9 +166,26 @@ async def _global_tick(context):
     all_users = user_repo.find({"telegram_user_id": {"$ne": None}})
     logger.info("Poller tick: checking %d users", len(all_users))
 
+    trial_service = data.get("trial_service")
+    feedback_service = data.get("feedback_service")
+    gem_service = data.get("gem_service")
+    landing_page_url = data.get("landing_page_url", "")
+
     for profile in all_users:
         if not profile.telegram_user_id:
             continue
+        try:
+            # Trial expiry proactive message (before regular hooks)
+            if trial_service:
+                await _check_trial_expiry_message(
+                    context, profile, user_repo, toggle_service,
+                    trial_service, gem_service, feedback_service,
+                    admin_chat_id=admin_chat_id,
+                    landing_page_url=landing_page_url,
+                    food_repo=food_repo,
+                )
+        except Exception:
+            logger.exception("Trial expiry check failed for user %d", profile.telegram_user_id)
         try:
             await _check_user_hooks(
                 context, profile, user_repo, toggle_service,
@@ -170,6 +194,73 @@ async def _global_tick(context):
             )
         except Exception:
             logger.exception("Poller tick failed for user %d", profile.telegram_user_id)
+
+
+# ---------------------------------------------------------------------------
+# Trial expiry proactive message
+# ---------------------------------------------------------------------------
+
+async def _check_trial_expiry_message(
+    context, profile, user_repo, toggle_service,
+    trial_service, gem_service=None, feedback_service=None,
+    admin_chat_id: int = 0, landing_page_url: str = "",
+    food_repo=None,
+):
+    """Send a one-time celebratory message when a user's trial expires at 19:00."""
+    import messages as M
+    from keyboards import make_trial_cta_keyboard
+
+    if profile.subscription_status != "trial_active":
+        return
+    if getattr(profile, "trial_expiry_message_sent", False):
+        return
+
+    tid = profile.telegram_user_id
+    clock = UserClock(profile.timezone)
+
+    # Check if trial has expired
+    just_expired = trial_service.check_and_expire(profile, clock.now())
+    if not just_expired:
+        return
+
+    # Build the celebratory message
+    parts = []
+
+    # 1. Celebration text
+    try:
+        celebration_text = M.TRIAL_EXPIRY_CELEBRATION
+    except AttributeError:
+        celebration_text = "הניסיון שלך עם דוגרי הסתיים. תודה שנתת לזה צ'אנס."
+    parts.append(celebration_text)
+
+    # 2. Most relevant wisdom gem
+    if gem_service:
+        try:
+            gem_result = gem_service.select_best_gem(profile, clock)
+            if gem_result:
+                parts.append(f"\n{gem_result.dressed_text}")
+        except Exception:
+            logger.exception("Failed to select gem for trial expiry message (user %d)", tid)
+
+    # 3. Weekly report
+    if feedback_service:
+        try:
+            report = feedback_service.give_feedback(tid, profile)
+            if report:
+                parts.append(f"\n{report}")
+        except Exception:
+            logger.exception("Failed to generate weekly report for trial expiry (user %d)", tid)
+
+    text = "\n".join(parts)
+    keyboard = make_trial_cta_keyboard(landing_page_url)
+
+    await _send_and_save(
+        context, tid, text, user_repo, profile, toggle_service,
+        admin_chat_id, reply_markup=keyboard,
+    )
+
+    # Mark as sent so we never send twice
+    user_repo.update_fields(tid, {"trial_expiry_message_sent": True})
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +276,11 @@ async def _check_user_hooks(
     import messages as M
 
     tid = profile.telegram_user_id
+
+    # Trial-ended users: skip all proactive hooks
+    if profile.subscription_status == "trial_ended":
+        return
+
     clock = UserClock(profile.timezone)
     now = clock.now()
     today_weekday = clock.weekday()

@@ -38,13 +38,13 @@ class LinkingService:
         if user.telegram_user_id is not None:
             return LinkResult(status="already_linked", profile=user)
 
-        # Update the user doc: set telegram_user_id, clear token, start trial
+        # Update the user doc: set telegram_user_id, clear token, activate trial.
+        # trial_started_at is NOT set here - it starts on the user's first real message.
         self._user_repo.update_fields_by_email(user.email, {
             "telegram_user_id": telegram_user_id,
             "signup_session_token": None,
             "signup_session_token_expires_at": None,
             "subscription_status": "trial_active",
-            "trial_started_at": datetime.now(timezone.utc).isoformat(),
         })
 
         updated = self._user_repo.get(telegram_user_id)

@@ -53,7 +53,8 @@ class TestLinkingService:
         assert update_fields["telegram_user_id"] == 12345
         assert update_fields["signup_session_token"] is None
         assert update_fields["subscription_status"] == "trial_active"
-        assert "trial_started_at" in update_fields
+        # trial_started_at is NOT set at linking - it starts on first real message
+        assert "trial_started_at" not in update_fields
 
     def test_expired_token_returns_invalid(self):
         user_repo = _make_user_repo()

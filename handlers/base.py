@@ -447,17 +447,24 @@ class HealthHandlers:
             await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
             return
 
-        # Trial gating
+        # Trial start: first real message starts the trial clock
+        if (profile.subscription_status == "trial_active"
+                and profile.trial_started_at is None):
+            from datetime import timezone as _tz
+            self.user_repo.update_fields(tid, {
+                "trial_started_at": datetime.now(_tz.utc).isoformat(),
+            })
+
+        # Trial gating: check expiry, mark flag for dispatch override
+        _trial_ended = False
+        _is_first_post_trial = False
         if self.trial_service:
-            just_expired = self.trial_service.check_and_expire(
+            self.trial_service.check_and_expire(
                 profile, get_user_now(profile.timezone),
             )
-            if just_expired:
-                await self._send(self.trial_service.get_expiry_message(), tid=tid, message=message, save=False)
-                return
             if self.trial_service.is_blocked(profile):
-                await self._send(self.trial_service.get_blocked_message(), tid=tid, message=message, save=False)
-                return
+                _trial_ended = True
+                _is_first_post_trial = not getattr(profile, "trial_end_acknowledged", False)
 
         now = get_user_now(profile.timezone)
         calendar_today = now.strftime("%d/%m/%Y")
@@ -547,6 +554,7 @@ class HealthHandlers:
             message, context, tid, profile, router_result,
             calendar_today, day_name, stats_date, time_str, within_window,
             last_entry, recent_messages, toggle_state, reply_context,
+            trial_ended=_trial_ended, is_first_post_trial=_is_first_post_trial,
         )
 
     # ------------------------------------------------------------------
@@ -557,8 +565,13 @@ class HealthHandlers:
         self, message, context, tid, profile, router_result,
         calendar_today, day_name, stats_date, time_str, within_window,
         last_entry, recent_messages, toggle_state, reply_context,
+        trial_ended: bool = False, is_first_post_trial: bool = False,
     ):
         rtype = router_result.type
+
+        # Trial ended: force all routes to conversational
+        if trial_ended and rtype != "conversational":
+            rtype = "conversational"
 
         if rtype == "opt_in":
             # Check for log-confirmation misclassification: when toggle is
@@ -577,6 +590,7 @@ class HealthHandlers:
             await self._handle_conversational(
                 message, tid, profile, toggle_state, recent_messages,
                 calendar_today, day_name,
+                trial_ended=trial_ended, is_first_post_trial=is_first_post_trial,
             )
             return
 
@@ -817,6 +831,7 @@ class HealthHandlers:
     async def _handle_conversational(
         self, message, tid, profile, toggle_state, recent_messages,
         calendar_today="", day_name="",
+        trial_ended: bool = False, is_first_post_trial: bool = False,
     ):
         if not self.conversational_service:
             await self._send("מה נשמע?", tid=tid, message=message)
@@ -869,6 +884,10 @@ class HealthHandlers:
                 lines.append(f"{e.date},{label},{e.time},{e.description},{e.calories},{e.protein}")
             return "\n".join(lines)
 
+        trial_over_context = ""
+        if trial_ended and self.conversational_service:
+            trial_over_context = self.conversational_service.get_trial_over_context()
+
         response = self.conversational_service.respond(
             user_text=message.text,
             user_context=user_context,
@@ -876,6 +895,12 @@ class HealthHandlers:
             today_date=today_date or "לא זמין",
             recent_messages=recent_messages[:-1] if recent_messages else None,
             fetch_history=fetch_history,
+            trial_over_context=trial_over_context,
+            is_first_post_trial=is_first_post_trial,
         )
+
+        if is_first_post_trial:
+            self.user_repo.update_fields(tid, {"trial_end_acknowledged": True})
+
         await self._send(response, tid=tid, message=message)
 

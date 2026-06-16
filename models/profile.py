@@ -192,6 +192,9 @@ class User(BaseModel):
 
     subscription_status: str = "trial_pending"
     trial_started_at: datetime | None = None
+    trial_expiry_at: datetime | None = None
+    trial_expiry_message_sent: bool = False
+    trial_end_acknowledged: bool = False
 
     signup_session_token: str | None = None
     signup_session_token_expires_at: datetime | None = None

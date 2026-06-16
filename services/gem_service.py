@@ -244,6 +244,30 @@ class GemService:
             pattern_key=pattern_key,
         )
 
+    def select_best_gem(self, profile: User, clock: UserClock) -> GemResult | None:
+        """Select the most relevant gem for a one-time delivery (e.g. trial end).
+
+        Bypasses probabilistic gates and weekly cadence. Does NOT update
+        gem_delivered_this_week - this is a special delivery outside the
+        normal weekly cadence.
+        """
+        tid = profile.telegram_user_id
+        gem_state = profile.gem_state
+
+        # Try pattern-based gem first
+        patterns = self._pattern_detector.detect(profile, clock)
+        for pattern in patterns:
+            gem = self._select_gem_for_pattern(pattern, gem_state)
+            if gem:
+                return self._deliver(tid, profile, gem, pattern.key, pattern.context, clock)
+
+        # Fallback to general gem
+        gem = self._select_general_gem(gem_state)
+        if gem:
+            return self._deliver(tid, profile, gem, None, {}, clock)
+
+        return None
+
 
 def _weekday_to_gem_day(weekday: int) -> int:
     """Convert Python weekday (0=Mon...6=Sun) to gem-week day (0=Sun...6=Sat)."""

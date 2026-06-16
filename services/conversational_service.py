@@ -56,16 +56,32 @@ HISTORY_TOOL = {
 HistoryFetcher = Callable[[int], str]
 
 
+_FIRST_POST_TRIAL_INSTRUCTION = (
+    "חובה: תקופת הניסיון של המשתמש הסתיימה. "
+    "ציין את זה, אמור שאתה עדיין כאן לשיחה, "
+    "והציע לבדוק את התוכניות כדי להמשיך לתעד. "
+    "קצר ועובדתי, בטון של דוגרי."
+)
+
+
 class ConversationalService:
     def __init__(
         self,
         analyzer: FoodAnalyzer,
         knowledge_path: Path | None = None,
+        trial_sales_path: Path | None = None,
     ):
         self._analyzer = analyzer
         self._knowledge_doc = ""
         if knowledge_path and knowledge_path.exists():
             self._knowledge_doc = knowledge_path.read_text(encoding="utf-8")
+        self._trial_sales_doc = ""
+        if trial_sales_path and trial_sales_path.exists():
+            self._trial_sales_doc = trial_sales_path.read_text(encoding="utf-8")
+
+    def get_trial_over_context(self) -> str:
+        """Return the trial-over sales self-knowledge text."""
+        return self._trial_sales_doc
 
     def respond(
         self,
@@ -75,6 +91,8 @@ class ConversationalService:
         today_date: str,
         recent_messages: list[dict] | None = None,
         fetch_history: HistoryFetcher | None = None,
+        trial_over_context: str = "",
+        is_first_post_trial: bool = False,
     ) -> str:
         """Generate a conversational response.
 
@@ -86,6 +104,8 @@ class ConversationalService:
             recent_messages: Conversation history.
             fetch_history: Callback to fetch N days of food/habit history.
                            Called only if the LLM requests it via function calling.
+            trial_over_context: Sales self-knowledge injected when trial has ended.
+            is_first_post_trial: True if this is the first user message since trial ended.
 
         Returns:
             Plain text response in Hebrew.
@@ -95,9 +115,16 @@ class ConversationalService:
             user_context=user_context or "לא זמין",
             toggle_state=toggle_state or "לא זמין",
             today_date=today_date,
+            trial_over_context=trial_over_context,
         )
 
         messages: list[dict] = [{"role": "system", "content": system_prompt}]
+
+        if is_first_post_trial:
+            messages.append({
+                "role": "system",
+                "content": _FIRST_POST_TRIAL_INSTRUCTION,
+            })
 
         if recent_messages:
             for msg in recent_messages:

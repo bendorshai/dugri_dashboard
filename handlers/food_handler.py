@@ -42,6 +42,28 @@ class FoodHandler:
             await message.reply_text(f"צריך להירשם קודם: {self.ctx.landing_page_url}")
             return
 
+        # Trial gating for photos
+        if self.ctx.trial_service:
+            self.ctx.trial_service.check_and_expire(
+                profile, get_user_now(profile.timezone),
+            )
+            if self.ctx.trial_service.is_blocked(profile):
+                if self.ctx.conversational_service:
+                    is_first = not getattr(profile, "trial_end_acknowledged", False)
+                    trial_ctx = self.ctx.conversational_service.get_trial_over_context()
+                    response = self.ctx.conversational_service.respond(
+                        user_text="[המשתמש שלח תמונה לתיעוד אוכל]",
+                        user_context="",
+                        toggle_state="",
+                        today_date="",
+                        trial_over_context=trial_ctx,
+                        is_first_post_trial=is_first,
+                    )
+                    if is_first:
+                        self.ctx.user_repo.update_fields(tid, {"trial_end_acknowledged": True})
+                    await self.ctx._send(response, tid=tid, message=message)
+                return
+
         now = get_user_now(profile.timezone)
         calendar_today = now.strftime("%d/%m/%Y")
         time_str = self.ctx._get_time_str(profile)
