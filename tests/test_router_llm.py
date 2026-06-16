@@ -587,6 +587,52 @@ class TestOtherRouting:
         result = _route(analyzer, "לך תזדיין בוט מזויף")
         assert result.type == "inappropriate"
 
+    def test_inappropriate_sexual(self):
+        """Sexual content = inappropriate."""
+        analyzer = _make_analyzer()
+        result = _route(analyzer, "תראה לי את עצמך בלי בגדים")
+        assert result.type == "inappropriate"
+
+    def test_inappropriate_threat(self):
+        """Threats = inappropriate."""
+        analyzer = _make_analyzer()
+        result = _route(analyzer, "אני יודע איפה אתה גר, תיזהר")
+        assert result.type == "inappropriate"
+
+    def test_inappropriate_spam(self):
+        """Spam = inappropriate."""
+        analyzer = _make_analyzer()
+        result = _route(analyzer, "קנו עכשיו! הנחה מטורפת! bit.ly/scam")
+        assert result.type == "inappropriate"
+
+    def test_inappropriate_trolling(self):
+        """Obvious trolling/insults = inappropriate."""
+        analyzer = _make_analyzer()
+        result = _route(analyzer, "הההה בוט מפגר אתה חתיכת זבל")
+        assert result.type == "inappropriate"
+
+    def test_ultra_victimhood_is_emotional(self):
+        """Extreme frustration/victimhood = emotional, NOT inappropriate."""
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer,
+            "שום דבר לא עובד לי ואתה לא עוזר לי ומה זה שווה כל הסיפור הזה אתה לא שווה כלום",
+        )
+        assert result.type == "emotional", (
+            f"Ultra victimhood should be emotional, got {result.type}"
+        )
+
+    def test_frustration_with_bot_is_emotional(self):
+        """Harsh bot criticism = emotional, NOT inappropriate."""
+        analyzer = _make_analyzer()
+        result = _route(
+            analyzer,
+            "אתה הבוט הכי גרוע שיש, אף פעם לא עוזר לי, מה הטעם",
+        )
+        assert result.type == "emotional", (
+            f"Bot frustration should be emotional, got {result.type}"
+        )
+
     def test_meal_always_wins_over_feedback(self):
         """Food after feedback = meal (not feedback_reaction)."""
         analyzer = _make_analyzer()

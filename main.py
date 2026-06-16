@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.2.0"
-VERSION_NOTES = "Classification guardrails, message ID tracking on entries, reply-based correction lookup"
+VERSION = "10.3.0"
+VERSION_NOTES = "Inappropriate strikes system: 3-strike ban, permanent logging, expanded classification"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -95,6 +95,8 @@ def main():
 
     from repositories.feature_request_repository import FeatureRequestRepository
     feature_request_repo = FeatureRequestRepository(db["feature_requests"])
+    from repositories.inappropriate_log_repository import InappropriateLogRepository
+    inappropriate_log_repo = InappropriateLogRepository(db["inappropriate_logs"])
 
     # Services
     eating_day_service = EatingDayService(food_repo)
@@ -127,6 +129,7 @@ def main():
         admin_chat_id=admin_chat_id,
         token_log_repo=token_log_repo,
         emotional_support_config=cfg.get("emotional_support"),
+        inappropriate_log_repo=inappropriate_log_repo,
     )
 
     # Startup notification to admin

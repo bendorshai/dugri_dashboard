@@ -178,6 +178,7 @@ class User(BaseModel):
     last_feedback_offered_at: datetime | None = None
     discovered_patterns: list[DiscoveredPattern] = Field(default_factory=list)
     strikes: list[Strike] = Field(default_factory=list)
+    banned_at: datetime | None = None
 
     # Wisdom gems
     gem_state: GemState = Field(default_factory=GemState)

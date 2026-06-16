@@ -165,6 +165,13 @@ GEM_FLOOR_OF_WEEK_DAY = 4
 """Gem-week day (0=Sun) from which floor-of-week general gems can fire."""
 
 # ---------------------------------------------------------------------------
+# Inappropriate / ban
+# ---------------------------------------------------------------------------
+
+INAPPROPRIATE_MAX_STRIKES = 3
+"""Permanent ban after this many inappropriate messages."""
+
+# ---------------------------------------------------------------------------
 # Debug
 # ---------------------------------------------------------------------------
 

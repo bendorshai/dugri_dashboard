@@ -521,6 +521,12 @@ class HealthHandlers:
             await message.reply_text(f"צריך להירשם קודם: {self.landing_page_url}")
             return
 
+        # Ban check: permanently banned users get a canned response
+        if profile.banned_at is not None:
+            import messages as M
+            await self._send(M.INAPPROPRIATE_BANNED_RESPONSE, tid=tid, message=message)
+            return
+
         # Trial start: first real message starts the trial clock
         if (profile.subscription_status == "trial_active"
                 and profile.trial_started_at is None):
@@ -704,7 +710,19 @@ class HealthHandlers:
             return
 
         if rtype == "inappropriate":
-            await self._send("אני פה בשביל הרגלי בריאות. בוא נדבר על זה.", tid=tid, message=message)
+            if self.inappropriate_service:
+                import messages as M
+                result = self.inappropriate_service.record_strike(tid, message.text, profile)
+                if result["action"] == "ban":
+                    ban_msg = self.inappropriate_service.format_ban_message(
+                        result["logs"], profile.gender or "male",
+                    )
+                    await self._send(ban_msg, tid=tid, message=message)
+                else:
+                    gender = profile.gender or "male"
+                    await self._send(M.INAPPROPRIATE_WARNING[gender], tid=tid, message=message)
+            else:
+                await self._send("אני פה בשביל הרגלי בריאות. בוא נדבר על זה.", tid=tid, message=message)
             return
 
         if rtype == "correction" and last_entry:
