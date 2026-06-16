@@ -54,6 +54,8 @@ class CorrectionResult(BaseModel):
     corrected_description: str
     corrected_calories: int
     corrected_protein: int
+    corrected_date: str | None = None   # DD/MM/YYYY, None = no change
+    corrected_time: str | None = None   # HH:MM, None = no change
 
 
 class WeeklyFeedbackResult(BaseModel):
@@ -89,6 +91,15 @@ class RouterClassification(BaseModel):
     toggle_name: str | None = None
     declared_gender: Literal["male", "female", "other"] | None = None
     workout_note: str | None = None
+
+
+class HabitCorrectionResult(BaseModel):
+    """Correction result for non-food habits (sleep, workout, self_care)."""
+    corrected_date: str | None = None      # DD/MM/YYYY
+    corrected_time: str | None = None      # HH:MM (for sleep_time)
+    corrected_note: str | None = None      # workout note / self_care description
+    delete: bool = False                   # user wants to delete entirely
+    reclassify_to: Literal["sleep", "workout", "self_care"] | None = None  # change habit type
 
 
 class Tier1Classification(BaseModel):

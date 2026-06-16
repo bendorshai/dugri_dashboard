@@ -119,6 +119,46 @@ class LoggerService:
                 ack_text="קיבלתי, רשמתי את זה.",
             )
 
+    def extract_habit_correction(
+        self, text: str, habit_type: str, original_date: str,
+        original_value: str, today_str: str,
+    ):
+        """Extract correction details for a non-food habit entry.
+
+        Returns HabitCorrectionResult with what changed (date, time, note, or delete).
+        """
+        from models.analyzer_models import HabitCorrectionResult
+        from prompts import HABIT_CORRECTION_PROMPT
+
+        value_label = {
+            "sleep": f"שעת שינה: {original_value}",
+            "workout": f"סוג אימון: {original_value}" if original_value else "אימון",
+            "self_care": f"פעילות: {original_value}",
+        }.get(habit_type, original_value)
+
+        user_text = (
+            f"סוג הרגל: {habit_type}\n"
+            f"תאריך מקורי: {original_date}\n"
+            f"{value_label}\n"
+            f"תיקון: {text}"
+        )
+
+        try:
+            response = self._analyzer._parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": HABIT_CORRECTION_PROMPT + f"\nהתאריך של היום: {today_str}\n"},
+                    {"role": "user", "content": user_text},
+                ],
+                response_format=HabitCorrectionResult,
+                temperature=0,
+                max_tokens=100,
+            )
+            return response.choices[0].message.parsed
+        except Exception:
+            logger.exception("Habit correction extraction failed")
+            return HabitCorrectionResult()
+
     def check_log_confirmation(self, bot_message: str, user_message: str) -> LogConfirmationCheck:
         """Check if the user is confirming a bot suggestion to log a specific activity.
 

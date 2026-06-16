@@ -34,6 +34,15 @@ class FoodRepository(BaseRepository[FoodEntry]):
     def delete(self, entry_id: str) -> None:
         self.delete_by_id(ObjectId(entry_id))
 
+    def move(self, entry_id: str, new_date: str, new_time: str | None = None,
+             within_window: bool | None = None) -> None:
+        fields: dict = {"date": new_date}
+        if new_time is not None:
+            fields["time"] = new_time
+        if within_window is not None:
+            fields["within_window"] = within_window
+        self.update_by_id(ObjectId(entry_id), fields)
+
     def get_by_user_and_dates(
         self, telegram_user_id: int, dates: list[str],
     ) -> list[FoodEntry]:

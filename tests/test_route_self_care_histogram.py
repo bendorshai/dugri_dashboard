@@ -38,7 +38,7 @@ class TestRouteSelfCareHistogram:
         user_repo = MagicMock(spec=UserRepository)
 
         router = self._make_router(analyzer=analyzer, user_repo=user_repo)
-        result = router.route_self_care(123, "הלכתי לים עם המשפחה", "2026-W24")
+        result = router.route_self_care(123, "הלכתי לים עם המשפחה", "09/06/2026")
 
         analyzer.normalize_self_care_activity.assert_called_once_with("הלכתי לים עם המשפחה")
         user_repo.increment_activity.assert_called_once_with(123, "הליכה לים")
@@ -47,7 +47,7 @@ class TestRouteSelfCareHistogram:
     def test_without_analyzer_still_logs(self):
         """Backward compat: no analyzer -> self-care still logged, no crash."""
         router = self._make_router(analyzer=None, user_repo=None)
-        result = router.route_self_care(123, "הלכתי לים", "2026-W24")
+        result = router.route_self_care(123, "הלכתי לים", "09/06/2026")
 
         router._habit.log_self_care.assert_called_once()
         assert result.light_confirmation
@@ -59,7 +59,7 @@ class TestRouteSelfCareHistogram:
         user_repo = MagicMock(spec=UserRepository)
 
         router = self._make_router(analyzer=analyzer, user_repo=user_repo)
-        result = router.route_self_care(123, "הלכתי לים", "2026-W24")
+        result = router.route_self_care(123, "הלכתי לים", "09/06/2026")
 
         router._habit.log_self_care.assert_called_once()
         user_repo.increment_activity.assert_not_called()

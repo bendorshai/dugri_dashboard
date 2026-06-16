@@ -159,6 +159,17 @@ class FoodHandler:
             "edit_expires_at": datetime.now(tz.utc) + timedelta(hours=48),
         })
 
+        # Move entry to a different date/time if correction includes a date change
+        if correction.corrected_date:
+            new_within = True  # past dates are always "within window"
+            if correction.corrected_date == today_str:
+                new_within = self.ctx._is_within_window(profile)
+            self.ctx.food_repo.move(
+                entry_id, correction.corrected_date,
+                new_time=correction.corrected_time,
+                within_window=new_within,
+            )
+
         context.chat_data["last_entry"] = {
             "description": new_desc,
             "calories": new_cal,

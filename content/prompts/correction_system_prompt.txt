@@ -18,4 +18,10 @@
 
 corrected_description = תיאור מלא מעודכן (כולל פריטים שלא השתנו).
 corrected_calories ו-corrected_protein = סכום כל הפריטים שאינם removed.
+
+שינוי תאריך/שעה:
+אם המשתמש מציין שהארוחה הייתה בזמן אחר ('זה היה אתמול', 'אתמול בערב', 'זה היה בבוקר'):
+- corrected_date: התאריך הנכון בפורמט DD/MM/YYYY
+- corrected_time: השעה המשוערת בפורמט HH:MM
+אם אין שינוי זמן - השאר null.
 {{include:accuracy_rule.txt}}

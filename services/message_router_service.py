@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 class RouteResult:
     response_text: str
     light_confirmation: bool = False
+    entry_id: str | None = None
 
 
 class MessageRouterService:
@@ -46,25 +47,27 @@ class MessageRouterService:
     def route_sleep(
         self, telegram_user_id: int, sleep_time: str, date: str,
     ) -> RouteResult:
-        self._habit.log_sleep(telegram_user_id, sleep_time, date)
+        saved = self._habit.log_sleep(telegram_user_id, sleep_time, date)
         return RouteResult(
             response_text=f"רשמתי שינה ב-{sleep_time}. (אם התכוונת למשהו אחר, תכתוב לי.)",
             light_confirmation=True,
+            entry_id=saved.id,
         )
 
     def route_workout(
         self, telegram_user_id: int, date: str, note: str | None = None,
     ) -> RouteResult:
-        self._habit.log_workout(telegram_user_id, date, note)
+        saved = self._habit.log_workout(telegram_user_id, date, note)
         return RouteResult(
             response_text="רשמתי אימון. (אם התכוונת למשהו אחר, תכתוב לי.)",
             light_confirmation=True,
+            entry_id=saved.id,
         )
 
     def route_self_care(
-        self, telegram_user_id: int, description: str, week_id: str,
+        self, telegram_user_id: int, description: str, date: str,
     ) -> RouteResult:
-        self._habit.log_self_care(telegram_user_id, description, week_id)
+        saved = self._habit.log_self_care(telegram_user_id, description, date)
 
         if self._analyzer and self._user_repo:
             normalized = self._analyzer.normalize_self_care_activity(description)
@@ -74,6 +77,7 @@ class MessageRouterService:
         return RouteResult(
             response_text="יפה. רשמתי 'משהו לעצמי' השבוע.",
             light_confirmation=True,
+            entry_id=saved.id,
         )
 
     def route_help(
