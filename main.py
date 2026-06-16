@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.0.0"
-VERSION_NOTES = "Terminology rename (tier1/tier2 -> clear module names) + emotional empathy for all habit routes"
+VERSION = "11.0.1"
+VERSION_NOTES = "Fix simulator: deserialize Update with SimulatorBot so reply_text is captured"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -221,19 +221,18 @@ def make_simulate_handler(application: Any, mongo_uri: str, db_name: str,
                 self.write(json.dumps({"error": "user not linked to telegram"}))
                 return
 
-            # Build fake update
+            # Build simulator bot FIRST so Update objects reference it
+            # (message.reply_text() uses the bot stored in the Message)
+            sim_bot = SimulatorBot(self._app.bot)
+            original_bot = self._app.bot
+
             from telegram import Update
             update_dict = build_fake_update(tid, text=text,
                                             callback_data=callback_data,
                                             bot=self._app.bot)
-            update = Update.de_json(update_dict, self._app.bot)
-
-            # Swap bot with simulator
-            sim_bot = SimulatorBot(self._app.bot)
-            original_bot = self._app.bot
+            update = Update.de_json(update_dict, sim_bot)
 
             try:
-                # Monkey-patch: replace the bot on the application
                 self._app._bot = sim_bot
                 await self._app.process_update(update)
             except Exception:
