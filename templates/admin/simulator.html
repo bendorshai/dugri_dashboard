@@ -337,7 +337,7 @@ function simulator() {
             data[field] = value;
             await this.api('/admin/simulator/state', data);
             this.flash(field + ' updated');
-            await this._loadState();
+            await this._refreshPanel();
         },
 
         async saveTrialStarted() {
@@ -360,7 +360,7 @@ function simulator() {
                 subscription_status: 'trial_active',
             });
             this.flash('Set to day ' + daysAgo);
-            await this._loadState();
+            await this._refreshPanel();
         },
 
         async saveToggle(name) {
@@ -376,7 +376,7 @@ function simulator() {
             }
             await this.api('/admin/simulator/state', data);
             this.flash(name + ' toggle updated');
-            await this._loadState();
+            await this._refreshPanel();
         },
 
         async toggleBan(banned) {
@@ -401,7 +401,7 @@ function simulator() {
             await this.api('/admin/simulator/state', { strikes: [], banned_at: null });
             this.state.banned_at = null;
             this.flash('Strikes and ban cleared');
-            await this._loadState();
+            await this._refreshPanel();
         },
 
         async fullReset() {
@@ -426,7 +426,7 @@ function simulator() {
                 const result = await this.api('/admin/simulator/clear-logs', null, 'POST');
                 const total = Object.values(result.deleted || {}).reduce((a, b) => a + b, 0);
                 this.flash(total + ' log entries deleted');
-                await this._loadState();
+                await this._refreshPanel();
             } finally {
                 this.loading = false;
             }
@@ -445,10 +445,23 @@ function simulator() {
                     this._appendBotResponses(result);
                     this.flash(count ? count + ' message(s) triggered' : 'No messages triggered');
                 }
-                await this._loadState();
+                await this._refreshPanel();
             } finally {
                 this.loading = false;
             }
+        },
+
+        async _refreshPanel() {
+            const data = await this.api('/admin/simulator/state');
+            if (!data.error) {
+                this.state = data;
+                if (data.trial_started_at) {
+                    try {
+                        this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16);
+                    } catch(e) {}
+                }
+            }
+            await this._loadHistory();
         },
 
         async _loadState() {
@@ -510,7 +523,7 @@ function simulator() {
             try {
                 const result = await this.api('/admin/simulator/send', { text });
                 this._appendBotResponses(result);
-                await this._loadState();
+                await this._refreshPanel();
             } catch(e) {}
             this.chatLoading = false;
             this.$refs.chatInputField.focus();
@@ -521,7 +534,7 @@ function simulator() {
             try {
                 const result = await this.api('/admin/simulator/send', { callback_data: callbackData });
                 this._appendBotResponses(result);
-                await this._loadState();
+                await this._refreshPanel();
             } catch(e) {}
             this.chatLoading = false;
         },
