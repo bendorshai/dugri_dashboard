@@ -55,44 +55,73 @@
                 </div>
             </div>
 
-            <!-- Profile & Targets (read-only) -->
+            <!-- Profile & Targets (editable) -->
             <div class="sim-card">
                 <h4>Profile & Targets</h4>
                 <div class="sim-field sim-field--row">
                     <label>Name</label>
-                    <span class="sim-value" x-text="state.name || '\u2014'"></span>
+                    <input type="text" class="sim-input--inline" x-model="state.name"
+                           @change="saveField('name', state.name)" placeholder="-">
                 </div>
                 <div class="sim-field sim-field--row">
                     <label>Gender</label>
-                    <span class="sim-value" x-text="state.gender || '\u2014'"></span>
+                    <select class="sim-input--inline" x-model="state.gender"
+                            @change="saveField('gender', state.gender)">
+                        <option value="">-</option>
+                        <option value="male">male</option>
+                        <option value="female">female</option>
+                    </select>
                 </div>
                 <div class="sim-field sim-field--row">
                     <label>Height</label>
-                    <span class="sim-value" x-text="state.height_cm ? state.height_cm + ' cm' : '\u2014'"></span>
+                    <input type="number" class="sim-input--inline" x-model.number="state.height_cm"
+                           @change="saveField('height_cm', state.height_cm)" placeholder="-">
+                    <span class="sim-unit">cm</span>
                 </div>
                 <div class="sim-field sim-field--row">
                     <label>Weight</label>
-                    <span class="sim-value" x-text="state.weight_kg ? state.weight_kg + ' kg' : '\u2014'"></span>
+                    <input type="number" class="sim-input--inline" x-model.number="state.weight_kg"
+                           @change="saveField('weight_kg', state.weight_kg)" placeholder="-">
+                    <span class="sim-unit">kg</span>
                 </div>
                 <div class="sim-field sim-field--row">
                     <label>Birth Year</label>
-                    <span class="sim-value" x-text="state.birth_year || '\u2014'"></span>
+                    <input type="number" class="sim-input--inline" x-model.number="state.birth_year"
+                           @change="saveField('birth_year', state.birth_year)" placeholder="-">
                 </div>
                 <div class="sim-field sim-field--row">
                     <label>Cal Target</label>
-                    <span class="sim-value" x-text="state.targets && state.targets.calories ? state.targets.calories : '\u2014'"></span>
+                    <input type="number" class="sim-input--inline"
+                           :value="state.targets && state.targets.calories"
+                           @change="saveField('targets.calories', parseInt($event.target.value) || null)" placeholder="-">
                 </div>
                 <div class="sim-field sim-field--row">
-                    <label>Protein Target</label>
-                    <span class="sim-value" x-text="state.targets && state.targets.protein ? state.targets.protein + 'g' : '\u2014'"></span>
+                    <label>Protein</label>
+                    <input type="number" class="sim-input--inline"
+                           :value="state.targets && state.targets.protein"
+                           @change="saveField('targets.protein', parseInt($event.target.value) || null)" placeholder="-">
+                    <span class="sim-unit">g</span>
                 </div>
                 <div class="sim-field sim-field--row">
-                    <label>Weight Goal</label>
-                    <span class="sim-value" x-text="state.targets && state.targets.weight_goal ? state.targets.weight_goal : '\u2014'"></span>
+                    <label>Goal</label>
+                    <select class="sim-input--inline"
+                            :value="state.targets && state.targets.weight_goal"
+                            @change="saveField('targets.weight_goal', $event.target.value || null)">
+                        <option value="">-</option>
+                        <option value="lose">lose</option>
+                        <option value="maintain">maintain</option>
+                        <option value="gain">gain</option>
+                    </select>
                 </div>
                 <div class="sim-field sim-field--row">
-                    <label>Eating Window</label>
-                    <span class="sim-value" x-text="state.eating_window ? state.eating_window.start + ' \u2013 ' + state.eating_window.end : '\u2014'"></span>
+                    <label>Eat Window</label>
+                    <input type="time" class="sim-input--inline sim-input--time"
+                           :value="state.eating_window && state.eating_window.start"
+                           @change="saveEatingWindow('start', $event.target.value)">
+                    <span class="sim-unit">-</span>
+                    <input type="time" class="sim-input--inline sim-input--time"
+                           :value="state.eating_window && state.eating_window.end"
+                           @change="saveEatingWindow('end', $event.target.value)">
                 </div>
             </div>
 
@@ -216,58 +245,110 @@
                 </div>
             </div>
 
-            <!-- Entry History -->
+            <!-- Entry History (reuses history page CSS classes) -->
             <div class="sim-history">
                 <h3 class="sim-panel-title">Entry History</h3>
                 <div x-show="historyLoading" class="sim-history-loading">Loading...</div>
                 <div x-show="!historyLoading && historyDays.length === 0" class="sim-history-empty">
                     No entries yet
                 </div>
-                <template x-for="day in historyDays" :key="day.date">
-                    <div class="sim-history-day" x-show="day.meals.length || day.workouts.length || day.sleep || day.self_care.length">
-                        <div class="sim-history-day-header" x-text="day.date_display"></div>
-
-                        <!-- Meals -->
-                        <template x-for="meal in day.meals" :key="meal.id">
-                            <div class="sim-history-entry">
-                                <span class="sim-history-time" x-text="meal.time"></span>
-                                <span class="sim-history-desc" x-text="meal.description"></span>
-                                <span class="sim-history-stats">
-                                    <span x-text="meal.calories"></span> cal,
-                                    <span x-text="meal.protein"></span>g prot
-                                </span>
+                <template x-for="(day, index) in historyDays" :key="day.date">
+                    <div class="history-day-card"
+                         x-show="day.meals.length || day.workouts.length || day.sleep || (day.self_care && day.self_care.length)">
+                        <!-- Day header -->
+                        <div class="day-card-header" @click="historyOpen[index] = !historyOpen[index]">
+                            <span class="day-card-date" x-text="day.date_display"></span>
+                            <div class="day-card-badges">
+                                <span class="day-badge day-badge--cal" x-show="day.meals_total.calories > 0"
+                                      x-text="day.meals_total.calories + ' cal'"></span>
+                                <span class="day-badge day-badge--prot" x-show="day.meals_total.protein > 0"
+                                      x-text="day.meals_total.protein + 'g'"></span>
+                                <span class="day-badge day-badge--workout" x-show="day.workouts.length > 0">&#127947;</span>
                             </div>
-                        </template>
-
-                        <!-- Day totals -->
-                        <div class="sim-history-totals" x-show="day.meals.length">
-                            Total: <span x-text="day.meals_total.calories"></span> cal,
-                            <span x-text="day.meals_total.protein"></span>g prot
+                            <span class="day-card-toggle" :class="{ open: historyOpen[index] }">&#9660;</span>
                         </div>
 
-                        <!-- Workouts -->
-                        <template x-for="w in day.workouts" :key="w.id">
-                            <div class="sim-history-entry sim-history-entry--habit">
-                                <span>Workout</span>
-                                <span class="sim-history-desc" x-text="w.note || 'logged'"></span>
+                        <!-- Day body -->
+                        <div class="day-card-body" x-show="historyOpen[index]" x-transition.duration.200ms>
+                            <!-- Meals -->
+                            <div class="history-section" x-show="day.meals.length">
+                                <div class="history-section-title history-section-title--meals">
+                                    <span class="history-section-emoji">&#127869;</span>
+                                    <span>Meals</span>
+                                </div>
+                                <div class="meals-table-wrap">
+                                    <table class="meals-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Description</th>
+                                                <th>Cal</th>
+                                                <th>Protein</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="meal in day.meals" :key="meal.id">
+                                                <tr :class="{ 'meal-out-of-window': !meal.within_window }">
+                                                    <td class="meal-time" x-text="meal.time"></td>
+                                                    <td class="meal-desc" x-text="meal.description"></td>
+                                                    <td class="meal-cal" x-text="meal.calories"></td>
+                                                    <td class="meal-prot" x-text="meal.protein + 'g'"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="meals-total">
+                                    <span class="meals-total-label">Total:</span>
+                                    <span class="meals-total-cal"><span x-text="day.meals_total.calories"></span> cal</span>
+                                    <span class="meals-total-prot"><span x-text="day.meals_total.protein"></span>g protein</span>
+                                </div>
                             </div>
-                        </template>
 
-                        <!-- Sleep -->
-                        <template x-if="day.sleep">
-                            <div class="sim-history-entry sim-history-entry--habit">
-                                <span>Sleep</span>
-                                <span class="sim-history-desc" x-text="day.sleep.sleep_time"></span>
+                            <!-- Workouts -->
+                            <div class="history-section" x-show="day.workouts.length">
+                                <div class="history-section-title history-section-title--workout">
+                                    <span class="history-section-emoji">&#127947;</span>
+                                    <span>Workouts</span>
+                                </div>
+                                <template x-for="w in day.workouts" :key="w.id">
+                                    <div class="habit-item">
+                                        <span>&#9989;</span>
+                                        <span x-text="w.note || 'Logged'"></span>
+                                    </div>
+                                </template>
                             </div>
-                        </template>
 
-                        <!-- Self-care -->
-                        <template x-for="sc in day.self_care" :key="sc.id">
-                            <div class="sim-history-entry sim-history-entry--habit">
-                                <span>Self-care</span>
-                                <span class="sim-history-desc" x-text="sc.description"></span>
+                            <!-- Sleep -->
+                            <div class="history-section" x-show="day.sleep">
+                                <div class="history-section-title history-section-title--sleep">
+                                    <span class="history-section-emoji">&#128564;</span>
+                                    <span>Sleep</span>
+                                </div>
+                                <template x-if="day.sleep">
+                                    <div class="habit-item">
+                                        <span>&#127769;</span>
+                                        <span>Sleep time: <strong x-text="day.sleep.sleep_time"></strong></span>
+                                    </div>
+                                </template>
                             </div>
-                        </template>
+
+                            <!-- Self-care -->
+                            <div class="history-section" x-show="day.self_care && day.self_care.length">
+                                <div class="history-section-title history-section-title--selfcare">
+                                    <span class="history-section-emoji">&#128134;</span>
+                                    <span>Self-care</span>
+                                </div>
+                                <div class="self-care-chips">
+                                    <template x-for="sc in (day.self_care || [])" :key="sc.id">
+                                        <div class="self-care-chip">
+                                            <span>&#10024;</span>
+                                            <span x-text="sc.description"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </template>
             </div>
@@ -305,8 +386,13 @@ function simulator() {
         chatLoading: false,
         toggleNames: ['nutrition', 'sleep', 'eating_window', 'workouts', 'self_care', 'weekly_summary'],
         historyDays: [],
+        historyOpen: {},
         historyLoading: false,
         fakeClock: '',
+
+        init() {
+            this._loadHistory();
+        },
 
         get currentDay() {
             if (!this.state.trial_started_at) return '-';
@@ -338,6 +424,14 @@ function simulator() {
             await this.api('/admin/simulator/state', data);
             this.flash(field + ' updated');
             await this._refreshPanel();
+        },
+
+        async saveEatingWindow(which, value) {
+            const ew = this.state.eating_window || { start: '', end: '' };
+            ew[which] = value;
+            if (ew.start && ew.end) {
+                await this.saveField('eating_window', ew);
+            }
         },
 
         async saveTrialStarted() {
@@ -412,6 +506,11 @@ function simulator() {
                 // Trigger real onboarding via /start {token} (linking flow)
                 if (resetResult.signup_token) {
                     await this.api('/admin/simulator/send', { text: '/start ' + resetResult.signup_token });
+                    // Start trial clock immediately for simulator convenience
+                    // (in prod, trial_started_at is set on first real message)
+                    await this.api('/admin/simulator/state', {
+                        trial_started_at: new Date().toISOString(),
+                    });
                 }
                 await this._loadState();
                 this.flash('Full reset complete');
@@ -497,6 +596,10 @@ function simulator() {
                 const data = await this.api('/admin/simulator/history');
                 if (!data.error) {
                     this.historyDays = data.days || [];
+                    // Auto-open all days
+                    for (let i = 0; i < this.historyDays.length; i++) {
+                        if (this.historyOpen[i] === undefined) this.historyOpen[i] = true;
+                    }
                 }
             } catch(e) {}
             this.historyLoading = false;

@@ -368,6 +368,9 @@ def simulator_send():
         return jsonify({"error": "bot unreachable"}), 502
 
 
+SIMULATOR_TID = 999999999
+
+
 @admin_bp.route("/simulator/history")
 @admin_required
 def simulator_history():
@@ -375,6 +378,13 @@ def simulator_history():
     from api import format_activity_days
 
     storage = _get_dashboard_storage()
+
+    # Ensure telegram_user_id is set so get_activity_history can query entries.
+    # After a full reset telegram_user_id is temporarily None until /start links it.
+    user = storage.get_user(SIMULATOR_EMAIL)
+    if user and not user.get("telegram_user_id"):
+        storage.update_user_raw(SIMULATOR_EMAIL, {"telegram_user_id": SIMULATOR_TID})
+
     today = date.today()
     start_date = today - timedelta(days=2)
 
