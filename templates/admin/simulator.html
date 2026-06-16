@@ -118,7 +118,7 @@
             <h3 class="sim-panel-title">Chat Simulator</h3>
 
             <div class="sim-chat-messages" x-ref="chatMessages">
-                <template x-for="(msg, i) in chatMessages" :key="i">
+                <template x-for="(msg, i) in chatMessages" :key="msg._id">
                     <div :class="'sim-msg sim-msg--' + msg.role">
                         <div class="sim-msg-bubble" x-text="msg.text"></div>
                         <!-- Inline keyboard buttons -->
@@ -175,17 +175,20 @@ function simulator() {
         } catch(e) {}
     }
 
+    let msgIdCounter = 0;
+    function mkMsg(role, text, reply_markup) {
+        return { _id: ++msgIdCounter, role, text: text || '', reply_markup: reply_markup || null };
+    }
+
     return {
         state: rawUser,
         trialStartedLocal: trialLocal,
         loading: false,
         statusMsg: '',
         statusOk: true,
-        chatMessages: (rawUser.recent_messages || []).map(m => ({
-            role: m.role === 'bot' ? 'bot' : 'user',
-            text: m.text || '',
-            reply_markup: m.reply_markup || null,
-        })),
+        chatMessages: (rawUser.recent_messages || []).map(m =>
+            mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup)
+        ),
         chatInput: '',
         chatLoading: false,
         toggleNames: ['nutrition', 'sleep', 'eating_window', 'workouts', 'self_care', 'weekly_summary'],
@@ -290,11 +293,7 @@ function simulator() {
                 const greetResult = await this.api('/admin/simulator/send', { text: '/start' });
                 if (greetResult.responses) {
                     for (const r of greetResult.responses) {
-                        this.chatMessages.push({
-                            role: 'bot',
-                            text: r.text || '',
-                            reply_markup: r.reply_markup || null,
-                        });
+                        this.chatMessages.push(mkMsg('bot', r.text, r.reply_markup));
                     }
                 }
             } catch(e) {
@@ -318,11 +317,9 @@ function simulator() {
             const data = await this.api('/admin/simulator/state');
             if (!data.error) {
                 this.state = data;
-                this.chatMessages = (data.recent_messages || []).map(m => ({
-                    role: m.role === 'bot' ? 'bot' : 'user',
-                    text: m.text || '',
-                    reply_markup: m.reply_markup || null,
-                }));
+                this.chatMessages = (data.recent_messages || []).map(m =>
+                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup)
+                );
                 if (data.trial_started_at) {
                     try {
                         this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16);
@@ -337,7 +334,7 @@ function simulator() {
             const text = this.chatInput.trim();
             if (!text) return;
             this.chatInput = '';
-            this.chatMessages.push({ role: 'user', text, reply_markup: null });
+            this.chatMessages.push(mkMsg('user', text));
             this.scrollChat();
             this.chatLoading = true;
 
@@ -345,17 +342,13 @@ function simulator() {
                 const result = await this.api('/admin/simulator/send', { text });
                 if (result.responses) {
                     for (const r of result.responses) {
-                        this.chatMessages.push({
-                            role: 'bot',
-                            text: r.text || '',
-                            reply_markup: r.reply_markup || null,
-                        });
+                        this.chatMessages.push(mkMsg('bot', r.text, r.reply_markup));
                     }
                 } else if (result.error) {
-                    this.chatMessages.push({ role: 'bot', text: '[Error: ' + result.error + ']', reply_markup: null });
+                    this.chatMessages.push(mkMsg('bot', '[Error: ' + result.error + ']'));
                 }
             } catch(e) {
-                this.chatMessages.push({ role: 'bot', text: '[Connection error]', reply_markup: null });
+                this.chatMessages.push(mkMsg('bot', '[Connection error]'));
             }
             this.chatLoading = false;
             this.scrollChat();
@@ -364,24 +357,20 @@ function simulator() {
 
         async sendCallback(callbackData) {
             this.chatLoading = true;
-            this.chatMessages.push({ role: 'user', text: '[button: ' + callbackData + ']', reply_markup: null });
+            this.chatMessages.push(mkMsg('user', '[button: ' + callbackData + ']'));
             this.scrollChat();
 
             try {
                 const result = await this.api('/admin/simulator/send', { callback_data: callbackData });
                 if (result.responses) {
                     for (const r of result.responses) {
-                        this.chatMessages.push({
-                            role: 'bot',
-                            text: r.text || '',
-                            reply_markup: r.reply_markup || null,
-                        });
+                        this.chatMessages.push(mkMsg('bot', r.text, r.reply_markup));
                     }
                 } else if (result.error) {
-                    this.chatMessages.push({ role: 'bot', text: '[Error: ' + result.error + ']', reply_markup: null });
+                    this.chatMessages.push(mkMsg('bot', '[Error: ' + result.error + ']'));
                 }
             } catch(e) {
-                this.chatMessages.push({ role: 'bot', text: '[Connection error]', reply_markup: null });
+                this.chatMessages.push(mkMsg('bot', '[Connection error]'));
             }
             this.chatLoading = false;
             this.scrollChat();
