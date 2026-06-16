@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.2.0"
-VERSION_NOTES = "Classification guardrails, message ID tracking on entries, reply-based correction lookup"
+VERSION = "10.2.1"
+VERSION_NOTES = "Wisdom gems gate reduced from 14 to 5 days"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

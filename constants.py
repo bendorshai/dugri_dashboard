@@ -140,7 +140,7 @@ SILENCE_PERMANENT_HOURS = 120
 # Wisdom gems
 # ---------------------------------------------------------------------------
 
-GEM_GATE_DAYS = 14
+GEM_GATE_DAYS = 5
 """Minimum days since trial start before gems activate."""
 
 GEM_SILENT_WEEK_RATE = 0.10

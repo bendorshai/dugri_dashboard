@@ -3,7 +3,7 @@ test_gem_service.py - Tests for the core wisdom gem engine.
 
 Expected behavior:
 - Safety gate: restriction signal blocks all gem delivery
-- Min days gate: <14 days since trial start blocks delivery
+- Min days gate: <5 days since trial start blocks delivery
 - Silent week: ~10% of weeks are silent (no gems)
 - Already-delivered-this-week blocks repeat delivery
 - Declining threshold: high on Sunday (week start), low on Saturday
@@ -107,7 +107,7 @@ class TestMinDaysGate:
 
     def test_too_early_blocks(self):
         svc, _, _, toggle_service, _ = _make_service()
-        toggle_service.get_day_number.return_value = 10  # < 14
+        toggle_service.get_day_number.return_value = 3  # < 5
         user = _make_user()
         clock = _make_clock()
         result = svc.try_deliver_gem(user, clock)
@@ -116,7 +116,7 @@ class TestMinDaysGate:
     @patch("services.gem_service.random")
     def test_past_gate_allows(self, mock_random):
         svc, _, pattern_detector, toggle_service, _ = _make_service()
-        toggle_service.get_day_number.return_value = 15  # >= 14
+        toggle_service.get_day_number.return_value = 6  # >= 5
         mock_random.random.return_value = 0.5  # not silent (0.5 > 0.10)
         mock_random.uniform.return_value = 0.0
         user = _make_user()
