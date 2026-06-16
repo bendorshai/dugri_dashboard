@@ -284,21 +284,26 @@ function simulator() {
 
         async fullReset() {
             this.loading = true;
-            await this.api('/admin/simulator/reset');
             this.chatMessages = [];
-            await this.refreshState();
+            await this.api('/admin/simulator/reset');
 
             // Trigger bot greeting via simulate endpoint
             try {
                 const greetResult = await this.api('/admin/simulator/send', { text: '/start' });
-                if (greetResult.responses) {
-                    for (const r of greetResult.responses) {
-                        this.chatMessages.push(mkMsg('bot', r.text, r.reply_markup));
-                    }
-                }
+                this._addResponses(greetResult);
             } catch(e) {
-                // Bot may not be running locally
+                // Bot may not be running
             }
+
+            // Refresh state panel (but preserve chat from above)
+            const data = await this.api('/admin/simulator/state');
+            if (!data.error) {
+                this.state = data;
+                if (data.trial_started_at) {
+                    try { this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16); } catch(e) {}
+                }
+            }
+
             this.scrollChat();
             this.loading = false;
             this.flash('Full reset complete');
@@ -330,25 +335,32 @@ function simulator() {
             this.flash('State refreshed');
         },
 
+        _addMsg(role, text, reply_markup) {
+            this.chatMessages = [...this.chatMessages, mkMsg(role, text, reply_markup)];
+        },
+
+        _addResponses(result) {
+            if (result.responses && result.responses.length) {
+                const newMsgs = result.responses.map(r => mkMsg('bot', r.text, r.reply_markup));
+                this.chatMessages = [...this.chatMessages, ...newMsgs];
+            } else if (result.error) {
+                this._addMsg('bot', '[Error: ' + result.error + ']');
+            }
+        },
+
         async sendMessage() {
             const text = this.chatInput.trim();
             if (!text) return;
             this.chatInput = '';
-            this.chatMessages.push(mkMsg('user', text));
+            this._addMsg('user', text);
             this.scrollChat();
             this.chatLoading = true;
 
             try {
                 const result = await this.api('/admin/simulator/send', { text });
-                if (result.responses) {
-                    for (const r of result.responses) {
-                        this.chatMessages.push(mkMsg('bot', r.text, r.reply_markup));
-                    }
-                } else if (result.error) {
-                    this.chatMessages.push(mkMsg('bot', '[Error: ' + result.error + ']'));
-                }
+                this._addResponses(result);
             } catch(e) {
-                this.chatMessages.push(mkMsg('bot', '[Connection error]'));
+                this._addMsg('bot', '[Connection error]');
             }
             this.chatLoading = false;
             this.scrollChat();
@@ -357,20 +369,14 @@ function simulator() {
 
         async sendCallback(callbackData) {
             this.chatLoading = true;
-            this.chatMessages.push(mkMsg('user', '[button: ' + callbackData + ']'));
+            this._addMsg('user', '[button: ' + callbackData + ']');
             this.scrollChat();
 
             try {
                 const result = await this.api('/admin/simulator/send', { callback_data: callbackData });
-                if (result.responses) {
-                    for (const r of result.responses) {
-                        this.chatMessages.push(mkMsg('bot', r.text, r.reply_markup));
-                    }
-                } else if (result.error) {
-                    this.chatMessages.push(mkMsg('bot', '[Error: ' + result.error + ']'));
-                }
+                this._addResponses(result);
             } catch(e) {
-                this.chatMessages.push(mkMsg('bot', '[Connection error]'));
+                this._addMsg('bot', '[Connection error]');
             }
             this.chatLoading = false;
             this.scrollChat();
