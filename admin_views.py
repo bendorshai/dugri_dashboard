@@ -296,12 +296,19 @@ def simulator_reset():
         "re_engagement_stage": "none",
         "last_user_message_at": None,
     }
-    storage.update_user_raw(SIMULATOR_EMAIL, reset_fields)
+    ok = storage.update_user_raw(SIMULATOR_EMAIL, reset_fields)
+    logger.info("Simulator reset: update_user_raw returned %s", ok)
 
     # Clear activity logs
-    storage.delete_user_logs(SIMULATOR_EMAIL)
+    log_counts = storage.delete_user_logs(SIMULATOR_EMAIL)
+    logger.info("Simulator reset: deleted logs %s", log_counts)
 
-    return jsonify({"ok": True})
+    # Verify
+    after = storage.get_user(SIMULATOR_EMAIL)
+    msg_count = len(after.get("recent_messages", [])) if after else -1
+    logger.info("Simulator reset: recent_messages after reset = %d", msg_count)
+
+    return jsonify({"ok": True, "messages_after_reset": msg_count})
 
 
 @admin_bp.route("/simulator/clear-logs", methods=["POST"])
