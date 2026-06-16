@@ -4,6 +4,8 @@ sleep_repository.py — גישה לקולקציית sleep_logs.
 
 from __future__ import annotations
 
+from bson import ObjectId
+
 from models.sleep import SleepLog
 from repositories.base import BaseRepository
 
@@ -14,6 +16,12 @@ class SleepRepository(BaseRepository[SleepLog]):
 
     def add(self, log: SleepLog) -> SleepLog:
         return self.insert(log)
+
+    def move(self, entry_id: str, new_date: str, new_sleep_time: str | None = None) -> None:
+        fields: dict = {"date": new_date}
+        if new_sleep_time is not None:
+            fields["sleep_time"] = new_sleep_time
+        self.update_by_id(ObjectId(entry_id), fields)
 
     def get_for_user_and_date(self, telegram_user_id: int, date: str) -> SleepLog | None:
         return self.find_one({"telegram_user_id": telegram_user_id, "date": date})

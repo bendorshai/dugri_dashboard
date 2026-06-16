@@ -55,7 +55,7 @@ class TestHabitService:
 
     def test_log_self_care(self):
         svc, _, _, self_care_repo = self._make_service()
-        result = svc.log_self_care(123, "הלכתי לים", "2026-W21")
+        result = svc.log_self_care(123, "הלכתי לים", "19/05/2026")
         self_care_repo.add.assert_called_once()
         assert result.description == "הלכתי לים"
 
@@ -94,7 +94,7 @@ class TestMessageRouterService:
 
     def test_route_self_care(self):
         router, habit, _, _ = self._make_router()
-        result = router.route_self_care(123, "הלכתי לים", "2026-W21")
+        result = router.route_self_care(123, "הלכתי לים", "19/05/2026")
         habit.log_self_care.assert_called_once()
         assert "משהו לעצמי" in result.response_text
 

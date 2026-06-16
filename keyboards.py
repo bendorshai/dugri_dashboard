@@ -22,6 +22,12 @@ CB_EMOTIONAL = "emo_"
 CB_DEBUG = "dbg_"
 CB_GEM = "gem_"
 CB_FEATURE = "feat_"
+CB_SLEEP_EDIT = "sledit_"
+CB_SLEEP_DELETE = "sldel_"
+CB_WORKOUT_EDIT = "woedit_"
+CB_WORKOUT_DELETE = "wodel_"
+CB_SELFCARE_EDIT = "scedit_"
+CB_SELFCARE_DELETE = "scdel_"
 
 
 def make_daily_summary_keyboard(dashboard_url: str = "") -> InlineKeyboardMarkup:
@@ -107,6 +113,33 @@ def make_food_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("📋 תפריט", callback_data=f"{CB_BACK}main"),
+        ],
+    ])
+
+
+def make_sleep_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_SLEEP_EDIT}{entry_id}"),
+            InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_SLEEP_DELETE}{entry_id}"),
+        ],
+    ])
+
+
+def make_workout_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_WORKOUT_EDIT}{entry_id}"),
+            InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_WORKOUT_DELETE}{entry_id}"),
+        ],
+    ])
+
+
+def make_self_care_entry_keyboard(entry_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✏️ עריכה", callback_data=f"{CB_SELFCARE_EDIT}{entry_id}"),
+            InlineKeyboardButton("🗑 מחיקה", callback_data=f"{CB_SELFCARE_DELETE}{entry_id}"),
         ],
     ])
 

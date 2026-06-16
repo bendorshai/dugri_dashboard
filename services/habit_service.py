@@ -46,10 +46,10 @@ class HabitService:
         )
         return self._workout_repo.add(log)
 
-    def log_self_care(self, telegram_user_id: int, description: str, week_id: str) -> SelfCareLog:
+    def log_self_care(self, telegram_user_id: int, description: str, date: str) -> SelfCareLog:
         log = SelfCareLog(
             telegram_user_id=telegram_user_id,
-            week_id=week_id,
+            date=date,
             description=description,
         )
         return self._self_care_repo.add(log)

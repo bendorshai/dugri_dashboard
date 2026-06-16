@@ -73,10 +73,12 @@ class HandlerContext:
         token_log_repo=None,
         sleep_repo=None,
         workout_repo=None,
+        self_care_repo=None,
     ):
         self.landing_page_url = landing_page_url
         self.sleep_repo = sleep_repo
         self.workout_repo = workout_repo
+        self.self_care_repo = self_care_repo
         self.analyzer = analyzer
         self.user_repo = user_repo
         self.food_repo = food_repo

@@ -271,3 +271,98 @@ class PendingHandler:
         await self.ctx._send(report, tid=tid, message=message, reply_markup=make_main_menu_keyboard(self.ctx.landing_page_url), save=False)
         await safe_react(message, OK_HAND)
         return True
+
+    async def handle_pending_habit_correction(self, message, context, tid: int, profile: UserProfile) -> bool:
+        pending = context.chat_data.get("pending_habit_correction")
+        if not pending:
+            return False
+        if time.time() - pending.get("timestamp", 0) > PENDING_STATE_TTL:
+            del context.chat_data["pending_habit_correction"]
+            return False
+
+        del context.chat_data["pending_habit_correction"]
+        await safe_react(message, THUMBS_UP)
+
+        habit_type = pending["habit_type"]
+        entry = pending["entry"]
+        entry_id = entry["entry_id"]
+        calendar_today = get_user_now(profile.timezone).strftime("%d/%m/%Y")
+
+        # Determine original value for the habit
+        if habit_type == "sleep":
+            original_value = entry.get("sleep_time", "")
+        elif habit_type == "workout":
+            original_value = entry.get("note", "") or ""
+        else:
+            original_value = entry.get("description", "")
+
+        from services.logger_service import LoggerService
+        logger_svc = LoggerService(self.ctx.analyzer)
+        result = logger_svc.extract_habit_correction(
+            message.text, habit_type, entry.get("date", ""), original_value, calendar_today,
+        )
+
+        # Get the appropriate repo
+        repo_map = {
+            "sleep": self.ctx.sleep_repo,
+            "workout": self.ctx.workout_repo,
+            "self_care": self.ctx.self_care_repo,
+        }
+        repo = repo_map.get(habit_type)
+        if not repo:
+            await self.ctx._send("שגיאה פנימית.", tid=tid, message=message, save=False)
+            return True
+
+        from bson import ObjectId
+
+        if result.delete:
+            repo.delete_by_id(ObjectId(entry_id))
+            await self.ctx._send("🗑 נמחק.", tid=tid, message=message, save=False)
+            return True
+
+        # Reclassify to a different habit type
+        if result.reclassify_to and result.reclassify_to != habit_type:
+            repo.delete_by_id(ObjectId(entry_id))
+            entry_date = result.corrected_date or entry.get("date", calendar_today)
+            new_note = result.corrected_note or ""
+            target_repo = repo_map.get(result.reclassify_to)
+            if target_repo and result.reclassify_to == "workout":
+                from models.workout import WorkoutLog
+                new_log = WorkoutLog(telegram_user_id=tid, date=entry_date, note=new_note)
+                target_repo.insert(new_log)
+            elif target_repo and result.reclassify_to == "sleep":
+                from models.sleep import SleepLog
+                sleep_time = result.corrected_time or "23:00"
+                new_log = SleepLog(telegram_user_id=tid, date=entry_date, sleep_time=sleep_time)
+                target_repo.insert(new_log)
+            elif target_repo and result.reclassify_to == "self_care":
+                from models.self_care import SelfCareLog
+                new_log = SelfCareLog(telegram_user_id=tid, date=entry_date, description=new_note)
+                target_repo.insert(new_log)
+            await self.ctx._send("✅ עודכן.", tid=tid, message=message, save=False)
+            await safe_react(message, OK_HAND)
+            return True
+
+        # Apply date move
+        if result.corrected_date:
+            if habit_type == "sleep":
+                repo.move(entry_id, result.corrected_date, new_sleep_time=result.corrected_time)
+            else:
+                repo.move(entry_id, result.corrected_date)
+
+        # Apply note/description change
+        if result.corrected_note:
+            if habit_type == "sleep" and result.corrected_time and not result.corrected_date:
+                repo.update_by_id(ObjectId(entry_id), {"sleep_time": result.corrected_time})
+            elif habit_type == "workout":
+                repo.update_by_id(ObjectId(entry_id), {"note": result.corrected_note})
+            elif habit_type == "self_care":
+                repo.update_by_id(ObjectId(entry_id), {"description": result.corrected_note})
+
+        # Also handle sleep_time correction without date change
+        if habit_type == "sleep" and result.corrected_time and not result.corrected_date:
+            repo.update_by_id(ObjectId(entry_id), {"sleep_time": result.corrected_time})
+
+        await self.ctx._send("✅ עודכן.", tid=tid, message=message, save=False)
+        await safe_react(message, OK_HAND)
+        return True

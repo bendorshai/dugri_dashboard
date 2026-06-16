@@ -21,6 +21,7 @@ from keyboards import (
     make_daily_summary_keyboard, make_main_menu_keyboard,
     make_food_entry_keyboard, format_daily_status,
     make_emotional_support_keyboard, make_emotional_creator_keyboard,
+    make_sleep_entry_keyboard, make_workout_entry_keyboard, make_self_care_entry_keyboard,
 )
 from handlers.utils import safe_react, send_long_text, send_long_bot
 from handlers.context import HandlerContext
@@ -55,6 +56,7 @@ class HealthHandlers:
         token_log_repo=None,
         sleep_repo=None,
         workout_repo=None,
+        self_care_repo=None,
     ):
         # Shared context for all sub-handlers
         self.ctx = HandlerContext(
@@ -77,6 +79,7 @@ class HealthHandlers:
             token_log_repo=token_log_repo,
             sleep_repo=sleep_repo,
             workout_repo=workout_repo,
+            self_care_repo=self_care_repo,
         )
 
         # Sub-handlers
@@ -106,6 +109,12 @@ class HealthHandlers:
         self.handle_back_callback = self._cb.handle_back_callback
         self.handle_feedback_callback = self._cb.handle_feedback_callback
         self.handle_emotional_callback = self._cb.handle_emotional_callback
+        self.handle_sleep_edit_callback = self._cb.handle_sleep_edit_callback
+        self.handle_sleep_delete_callback = self._cb.handle_sleep_delete_callback
+        self.handle_workout_edit_callback = self._cb.handle_workout_edit_callback
+        self.handle_workout_delete_callback = self._cb.handle_workout_delete_callback
+        self.handle_selfcare_edit_callback = self._cb.handle_selfcare_edit_callback
+        self.handle_selfcare_delete_callback = self._cb.handle_selfcare_delete_callback
         self.handle_photo = self._food.handle_photo
 
     def __getattr__(self, name):
@@ -364,6 +373,9 @@ class HealthHandlers:
     async def _handle_pending_correction(self, message, context, tid, profile):
         return await self._get_pending_handler().handle_pending_correction(message, context, tid, profile)
 
+    async def _handle_pending_habit_correction(self, message, context, tid, profile):
+        return await self._get_pending_handler().handle_pending_habit_correction(message, context, tid, profile)
+
     async def _handle_pending_feature_request(self, message, context, tid):
         return await self._get_pending_handler().handle_pending_feature_request(message, context, tid)
 
@@ -528,6 +540,10 @@ class HealthHandlers:
         if await self._handle_pending_correction(message, context, tid, profile):
             return
 
+        # Pending habit correction (sleep/workout/self_care edit flow)
+        if await self._handle_pending_habit_correction(message, context, tid, profile):
+            return
+
         # Classify via Tiered Router
         self._debug_classification = None
         self._debug_router_type = None
@@ -627,7 +643,8 @@ class HealthHandlers:
             text = result.response_text
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
-            await self._send(text, tid=tid, message=message)
+            kb = make_sleep_entry_keyboard(result.entry_id) if result.entry_id else None
+            await self._send(text, tid=tid, message=message, reply_markup=kb)
             return
 
         if rtype == "workout" and self.message_router:
@@ -635,17 +652,17 @@ class HealthHandlers:
             text = result.response_text
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
-            await self._send(text, tid=tid, message=message)
+            kb = make_workout_entry_keyboard(result.entry_id) if result.entry_id else None
+            await self._send(text, tid=tid, message=message, reply_markup=kb)
             return
 
         if rtype == "self_care" and self.message_router:
-            from datetime import datetime as dt
-            week_id = dt.strptime(stats_date, "%d/%m/%Y").strftime("%G-W%V")
-            result = self.message_router.route_self_care(tid, message.text, week_id)
+            result = self.message_router.route_self_care(tid, message.text, stats_date)
             text = result.response_text
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{text}\n\n{edu}" if edu else text
-            await self._send(text, tid=tid, message=message)
+            kb = make_self_care_entry_keyboard(result.entry_id) if result.entry_id else None
+            await self._send(text, tid=tid, message=message, reply_markup=kb)
             return
 
         if rtype == "name_declaration" and self.onboarding_service:

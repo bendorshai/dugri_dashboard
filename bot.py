@@ -43,6 +43,8 @@ from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_WEEKLY, CB_DAILY, CB_BACK,
     CB_FEEDBACK, CB_EMOTIONAL, CB_DEBUG, CB_GEM, CB_FEATURE,
+    CB_SLEEP_EDIT, CB_SLEEP_DELETE, CB_WORKOUT_EDIT, CB_WORKOUT_DELETE,
+    CB_SELFCARE_EDIT, CB_SELFCARE_DELETE,
 )
 from handlers import HealthHandlers
 from scheduler import schedule_global_poller
@@ -171,6 +173,7 @@ def create_bot(
         token_log_repo=token_log_repo,
         sleep_repo=sleep_repo,
         workout_repo=workout_repo,
+        self_care_repo=self_care_repo,
     )
     h.gem_service = gem_service
 
@@ -203,6 +206,12 @@ def create_bot(
     app.add_handler(CallbackQueryHandler(h.handle_back_callback, pattern=f"^{CB_BACK}"))
     app.add_handler(CallbackQueryHandler(h.handle_debug_callback, pattern=f"^{CB_DEBUG}"))
     app.add_handler(CallbackQueryHandler(h.handle_gem_callback, pattern=f"^{CB_GEM}"))
+    app.add_handler(CallbackQueryHandler(h.handle_sleep_edit_callback, pattern=f"^{CB_SLEEP_EDIT}"))
+    app.add_handler(CallbackQueryHandler(h.handle_sleep_delete_callback, pattern=f"^{CB_SLEEP_DELETE}"))
+    app.add_handler(CallbackQueryHandler(h.handle_workout_edit_callback, pattern=f"^{CB_WORKOUT_EDIT}"))
+    app.add_handler(CallbackQueryHandler(h.handle_workout_delete_callback, pattern=f"^{CB_WORKOUT_DELETE}"))
+    app.add_handler(CallbackQueryHandler(h.handle_selfcare_edit_callback, pattern=f"^{CB_SELFCARE_EDIT}"))
+    app.add_handler(CallbackQueryHandler(h.handle_selfcare_delete_callback, pattern=f"^{CB_SELFCARE_DELETE}"))
 
     # Error handler
     app.add_error_handler(_make_error_handler(error_repo))

@@ -24,6 +24,9 @@ from keyboards import (
     CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_WEEKLY, CB_DAILY, CB_BACK,
     CB_FEEDBACK, CB_EMOTIONAL, CB_FEATURE,
+    CB_SLEEP_EDIT, CB_SLEEP_DELETE,
+    CB_WORKOUT_EDIT, CB_WORKOUT_DELETE,
+    CB_SELFCARE_EDIT, CB_SELFCARE_DELETE,
 )
 from handlers.utils import safe_answer
 
@@ -294,6 +297,8 @@ class CallbackHandler:
                     "original_description": food_entry.original_description,
                     "original_calories": food_entry.original_calories,
                     "original_protein": food_entry.original_protein,
+                    "date": food_entry.date,
+                    "time": food_entry.time,
                 },
                 "correction_history": existing_history,
                 "timestamp": time.time(),
@@ -584,3 +589,107 @@ class CallbackHandler:
                 [InlineKeyboardButton("פתח ChatGPT", url="https://chatgpt.com")]
             ]),
         )
+
+    # ------------------------------------------------------------------
+    # Habit edit/delete callbacks (sleep, workout, self_care)
+    # ------------------------------------------------------------------
+
+    async def _handle_habit_edit(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+        prefix: str, habit_type: str, repo, display_fn,
+    ):
+        """Generic edit handler for any habit type."""
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        from bson import ObjectId
+        entry_id = query.data.removeprefix(prefix)
+        try:
+            entry = repo.get_by_id(ObjectId(entry_id))
+            if entry is None:
+                await query.edit_message_text("❌ הרשומה לא נמצאה.")
+                return
+
+            context.chat_data["pending_habit_correction"] = {
+                "habit_type": habit_type,
+                "entry": display_fn(entry, entry_id),
+                "timestamp": time.time(),
+            }
+            desc = display_fn(entry, entry_id).get("display", "")
+            await query.edit_message_text(
+                f"✏️ עריכת {desc}\n\nשלח תיאור של התיקון (למשל: 'זה היה אתמול'):"
+            )
+        except Exception:
+            logger.exception("Failed to read %s entry for edit, id %s", habit_type, entry_id)
+
+    async def _handle_habit_delete(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+        prefix: str, repo,
+    ):
+        """Generic delete handler for any habit type."""
+        query = update.callback_query
+        if not query:
+            return
+        await safe_answer(query)
+
+        from bson import ObjectId
+        entry_id = query.data.removeprefix(prefix)
+        try:
+            repo.delete_by_id(ObjectId(entry_id))
+            await query.edit_message_text("🗑 נמחק.")
+        except Exception:
+            logger.exception("Failed to delete habit entry %s", entry_id)
+            await query.edit_message_text("❌ לא הצלחתי למחוק.")
+
+    def _sleep_display(self, entry, entry_id):
+        return {
+            "entry_id": entry_id,
+            "date": entry.date,
+            "sleep_time": entry.sleep_time,
+            "display": f"שינה ב-{entry.sleep_time} ({entry.date})",
+        }
+
+    def _workout_display(self, entry, entry_id):
+        return {
+            "entry_id": entry_id,
+            "date": entry.date,
+            "note": entry.note,
+            "display": f"אימון ({entry.date})",
+        }
+
+    def _self_care_display(self, entry, entry_id):
+        return {
+            "entry_id": entry_id,
+            "date": getattr(entry, "date", None),
+            "description": entry.description,
+            "display": f"משהו לעצמי: {entry.description}",
+        }
+
+    async def handle_sleep_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._handle_habit_edit(
+            update, context, CB_SLEEP_EDIT, "sleep",
+            self.ctx.sleep_repo, self._sleep_display,
+        )
+
+    async def handle_sleep_delete_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._handle_habit_delete(update, context, CB_SLEEP_DELETE, self.ctx.sleep_repo)
+
+    async def handle_workout_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._handle_habit_edit(
+            update, context, CB_WORKOUT_EDIT, "workout",
+            self.ctx.workout_repo, self._workout_display,
+        )
+
+    async def handle_workout_delete_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._handle_habit_delete(update, context, CB_WORKOUT_DELETE, self.ctx.workout_repo)
+
+    async def handle_selfcare_edit_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._handle_habit_edit(
+            update, context, CB_SELFCARE_EDIT, "self_care",
+            self.ctx.self_care_repo, self._self_care_display,
+        )
+
+    async def handle_selfcare_delete_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self._handle_habit_delete(update, context, CB_SELFCARE_DELETE, self.ctx.self_care_repo)
