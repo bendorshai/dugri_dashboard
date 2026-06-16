@@ -289,22 +289,13 @@ function simulator() {
 
             // Trigger bot greeting via simulate endpoint
             try {
-                const greetResult = await this.api('/admin/simulator/send', { text: '/start' });
-                this._addResponses(greetResult);
+                await this.api('/admin/simulator/send', { text: '/start' });
             } catch(e) {
                 // Bot may not be running
             }
 
-            // Refresh state panel (but preserve chat from above)
-            const data = await this.api('/admin/simulator/state');
-            if (!data.error) {
-                this.state = data;
-                if (data.trial_started_at) {
-                    try { this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16); } catch(e) {}
-                }
-            }
-
-            this.scrollChat();
+            // Reload everything from DB
+            await this.refreshState();
             this.loading = false;
             this.flash('Full reset complete');
         },
@@ -335,51 +326,38 @@ function simulator() {
             this.flash('State refreshed');
         },
 
-        _addMsg(role, text, reply_markup) {
-            this.chatMessages = [...this.chatMessages, mkMsg(role, text, reply_markup)];
-        },
-
-        _addResponses(result) {
-            if (result.responses && result.responses.length) {
-                const newMsgs = result.responses.map(r => mkMsg('bot', r.text, r.reply_markup));
-                this.chatMessages = [...this.chatMessages, ...newMsgs];
-            } else if (result.error) {
-                this._addMsg('bot', '[Error: ' + result.error + ']');
+        async reloadChat() {
+            const data = await this.api('/admin/simulator/state');
+            if (!data.error) {
+                this.chatMessages = (data.recent_messages || []).map(m =>
+                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup)
+                );
             }
+            this.scrollChat();
         },
 
         async sendMessage() {
             const text = this.chatInput.trim();
             if (!text) return;
             this.chatInput = '';
-            this._addMsg('user', text);
-            this.scrollChat();
             this.chatLoading = true;
 
             try {
-                const result = await this.api('/admin/simulator/send', { text });
-                this._addResponses(result);
-            } catch(e) {
-                this._addMsg('bot', '[Connection error]');
-            }
+                await this.api('/admin/simulator/send', { text });
+            } catch(e) {}
             this.chatLoading = false;
-            this.scrollChat();
+            await this.reloadChat();
             this.$refs.chatInputField.focus();
         },
 
         async sendCallback(callbackData) {
             this.chatLoading = true;
-            this._addMsg('user', '[button: ' + callbackData + ']');
-            this.scrollChat();
 
             try {
-                const result = await this.api('/admin/simulator/send', { callback_data: callbackData });
-                this._addResponses(result);
-            } catch(e) {
-                this._addMsg('bot', '[Connection error]');
-            }
+                await this.api('/admin/simulator/send', { callback_data: callbackData });
+            } catch(e) {}
             this.chatLoading = false;
-            this.scrollChat();
+            await this.reloadChat();
         },
 
         scrollChat() {
