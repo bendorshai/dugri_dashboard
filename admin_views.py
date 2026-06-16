@@ -250,6 +250,11 @@ def simulator_reset():
         "goal_remind_at": None,
         "goal_offered_at": None,
     }
+    # Generate a signup token so /start {token} triggers the real linking flow
+    import secrets
+    signup_token = secrets.token_urlsafe(24)
+    token_expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
     reset_fields = {
         "toggles": {
             "sleep": {**fresh_toggle},
@@ -265,8 +270,11 @@ def simulator_reset():
             "weight_goal": None,
         },
         "eating_window": None,
-        "subscription_status": "trial_active",
-        "trial_started_at": now,
+        "subscription_status": "trial_pending",
+        "trial_started_at": None,
+        "telegram_user_id": None,
+        "signup_session_token": signup_token,
+        "signup_session_token_expires_at": token_expires,
         "recent_messages": [],
         "dashboard_intro_shown": False,
         "target_retry_done": False,
@@ -308,7 +316,7 @@ def simulator_reset():
     msg_count = len(after.get("recent_messages", [])) if after else -1
     logger.info("Simulator reset: recent_messages after reset = %d", msg_count)
 
-    return jsonify({"ok": True, "messages_after_reset": msg_count})
+    return jsonify({"ok": True, "messages_after_reset": msg_count, "signup_token": signup_token})
 
 
 @admin_bp.route("/simulator/clear-logs", methods=["POST"])

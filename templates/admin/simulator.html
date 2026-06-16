@@ -289,15 +289,13 @@ function simulator() {
             this.loading = true;
             try {
                 this.chatMessages = [];
-                await this.api('/admin/simulator/reset', null, 'POST');
-                // Trigger the bot's organic greeting via /start
-                const startResult = await this.api('/admin/simulator/send', { text: '/start' });
-                console.log('simulate /start result:', JSON.stringify(startResult));
+                const resetResult = await this.api('/admin/simulator/reset', null, 'POST');
+                // Trigger real onboarding via /start {token} (linking flow)
+                if (resetResult.signup_token) {
+                    await this.api('/admin/simulator/send', { text: '/start ' + resetResult.signup_token });
+                }
                 await this._loadState();
-                const dbg = startResult.error
-                    ? 'start error: ' + startResult.error
-                    : 'start responses: ' + (startResult.responses ? startResult.responses.length : '?');
-                this.flash('Reset done. ' + dbg + '. Chat: ' + this.chatMessages.length);
+                this.flash('Full reset complete');
             } finally {
                 this.loading = false;
             }
