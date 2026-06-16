@@ -212,10 +212,14 @@ class FoodAnalyzer:
         self, text: str,
         recent_messages: list[dict] | None = None,
         last_entry: dict | None = None,
+        today_str: str = "",
+        day_name: str = "",
         on_usage: TokenCallback | None = None,
     ) -> HabitLoggerClassification:
         """Tier 2 Habit Logger - sub-classify into sleep/workout/self_care/correction."""
         system = TIER2_HABIT_LOGGER_PROMPT
+        system = system.replace("{today_str}", today_str or "")
+        system = system.replace("{day_name}", day_name or "")
 
         if last_entry:
             system += (
@@ -348,9 +352,16 @@ class FoodAnalyzer:
             # Tier 2: sub-classify habit
             t2 = self.route_tier2_habit_logger(
                 text, recent_messages=recent_messages,
-                last_entry=last_entry, on_usage=on_usage,
+                last_entry=last_entry,
+                today_str=today_str, day_name=day_name,
+                on_usage=on_usage,
             )
-            result = RouterClassification(type=t2.type, workout_note=t2.workout_note)
+            result = RouterClassification(
+                type=t2.type,
+                workout_note=t2.workout_note,
+                self_care_description=t2.self_care_description,
+                resolved_date=t2.resolved_date,
+            )
             return result
 
         if t1.type == "goals_talk":
