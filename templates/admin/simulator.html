@@ -281,11 +281,28 @@ function simulator() {
 
         async fullReset() {
             this.loading = true;
-            const result = await this.api('/admin/simulator/reset');
+            await this.api('/admin/simulator/reset');
             this.chatMessages = [];
             await this.refreshState();
+
+            // Trigger bot greeting via simulate endpoint
+            try {
+                const greetResult = await this.api('/admin/simulator/send', { text: '/start' });
+                if (greetResult.responses) {
+                    for (const r of greetResult.responses) {
+                        this.chatMessages.push({
+                            role: 'bot',
+                            text: r.text || '',
+                            reply_markup: r.reply_markup || null,
+                        });
+                    }
+                }
+            } catch(e) {
+                // Bot may not be running locally
+            }
+            this.scrollChat();
             this.loading = false;
-            this.flash('Full reset complete' + (result.greeting_sent ? ' (greeting sent)' : ''));
+            this.flash('Full reset complete');
         },
 
         async clearLogs() {

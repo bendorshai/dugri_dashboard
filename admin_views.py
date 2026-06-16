@@ -298,36 +298,10 @@ def simulator_reset():
     }
     storage.update_user_raw(SIMULATOR_EMAIL, reset_fields)
 
-    # Send greeting via Telegram Bot API
-    greeting_sent = False
-    cfg = current_app.config["APP_CONFIG"]
-    bot_token = cfg.get("telegram_bot_token")
-    tid = user.get("telegram_user_id")
-    if bot_token and tid:
-        greeting = (
-            "\u05d4\u05d9\u05d9, \u05d0\u05e0\u05d9 \u05d3\u05d5\u05d2\u05e8\u05d9 \U0001f44b\n\n"
-            "\u05d4\u05dc\u05d1 \u05e9\u05dc \u05de\u05d4 \u05e9\u05d0\u05e0\u05d9 \u05e2\u05d5\u05e9\u05d4"
-            " \u05d4\u05d5\u05d0 \u05de\u05d5\u05d3\u05e2\u05d5\u05ea \u05ea\u05d6\u05d5\u05e0\u05ea\u05d9\u05ea"
-            " \u2014 \u05e9\u05dc\u05d7 \u05dc\u05d9 \u05d0\u05ea \u05d4\u05d0\u05e8\u05d5\u05d7\u05d4"
-            " \u05d4\u05d1\u05d0\u05d4 \u05e9\u05dc\u05da \u05d1\u05db\u05de\u05d4 \u05de\u05d9\u05dc\u05d9\u05dd"
-            " \u05d5\u05d0\u05e0\u05d9 \u05d0\u05e2\u05e9\u05d4 \u05d0\u05ea \u05d4\u05d7\u05d9\u05e9\u05d5\u05d1.\n\n"
-            "\u05dc\u05e4\u05e0\u05d9 \u05e9\u05de\u05ea\u05d7\u05d9\u05dc\u05d9\u05dd,"
-            " \u05d0\u05d9\u05da \u05d0\u05ea\u05d4 \u05e8\u05d5\u05e6\u05d4 \u05e9\u05d0\u05e7\u05e8\u05d0 \u05dc\u05da?"
-        )
-        try:
-            resp = requests.post(
-                f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                json={"chat_id": tid, "text": greeting},
-                timeout=5,
-            )
-            greeting_sent = resp.ok
-        except Exception:
-            logger.exception("Failed to send simulator reset greeting")
-
-    # Also clear activity logs
+    # Clear activity logs
     storage.delete_user_logs(SIMULATOR_EMAIL)
 
-    return jsonify({"ok": True, "greeting_sent": greeting_sent})
+    return jsonify({"ok": True})
 
 
 @admin_bp.route("/simulator/clear-logs", methods=["POST"])
