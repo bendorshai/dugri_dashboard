@@ -11,7 +11,7 @@ test_router_llm.py - TDD tests for the slim Router (Module 1).
 #
 # OUTPUT MODEL: RouterClassification
 #   type: one of 12 types (see below)
-#   meal: TimedFoodAnalysisResult | None (only for type=meal)
+#   meal: MealResult | None (only for type=meal)
 #   toggle_name: str | None (for opt_in, identifies which habit)
 #
 # TYPES:
@@ -97,8 +97,8 @@ pytestmark = pytest.mark.integration
 
 
 def _route(analyzer, text, toggle_state=None, history=None, reply_context=None):
-    """Convenience wrapper for route_tiered (production code path)."""
-    return analyzer.route_tiered(
+    """Convenience wrapper for classify_message (production code path)."""
+    return analyzer.classify_message(
         text=text,
         today_str=datetime.now().strftime("%d/%m/%Y"),
         last_entry=None,
@@ -524,7 +524,7 @@ class TestOtherRouting:
     def test_correction(self):
         """'the schnitzel was 300g' = correction."""
         analyzer = _make_analyzer()
-        result = analyzer.route_tiered(
+        result = analyzer.classify_message(
             text="השניצל היה 300 גרם",
             today_str=datetime.now().strftime("%d/%m/%Y"),
             last_entry={"description": "שניצל עם אורז", "calories": 650, "protein": 35},
@@ -694,7 +694,7 @@ class TestReplyToFoodEntry:
     def test_correction_reply(self):
         """'It was without rice' replying to food = correction."""
         analyzer = _make_analyzer()
-        result = analyzer.route_tiered(
+        result = analyzer.classify_message(
             text="זה היה בלי אורז",
             today_str="14/06/2026",
             last_entry={"description": "שניצל עם אורז", "calories": 650, "protein": 35},

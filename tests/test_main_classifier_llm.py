@@ -1,31 +1,31 @@
 """
-test_tier1_router_llm.py - TDD tests for the Tier 1 Intent Router.
+test_main_classifier_llm.py - TDD tests for the Main Classifier.
 
 # ============================================================================
 # TIER 1 SPEC
 # ============================================================================
 #
-# The Tier 1 router is the first LLM call for every user message. It answers
+# The Main classifier is the first LLM call for every user message. It answers
 # ONE question: "what broad category does this message belong to?"
 #
 # It is PURELY CONTEXTUAL - it uses message text and conversation history
-# but receives NO toggle state. Toggle state is deferred to tier 2.
+# but receives NO toggle state. Toggle state is deferred to sub-classifier.
 #
-# OUTPUT MODEL: Tier1Classification
+# OUTPUT MODEL: MainClassifierResult
 #   type: "meal" | "habit_logger" | "goals_talk" | "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
-#   (classification only, no extraction - meal extraction is tier 2)
+#   (classification only, no extraction - meal extraction is sub-classifier)
 #
 # TYPES:
 #   meal   - food description. Includes emotional-meal ("ate ice cream because
 #            I'm sad" = meal). Extracted inline with calories/protein/time.
-#            One call, done. No tier 2.
+#            One call, done. No sub-classifier.
 #   logger - user is reporting a habit (sleep time, workout, self-care) OR
-#            correcting a previous food entry. Tier 2 sub-classifies.
+#            correcting a previous food entry. Sub-classifier sub-classifies.
 #   opt_in - user is responding to a bot offer/suggestion about goals or
 #            toggles. Detected from conversation history (bot's last message
-#            was an offer/question about tracking). Tier 2 sub-classifies.
+#            was an offer/question about tracking). Sub-classifier sub-classifies.
 #   other  - everything else: questions, conversation, name/gender declaration,
-#            feature requests, pure emotion, inappropriate. Tier 2 sub-classifies.
+#            feature requests, pure emotion, inappropriate. Sub-classifier sub-classifies.
 #
 # KEY ROUTING RULES:
 # 1. Meal always wins - specific food item name = meal, always.
@@ -68,9 +68,9 @@ from _lazy_optin_helpers import (
 pytestmark = pytest.mark.integration
 
 
-def _tier1(analyzer, text, history=None, last_entry=None, reply_context=None):
-    """Route through tier 1 only. No toggle state."""
-    return analyzer.route_tier1(
+def _classify_main(analyzer, text, history=None, last_entry=None, reply_context=None):
+    """Route through main classifier only. No toggle state."""
+    return analyzer.main_classifier(
         text=text,
         today_str=datetime.now().strftime("%d/%m/%Y"),
         last_entry=last_entry,
@@ -88,24 +88,24 @@ class TestTier1Meal:
 
     def test_simple_food(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "אכלתי שניצל עם אורז")
+        result = _classify_main(analyzer, "אכלתי שניצל עם אורז")
         assert result.type == "meal"
 
     def test_food_with_emotion(self):
         """Iron rule: specific food + emotion = meal."""
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "אכלתי גלידה כי אני עצוב")
+        result = _classify_main(analyzer, "אכלתי גלידה כי אני עצוב")
         assert result.type == "meal"
 
     def test_coffee(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "שתיתי קפה עם חלב")
+        result = _classify_main(analyzer, "שתיתי קפה עם חלב")
         assert result.type == "meal"
 
     def test_food_during_bot_offer(self):
         """Meal always wins even when bot just offered something."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "אכלתי פיצה",
             history=_build_history(("bot", SLEEP_OFFER)),
         )
@@ -114,7 +114,7 @@ class TestTier1Meal:
     def test_food_during_goal_question(self):
         """Meal always wins even during goal-setting conversation."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "שתיתי קפה עם חלב",
             history=_build_history(("bot", NUTRITION_SUGGESTION)),
         )
@@ -122,14 +122,14 @@ class TestTier1Meal:
 
     def test_hamburger(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "המבורגר עם צ'יפס")
+        result = _classify_main(analyzer, "המבורגר עם צ'יפס")
         assert result.type == "meal"
 
     def test_meal_after_onboarding_history(self):
         """Regression: clear multi-item meal after onboarding must be meal.
 
         Production bug 2026-06-16: user completed onboarding (name + gender)
-        then sent a detailed meal. Tier 1 classified as 'other' instead of
+        then sent a detailed meal. Main classifier classified as 'other' instead of
         'meal', causing the bot to discuss the food conversationally without
         logging it. The 5-message onboarding history biased the classifier.
         """
@@ -141,7 +141,7 @@ class TestTier1Meal:
             ("user", "בן"),
             ("bot", "מעכשיו, כל מה שתשלח לי - טקסט או תמונה של אוכל - אני אחשב קלוריות וחלבון.\n\nאני כאן, מחכה לארוחה הבאה שלך"),
         )
-        result = _tier1(
+        result = _classify_main(
             analyzer,
             "אכלתי עכשיו 2 סנדוויצים גדולים\nאחד עם שניצל ורטבים והשני עם גבינות ונקניקין. ואז שתיתי 2 כוסות קפה על חלב שיבולת שועל",
             history=onboarding_history,
@@ -162,7 +162,7 @@ class TestTier1Meal:
             ("user", "מגניב"),
             ("bot", "אני כאן, מחכה לארוחה הבאה שלך"),
         )
-        result = _tier1(
+        result = _classify_main(
             analyzer,
             "אכלתי פיצה עם זיתים וקולה",
             history=long_history,
@@ -179,22 +179,22 @@ class TestTier1Logger:
 
     def test_sleep_report(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "הלכתי לישון ב-23")
+        result = _classify_main(analyzer, "הלכתי לישון ב-23")
         assert result.type == "habit_logger"
 
     def test_workout_report(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "התאמנתי היום")
+        result = _classify_main(analyzer, "התאמנתי היום")
         assert result.type == "habit_logger"
 
     def test_self_care_report(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "הלכתי לים היום")
+        result = _classify_main(analyzer, "הלכתי לים היום")
         assert result.type == "habit_logger"
 
     def test_yoga_workout(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "עשיתי יוגה בבוקר")
+        result = _classify_main(analyzer, "עשיתי יוגה בבוקר")
         assert result.type == "habit_logger"
 
     def test_correction(self):
@@ -205,7 +205,7 @@ class TestTier1Logger:
             "calories": 650,
             "protein": 35,
         }
-        result = _tier1(analyzer, "בלי אורז", last_entry=last_entry)
+        result = _classify_main(analyzer, "בלי אורז", last_entry=last_entry)
         assert result.type == "habit_logger"
 
     def test_correction_smaller(self):
@@ -215,13 +215,13 @@ class TestTier1Logger:
             "calories": 800,
             "protein": 40,
         }
-        result = _tier1(analyzer, "היה יותר קטן", last_entry=last_entry)
+        result = _classify_main(analyzer, "היה יותר קטן", last_entry=last_entry)
         assert result.type == "habit_logger"
 
     def test_multi_date_sleep(self):
         """Same habit, multiple dates = still logger (not other)."""
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "אתמול הלכתי לישון ב-22, שלשום ב-21")
+        result = _classify_main(analyzer, "אתמול הלכתי לישון ב-22, שלשום ב-21")
         assert result.type == "habit_logger"
 
     def test_confirm_log_suggestion(self):
@@ -231,7 +231,7 @@ class TestTier1Logger:
         This is logging, not activating a new tracking feature.
         """
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "אוקיי",
             history=_build_history(
                 ("user", "רצתי אתמול בים"),
@@ -250,7 +250,7 @@ class TestTier1OptIn:
 
     def test_yalla_after_offer(self):
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "יאללה",
             history=_build_history(
                 ("user", "אכלתי שניצל"),
@@ -262,7 +262,7 @@ class TestTier1OptIn:
 
     def test_yes_after_offer(self):
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "כן",
             history=_build_history(
                 ("user", "אכלתי שניצל"),
@@ -274,7 +274,7 @@ class TestTier1OptIn:
 
     def test_sababa_after_offer(self):
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "סבבה",
             history=_build_history(
                 ("user", "אכלתי שניצל"),
@@ -287,7 +287,7 @@ class TestTier1OptIn:
     def test_refuse_after_offer(self):
         """Refusal is still opt_in - it's a toggle decision."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "לא, עזוב",
             history=_build_history(
                 ("user", "אכלתי שניצל"),
@@ -299,7 +299,7 @@ class TestTier1OptIn:
 
     def test_hesitation_after_offer(self):
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "לא בטוח",
             history=_build_history(
                 ("user", "אכלתי שניצל"),
@@ -312,7 +312,7 @@ class TestTier1OptIn:
     def test_values_after_goal_question(self):
         """Providing goal values after bot asked = opt_in."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "2500 קלוריות ו-200 גרם חלבון",
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
@@ -327,7 +327,7 @@ class TestTier1OptIn:
     def test_time_after_sleep_goal_question(self):
         """Hard edge: '23:00' after bot asked sleep goal = opt_in."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "23:00",
             history=_build_history(
                 ("bot", SLEEP_OFFER),
@@ -340,7 +340,7 @@ class TestTier1OptIn:
     def test_deference_after_offer(self):
         """'You decide' after bot suggested values = opt_in (cooperation)."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "תחליט אתה",
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
@@ -355,7 +355,7 @@ class TestTier1OptIn:
     def test_short_affirmative_after_suggestion(self):
         """'OK' after bot suggested calorie/protein values = opt_in."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "אוקיי",
             history=_build_history(
                 ("bot", NUTRITION_OFFER),
@@ -370,7 +370,7 @@ class TestTier1OptIn:
     def test_remind_later_response(self):
         """Response to 'want me to remind you later?' = opt_in."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "כן",
             history=_build_history(("bot", GOAL_REMIND_ASK)),
         )
@@ -386,50 +386,50 @@ class TestTier1Other:
 
     def test_question_about_data(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "כמה אכלתי השבוע?")
+        result = _classify_main(analyzer, "כמה אכלתי השבוע?")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_general_chat(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "מה דעתך על צום לסירוגין?")
+        result = _classify_main(analyzer, "מה דעתך על צום לסירוגין?")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_pure_emotion(self):
         """Pure emotion without specific food = other (not meal)."""
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "יום קשה היום")
+        result = _classify_main(analyzer, "יום קשה היום")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_vague_eating_emotion(self):
         """'Ate a lot' with no food item = other (emotional)."""
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "אכלתי המון")
+        result = _classify_main(analyzer, "אכלתי המון")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_name_declaration(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "קוראים לי שי")
+        result = _classify_main(analyzer, "קוראים לי שי")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_feature_request(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "אפשר להוסיף מעקב שתיית מים?")
+        result = _classify_main(analyzer, "אפשר להוסיף מעקב שתיית מים?")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_feedback_request(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "תן לי סיכום שבועי")
+        result = _classify_main(analyzer, "תן לי סיכום שבועי")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_inappropriate(self):
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "לך תזדיין")
+        result = _classify_main(analyzer, "לך תזדיין")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"
 
     def test_negotiation_after_suggestion(self):
         """Pushback without values = other (conversational), not opt_in."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "2000 נשמע הרבה",
             history=_build_history(("bot", NUTRITION_SUGGESTION)),
         )
@@ -438,7 +438,7 @@ class TestTier1Other:
     def test_question_after_suggestion(self):
         """Question about suggestion = other, not opt_in."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "למה 1800?",
             history=_build_history(("bot", NUTRITION_SUGGESTION)),
         )
@@ -446,15 +446,15 @@ class TestTier1Other:
 
     def test_proactive_tracking_request(self):
         """User-initiated 'I want to track sleep' with no prior offer = other.
-        (Tier 2 will sub-classify as opt_in with toggle context.)"""
+        (Sub-classifier will sub-classify as opt_in with toggle context.)"""
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "אני רוצה לעקוב אחרי שינה")
+        result = _classify_main(analyzer, "אני רוצה לעקוב אחרי שינה")
         assert result.type == "goals_talk"
 
     def test_reply_to_food_confirmation(self):
         """Replying to food confirmation with a question = other."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "תודה",
             reply_context=FOOD_RESPONSE_SCHNITZEL,
         )
@@ -463,7 +463,7 @@ class TestTier1Other:
     def test_new_food_as_reply_to_confirmation(self):
         """New food item as reply to food confirmation = meal (always wins)."""
         analyzer = _make_analyzer()
-        result = _tier1(
+        result = _classify_main(
             analyzer, "וגם שתיתי קולה",
             reply_context=FOOD_RESPONSE_SCHNITZEL,
         )
@@ -480,5 +480,5 @@ class TestTier1MultiIntent:
     def test_food_and_sleep(self):
         """Food + sleep in same message = other (multi-intent)."""
         analyzer = _make_analyzer()
-        result = _tier1(analyzer, "אכלתי המבורגר, גם הלכתי לישון ב-23")
+        result = _classify_main(analyzer, "אכלתי המבורגר, גם הלכתי לישון ב-23")
         assert result.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"

@@ -21,7 +21,7 @@ from services.message_router_service import MessageRouterService
 from repositories.sleep_repository import SleepRepository
 from repositories.workout_repository import WorkoutRepository
 from repositories.self_care_repository import SelfCareRepository
-from analyzer import FoodAnalysisResult, FoodItem, TimedFoodGroup, TimedFoodAnalysisResult
+from analyzer import FoodAnalysisResult, FoodItem, MealGroup, MealResult
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ no feedback was given, correction when no correctable entry exists).
 Pure logic: no LLM calls, no DB access, no side effects.
 
 Depends on: models/analyzer_models.py (RouterClassification)
-Used by: handlers/base.py (_dispatch_v2)
+Used by: handlers/base.py (_handle_classified)
 """
 
 from __future__ import annotations

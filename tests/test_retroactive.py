@@ -45,10 +45,10 @@ def _make_profile(**kwargs):
 # Model tests
 # ---------------------------------------------------------------------------
 
-class TestTimedFoodGroupModel:
+class TestMealGroupModel:
     def test_create_timed_food_group(self):
-        from analyzer import TimedFoodGroup
-        group = TimedFoodGroup(
+        from analyzer import MealGroup
+        group = MealGroup(
             temporal_label="אתמול בערב",
             date="04/06/2026",
             time="20:00",
@@ -63,8 +63,8 @@ class TestTimedFoodGroupModel:
         assert group.total_calories == 600
 
     def test_create_timed_food_analysis_result(self):
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
-        group1 = TimedFoodGroup(
+        from analyzer import MealGroup, MealResult
+        group1 = MealGroup(
             temporal_label="אתמול בערב",
             date="04/06/2026",
             time="20:00",
@@ -72,7 +72,7 @@ class TestTimedFoodGroupModel:
             total_calories=600,
             total_protein=30,
         )
-        group2 = TimedFoodGroup(
+        group2 = MealGroup(
             temporal_label="עכשיו",
             date="05/06/2026",
             time="13:00",
@@ -80,15 +80,15 @@ class TestTimedFoodGroupModel:
             total_calories=100,
             total_protein=5,
         )
-        result = TimedFoodAnalysisResult(groups=[group1, group2])
+        result = MealResult(groups=[group1, group2])
         assert len(result.groups) == 2
         assert result.groups[0].date == "04/06/2026"
         assert result.groups[1].date == "05/06/2026"
 
     def test_single_group_backward_compatible(self):
         """A message with no temporal markers should produce a single group."""
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
-        group = TimedFoodGroup(
+        from analyzer import MealGroup, MealResult
+        group = MealGroup(
             temporal_label="עכשיו",
             date="05/06/2026",
             time="13:00",
@@ -99,7 +99,7 @@ class TestTimedFoodGroupModel:
             total_calories=600,
             total_protein=35,
         )
-        result = TimedFoodAnalysisResult(groups=[group])
+        result = MealResult(groups=[group])
         assert len(result.groups) == 1
 
 
@@ -116,9 +116,9 @@ class TestFormatGroupedItemsText:
 
     def test_single_group_today_no_label(self):
         """Single group for today should not show a temporal label."""
-        from analyzer import TimedFoodGroup
+        from analyzer import MealGroup
         h = self._make_handler()
-        groups = [TimedFoodGroup(
+        groups = [MealGroup(
             temporal_label="עכשיו",
             date="05/06/2026",
             time="13:00",
@@ -134,10 +134,10 @@ class TestFormatGroupedItemsText:
 
     def test_multiple_groups_show_labels(self):
         """Multiple groups should show temporal labels for each."""
-        from analyzer import TimedFoodGroup
+        from analyzer import MealGroup
         h = self._make_handler()
         groups = [
-            TimedFoodGroup(
+            MealGroup(
                 temporal_label="אתמול בערב",
                 date="04/06/2026",
                 time="20:00",
@@ -145,7 +145,7 @@ class TestFormatGroupedItemsText:
                 total_calories=600,
                 total_protein=30,
             ),
-            TimedFoodGroup(
+            MealGroup(
                 temporal_label="עכשיו",
                 date="05/06/2026",
                 time="13:00",
@@ -162,9 +162,9 @@ class TestFormatGroupedItemsText:
 
     def test_retro_group_shows_label_even_if_single(self):
         """A single group for a past date should still show a label."""
-        from analyzer import TimedFoodGroup
+        from analyzer import MealGroup
         h = self._make_handler()
-        groups = [TimedFoodGroup(
+        groups = [MealGroup(
             temporal_label="אתמול",
             date="04/06/2026",
             time="20:00",
@@ -178,9 +178,9 @@ class TestFormatGroupedItemsText:
 
     def test_items_show_grams_and_macros(self):
         """Each item should show grams, calories, and protein."""
-        from analyzer import TimedFoodGroup
+        from analyzer import MealGroup
         h = self._make_handler()
-        groups = [TimedFoodGroup(
+        groups = [MealGroup(
             temporal_label="עכשיו",
             date="05/06/2026",
             time="13:00",
@@ -224,8 +224,8 @@ class TestHandleMessageRetroactive:
 
     @staticmethod
     def _set_meal_classification(handler, timed):
-        """Set route_tiered mock for a meal result."""
-        handler.analyzer.route_tiered.return_value = RouterClassification(type="meal", meal=timed)
+        """Set classify_message mock for a meal result."""
+        handler.analyzer.classify_message.return_value = RouterClassification(type="meal", meal=timed)
 
     @pytest.mark.asyncio
     @patch("handlers.base.make_food_entry_keyboard", return_value="kb")
@@ -235,7 +235,7 @@ class TestHandleMessageRetroactive:
     async def test_multi_group_creates_multiple_entries(self, mock_send, mock_react, mock_now, _kb):
         """When GPT returns multiple groups, handler should create one FoodEntry per group."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
+        from analyzer import MealGroup, MealResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -247,8 +247,8 @@ class TestHandleMessageRetroactive:
         h.eating_day_svc.get_eating_day_totals.return_value = (100, 5)
 
         # Simulate classifier returning multi-group result
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
+        timed = MealResult(groups=[
+            MealGroup(
                 temporal_label="אתמול בערב",
                 date="04/06/2026",
                 time="20:00",
@@ -256,7 +256,7 @@ class TestHandleMessageRetroactive:
                 total_calories=600,
                 total_protein=30,
             ),
-            TimedFoodGroup(
+            MealGroup(
                 temporal_label="עכשיו",
                 date="05/06/2026",
                 time="13:45",
@@ -307,7 +307,7 @@ class TestHandleMessageRetroactive:
     async def test_daily_totals_exclude_retroactive_entries(self, mock_send, mock_react, mock_now, _kb):
         """Daily summary should reflect only today's entries, not retroactive ones."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
+        from analyzer import MealGroup, MealResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -319,8 +319,8 @@ class TestHandleMessageRetroactive:
         # Daily totals include today's existing (200 cal) + new today entry (100 cal) = 300
         h.eating_day_svc.get_eating_day_totals.return_value = (300, 15)
 
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
+        timed = MealResult(groups=[
+            MealGroup(
                 temporal_label="אתמול",
                 date="04/06/2026",
                 time="20:00",
@@ -328,7 +328,7 @@ class TestHandleMessageRetroactive:
                 total_calories=800,
                 total_protein=25,
             ),
-            TimedFoodGroup(
+            MealGroup(
                 temporal_label="עכשיו",
                 date="05/06/2026",
                 time="13:45",
@@ -366,7 +366,7 @@ class TestHandleMessageRetroactive:
     async def test_all_retro_shows_confirmation_no_daily_summary(self, mock_send, mock_react, mock_now, _kb):
         """When all entries are retroactive, show confirmation instead of daily summary."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
+        from analyzer import MealGroup, MealResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -377,8 +377,8 @@ class TestHandleMessageRetroactive:
         h.eating_day_svc.get_stats_date.return_value = "05/06/2026"
         h.eating_day_svc.get_eating_day_totals.return_value = (0, 0)
 
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
+        timed = MealResult(groups=[
+            MealGroup(
                 temporal_label="אתמול בערב",
                 date="04/06/2026",
                 time="20:00",
@@ -416,7 +416,7 @@ class TestHandleMessageRetroactive:
     async def test_single_group_today_backward_compatible(self, mock_send, mock_react, mock_now, _kb):
         """Single group for today should behave like the old flow."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
+        from analyzer import MealGroup, MealResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -427,8 +427,8 @@ class TestHandleMessageRetroactive:
         h.eating_day_svc.get_stats_date.return_value = "05/06/2026"
         h.eating_day_svc.get_eating_day_totals.return_value = (400, 30)
 
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
+        timed = MealResult(groups=[
+            MealGroup(
                 temporal_label="עכשיו",
                 date="05/06/2026",
                 time="13:45",
@@ -474,7 +474,7 @@ class TestHandleMessageRetroactive:
     async def test_last_entry_stores_latest_group(self, mock_send, mock_react, mock_now, _kb):
         """last_entry in chat_data should be the chronologically latest entry."""
         from datetime import datetime as dt
-        from analyzer import TimedFoodGroup, TimedFoodAnalysisResult
+        from analyzer import MealGroup, MealResult
         import pytz
         tz = pytz.timezone("Asia/Jerusalem")
         mock_now.return_value = dt(2026, 6, 5, 13, 45, tzinfo=tz)
@@ -485,8 +485,8 @@ class TestHandleMessageRetroactive:
         h.eating_day_svc.get_stats_date.return_value = "05/06/2026"
         h.eating_day_svc.get_eating_day_totals.return_value = (100, 5)
 
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
+        timed = MealResult(groups=[
+            MealGroup(
                 temporal_label="אתמול",
                 date="04/06/2026",
                 time="20:00",
@@ -494,7 +494,7 @@ class TestHandleMessageRetroactive:
                 total_calories=800,
                 total_protein=25,
             ),
-            TimedFoodGroup(
+            MealGroup(
                 temporal_label="עכשיו",
                 date="05/06/2026",
                 time="13:45",

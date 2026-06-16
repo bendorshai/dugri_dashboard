@@ -2,8 +2,8 @@
 test_habit_temporal.py - TDD tests for temporal date extraction in habit logging.
 
 Expected behavior:
-- HabitLoggerClassification has a resolved_date field (DD/MM/YYYY or None)
-- RouterClassification carries resolved_date through the tiered pipeline
+- HabitLoggerResult has a resolved_date field (DD/MM/YYYY or None)
+- RouterClassification carries resolved_date through the classification pipeline
 - When resolved_date is set, handler uses it instead of stats_date
 - When resolved_date is None, handler falls back to stats_date (today)
 - Confirmation messages include day name when date != today
@@ -36,19 +36,19 @@ for mod in ["telegram", "telegram.ext", "pymongo"]:
 # ============================================================================
 
 
-class TestHabitLoggerClassificationModel:
+class TestHabitLoggerResultModel:
     """resolved_date field exists and behaves correctly."""
 
     def test_resolved_date_defaults_to_none(self):
-        from models.analyzer_models import HabitLoggerClassification
+        from models.analyzer_models import HabitLoggerResult
 
-        result = HabitLoggerClassification(type="workout")
+        result = HabitLoggerResult(type="workout")
         assert result.resolved_date is None
 
     def test_resolved_date_accepts_valid_date(self):
-        from models.analyzer_models import HabitLoggerClassification
+        from models.analyzer_models import HabitLoggerResult
 
-        result = HabitLoggerClassification(
+        result = HabitLoggerResult(
             type="workout",
             workout_note="אימון ריצה",
             resolved_date="14/06/2026",
@@ -56,9 +56,9 @@ class TestHabitLoggerClassificationModel:
         assert result.resolved_date == "14/06/2026"
 
     def test_resolved_date_on_sleep(self):
-        from models.analyzer_models import HabitLoggerClassification
+        from models.analyzer_models import HabitLoggerResult
 
-        result = HabitLoggerClassification(
+        result = HabitLoggerResult(
             type="sleep",
             sleep_time="23:00",
             resolved_date="13/06/2026",
@@ -67,9 +67,9 @@ class TestHabitLoggerClassificationModel:
         assert result.sleep_time == "23:00"
 
     def test_resolved_date_on_self_care(self):
-        from models.analyzer_models import HabitLoggerClassification
+        from models.analyzer_models import HabitLoggerResult
 
-        result = HabitLoggerClassification(
+        result = HabitLoggerResult(
             type="self_care",
             self_care_description="הלכתי לים",
             resolved_date="14/06/2026",
@@ -326,8 +326,8 @@ def _get_day_name() -> str:
 
 
 def _route_habit(analyzer, text):
-    """Call route_tier2_habit_logger with proper date context."""
-    return analyzer.route_tier2_habit_logger(
+    """Call classify_habit with proper date context."""
+    return analyzer.classify_habit(
         text=text,
         today_str=_TODAY_STR,
         day_name=_get_day_name(),
