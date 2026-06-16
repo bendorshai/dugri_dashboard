@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+
+
 from pydantic import BaseModel, Field
 
 
@@ -56,6 +58,13 @@ class CorrectionResult(BaseModel):
     corrected_protein: int
     corrected_date: str | None = None   # DD/MM/YYYY, None = no change
     corrected_time: str | None = None   # HH:MM, None = no change
+
+
+class MessageParseResult(BaseModel):
+    type: Literal["food", "correction", "unknown"]
+    food: FoodAnalysisResult | None = None
+    correction: CorrectionResult | None = None
+
 
 
 class WeeklyFeedbackResult(BaseModel):

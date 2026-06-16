@@ -162,6 +162,33 @@ Adding "each habit has a logging aspect AND a goals aspect" before the categorie
 ### "Same-habit multi-date vs multi-intent" (session 2026-06-16)
 "Sleep at 22 yesterday, 21 day before" = same habit, multiple dates = habit_logger. "Hamburger + sleep at 23" = different habit types = multi-intent = other. LLMs can't infer this distinction without explicit examples of both patterns side by side.
 
+## Structural limits of monolithic classification (session 2026-06-15)
+
+### One classification axis per structured output call
+GPT-4o-mini reliably fills ONE classification field per structured output response. Adding a second independent classification field causes one of two outcomes:
+- **Before `type`**: the pre-field is filled correctly, but `type` regresses (21 failures in testing). The model "spends" its classification capacity on the first field.
+- **After `type`**: the post-field is ignored (always returns default value). The model's classification capacity is already exhausted.
+
+This was tested with binary fields (`log_offer/other`), 3-way fields (`logging/goal_setting/other`), 4-way fields (`log_workout/log_sleep/log_self_care/other`), and booleans (`bot_suggested_logging`). All showed the same pattern.
+
+### Prompt saturation: new types cause regressions on existing types
+Each new classification type added to the prompt erodes boundaries between existing types. Evidence:
+- Adding `feature_request` type (with "למה אין אפשרות ל..." examples) caused `test_emotional_question_no_data_ask` to fail consistently - the "למה" pattern bled into emotional classification
+- `test_accept_suggestion_all_variants` became increasingly flaky as the prompt grew - the opt_in boundary eroded with more competing rules
+- These regressions are subtle (not caught by the target tests for the new type) and cumulative
+
+### When to decompose vs when to add rules
+**Add a rule** when the classification boundary is clear and the new rule doesn't overlap with existing type definitions. Example: rule 7א (nutrition suggestion + positive reply = opt_in) - narrow, no overlap.
+
+**Decompose** when:
+- Flaky tests persist despite correct rules (prompt saturation)
+- New types cause regressions on unrelated types (cross-contamination)
+- The classification requires reading two independent signals (e.g. bot's intent AND user's response type)
+- The prompt exceeds ~80 lines of classification rules
+
+### The LoggerService escape hatch
+When the router can't make a distinction in one call, use a second focused GPT call via LoggerService. This is already the pattern for emotional (empathy generation), feature_request (sub-type classification), and now log-confirmation (opt_in disambiguation). Each call does one thing, does it well. Cost: ~200-400ms extra latency, only for the specific type that needs it.
+
 ## Anti-patterns (things that made it worse)
 
 1. **Over-abstracting word lists** - replacing inline examples with "תשובה חיובית קצרה" lost the LLM
