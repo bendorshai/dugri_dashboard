@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "10.1.0"
-VERSION_NOTES = "Fix tier 1 meal misclassification: rename catch-all type to prevent food messages being swallowed"
+VERSION = "10.2.0"
+VERSION_NOTES = "Classification guardrails, message ID tracking on entries, reply-based correction lookup"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

@@ -22,6 +22,8 @@ class SleepLog(BaseModel):
     telegram_user_id: int
     date: str
     sleep_time: str
+    user_message_id: int | None = None
+    bot_message_id: int | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("date")
