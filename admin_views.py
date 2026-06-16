@@ -255,6 +255,11 @@ def simulator_reset():
     signup_token = secrets.token_urlsafe(24)
     token_expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
 
+    # Clear activity logs BEFORE resetting telegram_user_id (delete_user_logs
+    # needs the current tid to find entries in food_entries, sleep_logs, etc.)
+    log_counts = storage.delete_user_logs(SIMULATOR_EMAIL)
+    logger.info("Simulator reset: deleted logs %s", log_counts)
+
     reset_fields = {
         "toggles": {
             "sleep": {**fresh_toggle},
@@ -302,14 +307,16 @@ def simulator_reset():
             "silent_week": False,
         },
         "re_engagement_stage": "none",
+        "re_engagement_last_sent_at": None,
         "last_user_message_at": None,
+        "trial_expiry_message_sent": False,
+        "trial_expiry_at": None,
+        "trial_end_acknowledged": False,
+        "tokens_used": {},
+        "self_care_activities": {},
     }
     ok = storage.update_user_raw(SIMULATOR_EMAIL, reset_fields)
     logger.info("Simulator reset: update_user_raw returned %s", ok)
-
-    # Clear activity logs
-    log_counts = storage.delete_user_logs(SIMULATOR_EMAIL)
-    logger.info("Simulator reset: deleted logs %s", log_counts)
 
     # Verify
     after = storage.get_user(SIMULATOR_EMAIL)

@@ -487,7 +487,15 @@ function simulator() {
                 source: 'simulator',
                 created_at: new Date().toISOString(),
             });
-            await this.saveField('strikes', this.state.strikes);
+            const data = { strikes: this.state.strikes };
+            // Auto-ban on 3rd strike (matches INAPPROPRIATE_MAX_STRIKES=3)
+            if (this.state.strikes.length >= 3 && !this.state.banned_at) {
+                data.banned_at = new Date().toISOString();
+                this.state.banned_at = data.banned_at;
+            }
+            await this.api('/admin/simulator/state', data);
+            this.flash(data.banned_at ? 'Strike added - BANNED' : 'Strike added');
+            await this._refreshPanel();
         },
 
         async clearStrikes() {
