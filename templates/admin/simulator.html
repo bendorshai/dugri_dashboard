@@ -288,9 +288,13 @@ function simulator() {
                 this.chatMessages = [];
                 await this.api('/admin/simulator/reset');
                 // Trigger the bot's organic greeting via /start
-                await this.api('/admin/simulator/send', { text: '/start' });
+                const startResult = await this.api('/admin/simulator/send', { text: '/start' });
+                console.log('simulate /start result:', JSON.stringify(startResult));
                 await this._loadState();
-                this.flash('Full reset complete');
+                const dbg = startResult.error
+                    ? 'start error: ' + startResult.error
+                    : 'start responses: ' + (startResult.responses ? startResult.responses.length : '?');
+                this.flash('Reset done. ' + dbg + '. Chat: ' + this.chatMessages.length);
             } finally {
                 this.loading = false;
             }
