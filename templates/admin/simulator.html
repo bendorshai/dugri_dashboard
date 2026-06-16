@@ -55,6 +55,47 @@
                 </div>
             </div>
 
+            <!-- Profile & Targets (read-only) -->
+            <div class="sim-card">
+                <h4>Profile & Targets</h4>
+                <div class="sim-field sim-field--row">
+                    <label>Name</label>
+                    <span class="sim-value" x-text="state.name || '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Gender</label>
+                    <span class="sim-value" x-text="state.gender || '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Height</label>
+                    <span class="sim-value" x-text="state.height_cm ? state.height_cm + ' cm' : '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Weight</label>
+                    <span class="sim-value" x-text="state.weight_kg ? state.weight_kg + ' kg' : '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Birth Year</label>
+                    <span class="sim-value" x-text="state.birth_year || '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Cal Target</label>
+                    <span class="sim-value" x-text="state.targets && state.targets.calories ? state.targets.calories : '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Protein Target</label>
+                    <span class="sim-value" x-text="state.targets && state.targets.protein ? state.targets.protein + 'g' : '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Weight Goal</label>
+                    <span class="sim-value" x-text="state.targets && state.targets.weight_goal ? state.targets.weight_goal : '\u2014'"></span>
+                </div>
+                <div class="sim-field sim-field--row">
+                    <label>Eating Window</label>
+                    <span class="sim-value" x-text="state.eating_window ? state.eating_window.start + ' \u2013 ' + state.eating_window.end : '\u2014'"></span>
+                </div>
+            </div>
+
             <!-- Toggles -->
             <div class="sim-card">
                 <h4>Toggles</h4>
@@ -96,6 +137,18 @@
                 </div>
             </div>
 
+            <!-- Scheduler -->
+            <div class="sim-card">
+                <h4>Scheduler</h4>
+                <div class="sim-field">
+                    <label>Fake Clock</label>
+                    <input type="datetime-local" x-model="fakeClock">
+                </div>
+                <button @click="runTick()" class="sim-btn sim-btn--full" :disabled="loading || !fakeClock">
+                    Run Tick
+                </button>
+            </div>
+
             <!-- Danger Zone -->
             <div class="sim-card sim-card--danger">
                 <h4>Danger Zone</h4>
@@ -113,51 +166,110 @@
             </button>
         </div>
 
-        <!-- RIGHT: Chat Simulator -->
-        <div class="sim-chat">
-            <h3 class="sim-panel-title">Chat Simulator</h3>
+        <!-- RIGHT: Chat + History -->
+        <div class="sim-right">
+            <!-- Chat Simulator -->
+            <div class="sim-chat">
+                <h3 class="sim-panel-title">Chat Simulator</h3>
 
-            <div class="sim-chat-messages" x-ref="chatMessages">
-                <template x-for="(msg, i) in chatMessages" :key="msg._id">
-                    <div :class="'sim-msg sim-msg--' + msg.role">
-                        <div class="sim-msg-bubble" x-text="msg.text"></div>
-                        <!-- Inline keyboard buttons -->
-                        <template x-if="msg.reply_markup && msg.reply_markup.inline_keyboard">
-                            <div class="sim-msg-keyboard">
-                                <template x-for="row in msg.reply_markup.inline_keyboard" :key="JSON.stringify(row)">
-                                    <div class="sim-keyboard-row">
-                                        <template x-for="btn in row" :key="btn.callback_data || btn.text">
-                                            <button class="sim-keyboard-btn"
-                                                    x-text="btn.text"
-                                                    @click="btn.callback_data ? sendCallback(btn.callback_data) : (btn.url ? window.open(btn.url) : null)"
-                                                    :disabled="!btn.callback_data && !btn.url">
-                                            </button>
-                                        </template>
-                                    </div>
-                                </template>
+                <div class="sim-chat-messages" x-ref="chatMessages">
+                    <template x-for="(msg, i) in chatMessages" :key="msg._id">
+                        <div :class="'sim-msg sim-msg--' + msg.role">
+                            <div class="sim-msg-bubble" x-text="msg.text"></div>
+                            <!-- Inline keyboard buttons -->
+                            <template x-if="msg.reply_markup && msg.reply_markup.inline_keyboard">
+                                <div class="sim-msg-keyboard">
+                                    <template x-for="row in msg.reply_markup.inline_keyboard" :key="JSON.stringify(row)">
+                                        <div class="sim-keyboard-row">
+                                            <template x-for="btn in row" :key="btn.callback_data || btn.text">
+                                                <button class="sim-keyboard-btn"
+                                                        x-text="btn.text"
+                                                        @click="btn.callback_data ? sendCallback(btn.callback_data) : (btn.url ? window.open(btn.url) : null)"
+                                                        :disabled="!btn.callback_data && !btn.url">
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <div x-show="chatLoading" class="sim-msg sim-msg--bot">
+                        <div class="sim-msg-bubble sim-msg-typing">...</div>
+                    </div>
+                </div>
+
+                <div class="sim-chat-input">
+                    <input type="text" x-model="chatInput" placeholder="Type a message..."
+                           @keydown.enter="sendMessage()"
+                           :disabled="chatLoading"
+                           x-ref="chatInputField">
+                    <button @click="sendMessage()" :disabled="chatLoading || !chatInput.trim()"
+                            class="sim-btn sim-btn--send">
+                        &gt;
+                    </button>
+                </div>
+
+                <div class="sim-chat-note">
+                    Messages go through the real Dugri pipeline (classifier, GPT, toggles, trial checks).
+                </div>
+            </div>
+
+            <!-- Entry History -->
+            <div class="sim-history">
+                <h3 class="sim-panel-title">Entry History</h3>
+                <div x-show="historyLoading" class="sim-history-loading">Loading...</div>
+                <div x-show="!historyLoading && historyDays.length === 0" class="sim-history-empty">
+                    No entries yet
+                </div>
+                <template x-for="day in historyDays" :key="day.date">
+                    <div class="sim-history-day" x-show="day.meals.length || day.workouts.length || day.sleep || day.self_care.length">
+                        <div class="sim-history-day-header" x-text="day.date_display"></div>
+
+                        <!-- Meals -->
+                        <template x-for="meal in day.meals" :key="meal.id">
+                            <div class="sim-history-entry">
+                                <span class="sim-history-time" x-text="meal.time"></span>
+                                <span class="sim-history-desc" x-text="meal.description"></span>
+                                <span class="sim-history-stats">
+                                    <span x-text="meal.calories"></span> cal,
+                                    <span x-text="meal.protein"></span>g prot
+                                </span>
+                            </div>
+                        </template>
+
+                        <!-- Day totals -->
+                        <div class="sim-history-totals" x-show="day.meals.length">
+                            Total: <span x-text="day.meals_total.calories"></span> cal,
+                            <span x-text="day.meals_total.protein"></span>g prot
+                        </div>
+
+                        <!-- Workouts -->
+                        <template x-for="w in day.workouts" :key="w.id">
+                            <div class="sim-history-entry sim-history-entry--habit">
+                                <span>Workout</span>
+                                <span class="sim-history-desc" x-text="w.note || 'logged'"></span>
+                            </div>
+                        </template>
+
+                        <!-- Sleep -->
+                        <template x-if="day.sleep">
+                            <div class="sim-history-entry sim-history-entry--habit">
+                                <span>Sleep</span>
+                                <span class="sim-history-desc" x-text="day.sleep.sleep_time"></span>
+                            </div>
+                        </template>
+
+                        <!-- Self-care -->
+                        <template x-for="sc in day.self_care" :key="sc.id">
+                            <div class="sim-history-entry sim-history-entry--habit">
+                                <span>Self-care</span>
+                                <span class="sim-history-desc" x-text="sc.description"></span>
                             </div>
                         </template>
                     </div>
                 </template>
-
-                <div x-show="chatLoading" class="sim-msg sim-msg--bot">
-                    <div class="sim-msg-bubble sim-msg-typing">...</div>
-                </div>
-            </div>
-
-            <div class="sim-chat-input">
-                <input type="text" x-model="chatInput" placeholder="Type a message..."
-                       @keydown.enter="sendMessage()"
-                       :disabled="chatLoading"
-                       x-ref="chatInputField">
-                <button @click="sendMessage()" :disabled="chatLoading || !chatInput.trim()"
-                        class="sim-btn sim-btn--send">
-                    &gt;
-                </button>
-            </div>
-
-            <div class="sim-chat-note">
-                Messages go through the real Dugri pipeline (classifier, GPT, toggles, trial checks).
             </div>
         </div>
     </div>
@@ -192,6 +304,9 @@ function simulator() {
         chatInput: '',
         chatLoading: false,
         toggleNames: ['nutrition', 'sleep', 'eating_window', 'workouts', 'self_care', 'weekly_summary'],
+        historyDays: [],
+        historyLoading: false,
+        fakeClock: '',
 
         get currentDay() {
             if (!this.state.trial_started_at) return '-';
@@ -222,6 +337,7 @@ function simulator() {
             data[field] = value;
             await this.api('/admin/simulator/state', data);
             this.flash(field + ' updated');
+            await this._loadState();
         },
 
         async saveTrialStarted() {
@@ -244,6 +360,7 @@ function simulator() {
                 subscription_status: 'trial_active',
             });
             this.flash('Set to day ' + daysAgo);
+            await this._loadState();
         },
 
         async saveToggle(name) {
@@ -259,6 +376,7 @@ function simulator() {
             }
             await this.api('/admin/simulator/state', data);
             this.flash(name + ' toggle updated');
+            await this._loadState();
         },
 
         async toggleBan(banned) {
@@ -283,6 +401,7 @@ function simulator() {
             await this.api('/admin/simulator/state', { strikes: [], banned_at: null });
             this.state.banned_at = null;
             this.flash('Strikes and ban cleared');
+            await this._loadState();
         },
 
         async fullReset() {
@@ -307,6 +426,26 @@ function simulator() {
                 const result = await this.api('/admin/simulator/clear-logs', null, 'POST');
                 const total = Object.values(result.deleted || {}).reduce((a, b) => a + b, 0);
                 this.flash(total + ' log entries deleted');
+                await this._loadState();
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async runTick() {
+            if (!this.fakeClock) return;
+            this.loading = true;
+            try {
+                const fakeNow = new Date(this.fakeClock).toISOString();
+                const result = await this.api('/admin/simulator/tick', { fake_now: fakeNow });
+                if (result.error) {
+                    this.flash(result.error, false);
+                } else {
+                    const count = (result.responses || []).length;
+                    this._appendBotResponses(result);
+                    this.flash(count ? count + ' message(s) triggered' : 'No messages triggered');
+                }
+                await this._loadState();
             } finally {
                 this.loading = false;
             }
@@ -326,6 +465,7 @@ function simulator() {
                 }
             }
             this.scrollChat();
+            await this._loadHistory();
         },
 
         async refreshState() {
@@ -338,14 +478,15 @@ function simulator() {
             }
         },
 
-        async reloadChat() {
-            const data = await this.api('/admin/simulator/state');
-            if (!data.error) {
-                this.chatMessages = (data.recent_messages || []).map(m =>
-                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup)
-                );
-            }
-            this.scrollChat();
+        async _loadHistory() {
+            this.historyLoading = true;
+            try {
+                const data = await this.api('/admin/simulator/history');
+                if (!data.error) {
+                    this.historyDays = data.days || [];
+                }
+            } catch(e) {}
+            this.historyLoading = false;
         },
 
         _appendBotResponses(result) {
@@ -369,6 +510,7 @@ function simulator() {
             try {
                 const result = await this.api('/admin/simulator/send', { text });
                 this._appendBotResponses(result);
+                await this._loadState();
             } catch(e) {}
             this.chatLoading = false;
             this.$refs.chatInputField.focus();
@@ -379,6 +521,7 @@ function simulator() {
             try {
                 const result = await this.api('/admin/simulator/send', { callback_data: callbackData });
                 this._appendBotResponses(result);
+                await this._loadState();
             } catch(e) {}
             this.chatLoading = false;
         },

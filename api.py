@@ -73,32 +73,11 @@ def regenerate_bot_link():
     return jsonify({"deep_link": deep_link, "token": token})
 
 
-@api_bp.route("/activity-history", methods=["GET"])
-@login_required
-def activity_history():
-    """Return activity data organized by date for the history page."""
-    storage = _get_storage()
-    email = session["user_email"]
+def format_activity_days(raw: dict, start_date: date, end_date: date) -> list[dict]:
+    """Group raw activity data into day-by-day dicts (newest first).
 
-    # Parse date range (defaults to last 7 days)
-    today = date.today()
-    start_str = request.args.get("start")
-    end_str = request.args.get("end")
-
-    try:
-        start_date = date.fromisoformat(start_str) if start_str else today - timedelta(days=6)
-        end_date = date.fromisoformat(end_str) if end_str else today
-    except ValueError:
-        return jsonify({"error": "invalid date format, use YYYY-MM-DD"}), 400
-
-    # Cap range to 31 days
-    if (end_date - start_date).days > 31:
-        start_date = end_date - timedelta(days=31)
-
-    raw = storage.get_activity_history(email, start_date, end_date)
-    targets = raw["targets"]
-    eating_window = raw.get("eating_window")
-
+    Shared by the history API and the simulator history endpoint.
+    """
     # Group food by date
     food_by_date: dict[str, list] = {}
     for entry in raw["food"]:
@@ -112,7 +91,6 @@ def activity_history():
             "within_window": entry.get("within_window", True),
         })
 
-    # Sort meals by time within each day
     for meals in food_by_date.values():
         meals.sort(key=lambda m: m["time"])
 
@@ -142,37 +120,20 @@ def activity_history():
             "description": entry.get("description", ""),
         })
 
-    # Build day-by-day response (newest first)
     days = []
-    total_cal = 0
-    total_prot = 0
-    days_with_food = 0
-    workout_count = 0
-    sleep_logged = 0
-
     current = end_date
     while current >= start_date:
         dd_mm_yyyy = current.strftime("%d/%m/%Y")
         day_name = _HEBREW_DAYS[current.weekday()]
-        date_display = f"{current.strftime('%d/%m')} — {day_name}"
+        date_display = f"{current.strftime('%d/%m')} - {day_name}"
 
         meals = food_by_date.get(dd_mm_yyyy, [])
         day_cal = sum(m["calories"] for m in meals)
         day_prot = sum(m["protein"] for m in meals)
 
-        if meals:
-            total_cal += day_cal
-            total_prot += day_prot
-            days_with_food += 1
-
         day_workouts = workouts_by_date.get(dd_mm_yyyy, [])
-        workout_count += len(day_workouts)
-
         day_sleep = sleep_by_date.get(dd_mm_yyyy)
-        if day_sleep:
-            sleep_logged += 1
 
-        # Self-care for this day's week
         iso_year, iso_week, _ = current.isocalendar()
         week_id = f"{iso_year}-W{iso_week:02d}"
         day_self_care = self_care_by_week.get(week_id, [])
@@ -188,6 +149,52 @@ def activity_history():
         })
 
         current -= timedelta(days=1)
+
+    return days
+
+
+@api_bp.route("/activity-history", methods=["GET"])
+@login_required
+def activity_history():
+    """Return activity data organized by date for the history page."""
+    storage = _get_storage()
+    email = session["user_email"]
+
+    # Parse date range (defaults to last 7 days)
+    today = date.today()
+    start_str = request.args.get("start")
+    end_str = request.args.get("end")
+
+    try:
+        start_date = date.fromisoformat(start_str) if start_str else today - timedelta(days=6)
+        end_date = date.fromisoformat(end_str) if end_str else today
+    except ValueError:
+        return jsonify({"error": "invalid date format, use YYYY-MM-DD"}), 400
+
+    # Cap range to 31 days
+    if (end_date - start_date).days > 31:
+        start_date = end_date - timedelta(days=31)
+
+    raw = storage.get_activity_history(email, start_date, end_date)
+    targets = raw["targets"]
+    eating_window = raw.get("eating_window")
+
+    days = format_activity_days(raw, start_date, end_date)
+
+    # Compute weekly totals
+    total_cal = 0
+    total_prot = 0
+    days_with_food = 0
+    workout_count = 0
+    sleep_logged = 0
+    for day in days:
+        if day["meals"]:
+            total_cal += day["meals_total"]["calories"]
+            total_prot += day["meals_total"]["protein"]
+            days_with_food += 1
+        workout_count += len(day["workouts"])
+        if day["sleep"]:
+            sleep_logged += 1
 
     num_days = (end_date - start_date).days + 1
     weekly_totals = {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import requests
 from flask import Blueprint, render_template, current_app, request, jsonify
@@ -365,6 +365,56 @@ def simulator_send():
         return jsonify({"error": "bot timeout"}), 504
     except Exception:
         logger.exception("Failed to reach bot simulate endpoint")
+        return jsonify({"error": "bot unreachable"}), 502
+
+
+@admin_bp.route("/simulator/history")
+@admin_required
+def simulator_history():
+    """Return activity history for the simulator test user."""
+    from api import format_activity_days
+
+    storage = _get_dashboard_storage()
+    today = date.today()
+    start_date = today - timedelta(days=2)
+
+    raw = storage.get_activity_history(SIMULATOR_EMAIL, start_date, today)
+    days = format_activity_days(raw, start_date, today)
+
+    return jsonify({"days": days})
+
+
+@admin_bp.route("/simulator/tick", methods=["POST"])
+@admin_required
+def simulator_tick():
+    """Proxy a scheduler tick to the bot's /internal/simulate-tick endpoint."""
+    data = request.get_json() or {}
+    fake_now = data.get("fake_now")
+    if not fake_now:
+        return jsonify({"error": "fake_now required"}), 400
+
+    cfg = current_app.config["APP_CONFIG"]
+    bot_url = cfg.get("bot_internal_url", "")
+    secret = cfg.get("internal_secret", "")
+
+    if not bot_url:
+        return jsonify({"error": "bot_internal_url not configured"}), 500
+
+    try:
+        resp = requests.post(
+            f"{bot_url}/internal/simulate-tick",
+            json={"email": SIMULATOR_EMAIL, "fake_now": fake_now},
+            headers={"X-Internal-Secret": secret},
+            timeout=30,
+        )
+        if resp.ok:
+            return jsonify(resp.json())
+        logger.error("Bot simulate-tick error: %s %s", resp.status_code, resp.text)
+        return jsonify({"error": "bot returned error", "status": resp.status_code}), 502
+    except requests.Timeout:
+        return jsonify({"error": "bot timeout"}), 504
+    except Exception:
+        logger.exception("Failed to reach bot simulate-tick endpoint")
         return jsonify({"error": "bot unreachable"}), 502
 
 
