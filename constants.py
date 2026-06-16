@@ -102,7 +102,7 @@ EATING_WINDOW_WARN_MINUTES = 60
 # Other constants
 # ---------------------------------------------------------------------------
 
-DASHBOARD_INTRO_DAY = 16
+DASHBOARD_INTRO_DAY = 8
 """Day number to show the dashboard introduction hook."""
 
 EXIT_DOOR_UNANSWERED_THRESHOLD = 2
