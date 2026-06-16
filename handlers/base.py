@@ -672,6 +672,17 @@ class HealthHandlers:
             trial_ended=_trial_ended, is_first_post_trial=_is_first_post_trial,
         )
 
+    def _prepend_empathy(self, text: str, router_result) -> str:
+        """Prepend empathy reflection to habit confirmation when emotion detected."""
+        if not router_result.emotional_context:
+            return text
+        empathy = router_result.empathy_reflection
+        if not empathy and self.emotional_support_service:
+            empathy = self.emotional_support_service.get_inline_empathy()
+        if empathy:
+            return f"{empathy}\n\n{text}"
+        return text
+
     # ------------------------------------------------------------------
     # Handle classified message
     # ------------------------------------------------------------------
@@ -790,6 +801,7 @@ class HealthHandlers:
                 date_label = hebrew_day_name(datetime.strptime(effective_date, "%d/%m/%Y"))
             result = self.message_router.route_sleep(tid, time_str, effective_date, date_label=date_label)
             text = result.response_text
+            text = self._prepend_empathy(text, router_result)
             edu = self._get_education_intro(tid, "sleep", profile)
             text = f"{text}\n\n{edu}" if edu else text
             kb = make_sleep_entry_keyboard(result.entry_id) if result.entry_id else None
@@ -804,6 +816,7 @@ class HealthHandlers:
                 date_label = hebrew_day_name(datetime.strptime(effective_date, "%d/%m/%Y"))
             result = self.message_router.route_workout(tid, effective_date, router_result.workout_note, date_label=date_label)
             text = result.response_text
+            text = self._prepend_empathy(text, router_result)
             edu = self._get_education_intro(tid, "workouts", profile)
             text = f"{text}\n\n{edu}" if edu else text
             kb = make_workout_entry_keyboard(result.entry_id) if result.entry_id else None
@@ -818,6 +831,7 @@ class HealthHandlers:
                 date_label = hebrew_day_name(datetime.strptime(effective_date, "%d/%m/%Y"))
             result = self.message_router.route_self_care(tid, message.text, effective_date, date_label=date_label)
             text = result.response_text
+            text = self._prepend_empathy(text, router_result)
             edu = self._get_education_intro(tid, "self_care", profile)
             text = f"{text}\n\n{edu}" if edu else text
             kb = make_self_care_entry_keyboard(result.entry_id) if result.entry_id else None
@@ -955,6 +969,8 @@ class HealthHandlers:
         else:
             retro_labels = [g.temporal_label for g in food_result.groups]
             response = f"{items_text}\n\n✅ נרשם ({', '.join(retro_labels)})"
+
+        response = self._prepend_empathy(response, router_result)
 
         last_entry_id = last_saved.id
         bot_msg_id = await self._send(response, tid=tid, message=message, reply_markup=make_food_entry_keyboard(last_entry_id))

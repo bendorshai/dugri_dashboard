@@ -343,7 +343,11 @@ class FoodAnalyzer:
 
         if t1.type == "meal":
             meal_result = self.analyze_food_text(text, today_str, day_name, on_usage=on_usage)
-            return RouterClassification(type="meal", meal=meal_result)
+            return RouterClassification(
+                type="meal", meal=meal_result,
+                emotional_context=meal_result.emotional_context if meal_result else False,
+                empathy_reflection=meal_result.empathy_reflection if meal_result else None,
+            )
 
         if t1.type == "habit_logger":
             t2 = self.classify_habit(
@@ -357,6 +361,8 @@ class FoodAnalyzer:
                 workout_note=t2.workout_note,
                 self_care_description=t2.self_care_description,
                 resolved_date=t2.resolved_date,
+                emotional_context=t2.emotional_context,
+                empathy_reflection=t2.empathy_reflection,
             )
             return result
 

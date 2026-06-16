@@ -37,6 +37,8 @@ class MealGroup(BaseModel):
 
 class MealResult(BaseModel):
     groups: list[MealGroup]
+    emotional_context: bool = False
+    empathy_reflection: str | None = None
 
 
 class FoodPhotoResult(BaseModel):
@@ -89,7 +91,7 @@ class HabitEntry(BaseModel):
 
 
 class RouterClassification(BaseModel):
-    """Slim Router output - classifies message type and extracts meal data inline."""
+    """Unified dispatch model - carries classified type and extracted data to handler."""
     type: Literal[
         "meal", "opt_in", "correction",
         "name_declaration", "gender_declaration", "sleep", "workout", "self_care", "emotional",
@@ -102,6 +104,8 @@ class RouterClassification(BaseModel):
     workout_note: str | None = None
     self_care_description: str | None = None
     resolved_date: str | None = None  # DD/MM/YYYY from temporal extraction
+    emotional_context: bool = False
+    empathy_reflection: str | None = None
 
 
 class HabitCorrectionResult(BaseModel):
@@ -128,6 +132,8 @@ class HabitLoggerResult(BaseModel):
     workout_note: str | None = None
     self_care_description: str | None = None
     resolved_date: str | None = None  # DD/MM/YYYY from temporal marker, None = today
+    emotional_context: bool = False
+    empathy_reflection: str | None = None
 
 
 class GoalValues(BaseModel):
