@@ -206,10 +206,13 @@ function simulator() {
             setTimeout(() => this.statusMsg = '', 3000);
         },
 
-        async api(url, body = null) {
-            const opts = body
-                ? { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }
-                : { method: 'GET' };
+        async api(url, body = null, method = null) {
+            const m = method || (body !== null ? 'POST' : 'GET');
+            const opts = { method: m };
+            if (body !== null) {
+                opts.headers = {'Content-Type': 'application/json'};
+                opts.body = JSON.stringify(body);
+            }
             const resp = await fetch(url, opts);
             return resp.json();
         },
@@ -286,7 +289,7 @@ function simulator() {
             this.loading = true;
             try {
                 this.chatMessages = [];
-                await this.api('/admin/simulator/reset');
+                await this.api('/admin/simulator/reset', null, 'POST');
                 // Trigger the bot's organic greeting via /start
                 const startResult = await this.api('/admin/simulator/send', { text: '/start' });
                 console.log('simulate /start result:', JSON.stringify(startResult));
@@ -303,7 +306,7 @@ function simulator() {
         async clearLogs() {
             this.loading = true;
             try {
-                const result = await this.api('/admin/simulator/clear-logs');
+                const result = await this.api('/admin/simulator/clear-logs', null, 'POST');
                 const total = Object.values(result.deleted || {}).reduce((a, b) => a + b, 0);
                 this.flash(total + ' log entries deleted');
             } finally {
