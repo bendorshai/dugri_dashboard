@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.0.2"
-VERSION_NOTES = "Simulate: persist reply_text responses to recent_messages for dashboard visibility"
+VERSION = "11.0.3"
+VERSION_NOTES = "Simulate: allow unlinked users with fallback tid for /start token linking flow"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

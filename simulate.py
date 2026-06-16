@@ -217,9 +217,9 @@ def make_simulate_handler(application: Any, mongo_uri: str, db_name: str,
 
             tid = user.get("telegram_user_id")
             if not tid:
-                self.set_status(400)
-                self.write(json.dumps({"error": "user not linked to telegram"}))
-                return
+                # Unlinked user (e.g. after reset) - use a stable fake ID
+                # so /start {token} can trigger the linking flow
+                tid = 999999999
 
             # Build simulator bot FIRST so Update objects reference it
             # (message.reply_text() uses the bot stored in the Message)
