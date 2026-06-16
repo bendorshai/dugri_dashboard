@@ -286,3 +286,164 @@ def make_simulate_handler(application: Any, mongo_uri: str, db_name: str,
         SimulateHandler,
         {"app": application, "uri": mongo_uri, "db": db_name, "secret": internal_secret},
     )
+
+
+# ---------------------------------------------------------------------------
+# Simulate-tick: run the scheduler for a single user with a fake clock
+# ---------------------------------------------------------------------------
+
+class _FakeJobData:
+    """Minimal stand-in for context.job so scheduler code can read .data."""
+    def __init__(self, data: dict):
+        self.data = data
+
+
+class _FakeContext:
+    """Minimal stand-in for PTB CallbackContext for scheduler functions."""
+    def __init__(self, bot, job_data: dict):
+        self.bot = bot
+        self.job = _FakeJobData(job_data)
+
+
+def make_simulate_tick_handler(application: Any, mongo_uri: str, db_name: str,
+                               internal_secret: str):
+    """Create a Tornado RequestHandler for /internal/simulate-tick.
+
+    Runs the scheduler's per-user checks with a fake clock, capturing
+    outgoing messages via SimulatorBot instead of sending to Telegram.
+    """
+    import tornado.web
+
+    class SimulateTickHandler(tornado.web.RequestHandler):
+        SUPPORTED_METHODS = ("POST",)
+
+        def initialize(self, app, uri, db, secret):
+            self._app = app
+            self._mongo_uri = uri
+            self._db_name = db
+            self._secret = secret
+
+        async def post(self):
+            req_secret = self.request.headers.get("X-Internal-Secret", "")
+            if self._secret and not hmac.compare_digest(req_secret, self._secret):
+                self.set_status(403)
+                self.write(json.dumps({"error": "forbidden"}))
+                return
+
+            body = json.loads(self.request.body.decode())
+            email = body.get("email")
+            fake_now_str = body.get("fake_now")
+
+            if not email:
+                self.set_status(400)
+                self.write(json.dumps({"error": "email required"}))
+                return
+            if not fake_now_str:
+                self.set_status(400)
+                self.write(json.dumps({"error": "fake_now required"}))
+                return
+
+            # Parse fake_now as UTC-aware datetime
+            try:
+                fake_now = datetime.fromisoformat(fake_now_str.replace("Z", "+00:00"))
+                if fake_now.tzinfo is None:
+                    fake_now = fake_now.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                self.set_status(400)
+                self.write(json.dumps({"error": "invalid fake_now format"}))
+                return
+
+            # Get services from the running poller job
+            poller_jobs = self._app.job_queue.get_jobs_by_name("global_poller")
+            if not poller_jobs:
+                self.set_status(500)
+                self.write(json.dumps({"error": "poller not running"}))
+                return
+            job_data = poller_jobs[0].data
+
+            user_repo = job_data["user_repo"]
+            toggle_service = job_data["toggle_service"]
+
+            # Look up user by email, build profile
+            profile = user_repo.find_one({"_id": email})
+            if not profile:
+                self.set_status(404)
+                self.write(json.dumps({"error": "user not found"}))
+                return
+
+            tid = profile.telegram_user_id
+            if not tid:
+                self.set_status(400)
+                self.write(json.dumps({"error": "user not linked (no telegram_user_id)"}))
+                return
+
+            # Build SimulatorBot to capture outgoing messages
+            sim_bot = SimulatorBot(self._app.bot)
+            fake_context = _FakeContext(sim_bot, job_data)
+
+            from scheduler import _check_trial_expiry_message, _check_user_hooks
+
+            # Run trial expiry check
+            trial_service = job_data.get("trial_service")
+            if trial_service:
+                try:
+                    await _check_trial_expiry_message(
+                        fake_context, profile, user_repo, toggle_service,
+                        trial_service,
+                        gem_service=job_data.get("gem_service"),
+                        feedback_service=job_data.get("feedback_service"),
+                        admin_chat_id=0,
+                        landing_page_url=job_data.get("landing_page_url", ""),
+                        food_repo=job_data.get("food_repo"),
+                        now_override=fake_now,
+                    )
+                except Exception:
+                    logger.exception("Simulate-tick: trial expiry check failed")
+
+            # Run user hooks (habits, eating window, re-engagement, gems, reveals)
+            try:
+                await _check_user_hooks(
+                    fake_context, profile, user_repo, toggle_service,
+                    goal_service=job_data.get("goal_service"),
+                    eating_day_svc=job_data.get("eating_day_service"),
+                    hook_schedule_store=job_data.get("hook_schedule_store"),
+                    admin_chat_id=0,
+                    food_repo=job_data.get("food_repo"),
+                    now_override=fake_now,
+                )
+            except Exception:
+                logger.exception("Simulate-tick: user hooks check failed")
+
+            # Persist captured responses to recent_messages
+            if sim_bot.captured:
+                save_client = MongoClient(self._mongo_uri)
+                save_db = save_client[self._db_name]
+                msgs_to_save = []
+                for cap in sim_bot.captured:
+                    txt = cap.get("text", "")
+                    if txt:
+                        msgs_to_save.append({
+                            "role": "bot",
+                            "text": txt[:500],
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        })
+                if msgs_to_save:
+                    save_db["users"].update_one(
+                        {"telegram_user_id": tid},
+                        {"$push": {
+                            "recent_messages": {
+                                "$each": msgs_to_save,
+                                "$slice": -12,
+                            },
+                        }},
+                    )
+                save_client.close()
+
+            self.set_header("Content-Type", "application/json")
+            self.write(json.dumps({"responses": sim_bot.captured}))
+
+    return (
+        r"/internal/simulate-tick",
+        SimulateTickHandler,
+        {"app": application, "uri": mongo_uri, "db": db_name, "secret": internal_secret},
+    )

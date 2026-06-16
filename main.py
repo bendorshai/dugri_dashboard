@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.0.4"
-VERSION_NOTES = "Fix sleep_time extraction: use user-stated time instead of wall-clock"
+VERSION = "11.1.0"
+VERSION_NOTES = "Add /internal/simulate-tick endpoint for on-demand scheduler testing with fake clock"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
@@ -155,14 +155,18 @@ def main():
     # Simulator endpoint setup
     internal_secret = cfg.get("internal_secret", "")
     sim_route = None
+    sim_tick_route = None
     try:
-        from simulate import make_simulate_handler
+        from simulate import make_simulate_handler, make_simulate_tick_handler
         sim_route = make_simulate_handler(
             app, mongo_uri, mongo_cfg["db_name"], internal_secret,
         )
-        logger.info("Simulator endpoint registered at /internal/simulate")
+        sim_tick_route = make_simulate_tick_handler(
+            app, mongo_uri, mongo_cfg["db_name"], internal_secret,
+        )
+        logger.info("Simulator endpoints registered at /internal/simulate{,-tick}")
     except Exception:
-        logger.exception("Failed to set up simulator endpoint")
+        logger.exception("Failed to set up simulator endpoints")
 
     if webhook_domain:
         port_num = int(port or 8443)
@@ -180,8 +184,11 @@ def main():
 
                 from telegram.ext._utils.webhookhandler import WebhookAppClass, WebhookServer
                 webhook_app = WebhookAppClass("/webhook", app.bot, app.update_queue)
-                # Add simulator route to the Tornado app
-                webhook_app.add_handlers(r".*", [sim_route])
+                # Add simulator routes to the Tornado app
+                sim_routes = [sim_route]
+                if sim_tick_route:
+                    sim_routes.append(sim_tick_route)
+                webhook_app.add_handlers(r".*", sim_routes)
 
                 httpd = WebhookServer("0.0.0.0", port_num, webhook_app, None)
                 await httpd.serve_forever()
@@ -228,6 +235,8 @@ def main():
         routes = [(r"/", _HealthHandler)]
         if sim_route:
             routes.append(sim_route)
+        if sim_tick_route:
+            routes.append(sim_tick_route)
         http_app = tornado.web.Application(routes)
         http_app.listen(port_num, address="0.0.0.0")
 
@@ -246,9 +255,12 @@ def main():
             import tornado.ioloop
 
             def _start_simulate_server():
-                sim_app = tornado.web.Application([sim_route])
+                sim_routes = [sim_route]
+                if sim_tick_route:
+                    sim_routes.append(sim_tick_route)
+                sim_app = tornado.web.Application(sim_routes)
                 sim_app.listen(8081)
-                logger.info("Simulator endpoint available at http://localhost:8081/internal/simulate")
+                logger.info("Simulator endpoints available at http://localhost:8081/internal/simulate{,-tick}")
                 tornado.ioloop.IOLoop.current().start()
 
             threading.Thread(target=_start_simulate_server, daemon=True).start()

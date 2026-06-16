@@ -204,7 +204,7 @@ async def _check_trial_expiry_message(
     context, profile, user_repo, toggle_service,
     trial_service, gem_service=None, feedback_service=None,
     admin_chat_id: int = 0, landing_page_url: str = "",
-    food_repo=None,
+    food_repo=None, now_override=None,
 ):
     """Send a one-time celebratory message when a user's trial expires at 19:00."""
     import messages as M
@@ -216,7 +216,7 @@ async def _check_trial_expiry_message(
         return
 
     tid = profile.telegram_user_id
-    clock = UserClock(profile.timezone)
+    clock = UserClock(profile.timezone, _now_override=now_override)
 
     # Check if trial has expired
     just_expired = trial_service.check_and_expire(profile, clock.now())
@@ -270,7 +270,7 @@ async def _check_trial_expiry_message(
 async def _check_user_hooks(
     context, profile, user_repo, toggle_service,
     goal_service=None, eating_day_svc=None, hook_schedule_store=None,
-    admin_chat_id: int = 0, food_repo=None,
+    admin_chat_id: int = 0, food_repo=None, now_override=None,
 ):
     """Check and fire all due messages for a single user."""
     import messages as M
@@ -281,7 +281,7 @@ async def _check_user_hooks(
     if profile.subscription_status == "trial_ended":
         return
 
-    clock = UserClock(profile.timezone)
+    clock = UserClock(profile.timezone, _now_override=now_override)
     now = clock.now()
     today_weekday = clock.weekday()
 
