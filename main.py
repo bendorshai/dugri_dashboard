@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "9.1.0"
-VERSION_NOTES = "Debug mode as constant: replace /debug command with DEBUG_MODE in constants.py"
+VERSION = "9.1.1"
+VERSION_NOTES = "Fix: sanitize dots in model names to prevent MongoDB nested field corruption"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

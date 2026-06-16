@@ -68,11 +68,12 @@ class UserRepository(BaseRepository[User]):
         """Atomically increment per-model token usage counters."""
         if prompt_tokens <= 0 and completion_tokens <= 0:
             return
+        safe_model = model.replace(".", "_")
         self._collection.update_one(
             {"telegram_user_id": telegram_user_id},
             {"$inc": {
-                f"tokens_used.{model}.prompt": prompt_tokens,
-                f"tokens_used.{model}.completion": completion_tokens,
+                f"tokens_used.{safe_model}.prompt": prompt_tokens,
+                f"tokens_used.{safe_model}.completion": completion_tokens,
             }},
         )
 

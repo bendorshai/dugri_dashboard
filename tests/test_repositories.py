@@ -176,6 +176,20 @@ class TestUserRepository:
         repo.increment_tokens(123, "gpt-4o", 100, 0)
         col.update_one.assert_called_once()
 
+    def test_increment_tokens_sanitizes_dots_in_model_name(self):
+        """Model names with dots (e.g. gpt-4.1-mini) must be sanitized
+        to prevent MongoDB interpreting dots as nested field separators."""
+        col = _make_mock_collection()
+        repo = UserRepository(col)
+
+        repo.increment_tokens(123, "gpt-4.1-mini", 500, 200)
+        col.update_one.assert_called_once()
+        args = col.update_one.call_args[0]
+        assert args[1] == {"$inc": {
+            "tokens_used.gpt-4_1-mini.prompt": 500,
+            "tokens_used.gpt-4_1-mini.completion": 200,
+        }}
+
 
 # ---------------------------------------------------------------------------
 # FoodRepository
