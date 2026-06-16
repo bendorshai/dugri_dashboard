@@ -24,8 +24,8 @@ _token_callback_var: contextvars.ContextVar[TokenCallback | None] = contextvars.
 from models.analyzer_models import (  # noqa: E402, F401
     FoodItem,
     FoodAnalysisResult,
-    TimedFoodGroup,
-    TimedFoodAnalysisResult,
+    MealGroup,
+    MealResult,
     FoodPhotoResult,
     CorrectionFoodItem,
     CorrectionResult,
@@ -33,10 +33,10 @@ from models.analyzer_models import (  # noqa: E402, F401
     NormalizedActivity,
     HabitEntry,
     RouterClassification,
-    Tier1Classification,
-    HabitLoggerClassification,
-    GoalsTalkClassification,
-    OtherClassification,
+    MainClassifierResult,
+    HabitLoggerResult,
+    GoalsTalkResult,
+    OtherResult,
 )
 
 
@@ -53,10 +53,10 @@ from prompts import (
     GEM_DRESSING_PROMPT,
     MEAL_SUGGESTION_SYSTEM_PROMPT,
     QA_SYSTEM_PROMPT,
-    TIER1_ROUTER_PROMPT,
-    TIER2_HABIT_LOGGER_PROMPT,
-    TIER2_GOALS_TALK_PROMPT,
-    TIER2_OTHER_PROMPT,
+    MAIN_CLASSIFIER_PROMPT,
+    HABIT_LOGGER_PROMPT,
+    GOALS_TALK_PROMPT,
+    OTHER_PROMPT,
     TARGET_SUGGESTION_SYSTEM_PROMPT,
     ENHANCED_WEEKLY_SUMMARY_PROMPT,
     NORMALIZE_SELF_CARE_PROMPT,
@@ -114,7 +114,7 @@ class FoodAnalyzer:
             return None
 
     def analyze_food_text(self, text: str, today_str: str, day_name: str = "",
-                          on_usage: TokenCallback | None = None) -> TimedFoodAnalysisResult | None:
+                          on_usage: TokenCallback | None = None) -> MealResult | None:
         date_line = f"\nהתאריך של היום: {today_str}"
         if day_name:
             date_line += f" (יום {day_name})"
@@ -127,7 +127,7 @@ class FoodAnalyzer:
                     {"role": "system", "content": system},
                     {"role": "user", "content": text},
                 ],
-                response_format=TimedFoodAnalysisResult,
+                response_format=MealResult,
                 temperature=0,
                 on_usage=on_usage,
             )
@@ -140,18 +140,17 @@ class FoodAnalyzer:
             logger.exception("GPT food analysis failed for: %s", text[:80])
             return None
 
-    def route_tier1(
+    def main_classifier(
         self, text: str, today_str: str, last_entry: dict | None = None,
         recent_messages: list[dict] | None = None,
         reply_context: str | None = None,
         day_name: str = "",
         on_usage: TokenCallback | None = None,
-    ) -> Tier1Classification:
-        """Tier 1 Intent Router - broad category classification.
+    ) -> MainClassifierResult:
+        """Main classifier - broad category classification.
 
         Purely contextual: uses message text and conversation history.
         NO toggle state. Returns one of: meal, habit_logger, goals_talk, other.
-        For type=meal, extracts food data inline.
         """
         system = ""
 
@@ -165,7 +164,7 @@ class FoodAnalyzer:
             else:
                 system += f"ההודעה הנוכחית היא תגובה ישירה להודעת הבוט:\n\"{reply_context}\"\n\n"
 
-        system += TIER1_ROUTER_PROMPT
+        system += MAIN_CLASSIFIER_PROMPT
         date_line = f"\nהתאריך של היום: {today_str}"
         if day_name:
             date_line += f" (יום {day_name})"
@@ -195,29 +194,29 @@ class FoodAnalyzer:
                     {"role": "system", "content": system},
                     {"role": "user", "content": text},
                 ],
-                response_format=Tier1Classification,
+                response_format=MainClassifierResult,
                 temperature=0,
                 on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
-                logger.warning("GPT tier1 router returned None for: %s", text[:80])
-                return Tier1Classification(type="conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else")
+                logger.warning("GPT main classifier returned None for: %s", text[:80])
+                return MainClassifierResult(type="conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else")
             return result
         except Exception:
-            logger.exception("GPT tier1 router failed for: %s", text[:80])
-            return Tier1Classification(type="conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else")
+            logger.exception("GPT main classifier failed for: %s", text[:80])
+            return MainClassifierResult(type="conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else")
 
-    def route_tier2_habit_logger(
+    def classify_habit(
         self, text: str,
         recent_messages: list[dict] | None = None,
         last_entry: dict | None = None,
         today_str: str = "",
         day_name: str = "",
         on_usage: TokenCallback | None = None,
-    ) -> HabitLoggerClassification:
-        """Tier 2 Habit Logger - sub-classify into sleep/workout/self_care/correction."""
-        system = TIER2_HABIT_LOGGER_PROMPT
+    ) -> HabitLoggerResult:
+        """Habit logger - sub-classify into sleep/workout/self_care/correction."""
+        system = HABIT_LOGGER_PROMPT
         system = system.replace("{today_str}", today_str or "")
         system = system.replace("{day_name}", day_name or "")
 
@@ -242,26 +241,26 @@ class FoodAnalyzer:
                     {"role": "system", "content": system},
                     {"role": "user", "content": text},
                 ],
-                response_format=HabitLoggerClassification,
+                response_format=HabitLoggerResult,
                 temperature=0,
                 on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
-                return HabitLoggerClassification(type="correction")
+                return HabitLoggerResult(type="correction")
             return result
         except Exception:
-            logger.exception("GPT tier2 habit_logger failed for: %s", text[:80])
-            return HabitLoggerClassification(type="correction")
+            logger.exception("GPT classify_habit failed for: %s", text[:80])
+            return HabitLoggerResult(type="correction")
 
-    def route_tier2_goals_talk(
+    def classify_goals_talk(
         self, text: str,
         recent_messages: list[dict] | None = None,
         toggle_state: str | None = None,
         on_usage: TokenCallback | None = None,
-    ) -> GoalsTalkClassification:
-        """Tier 2 Goals Talk - sub-classify into accept/refuse/goal_value/cancel/hesitation."""
-        system = TIER2_GOALS_TALK_PROMPT.replace("{toggle_state}", toggle_state or "לא זמין")
+    ) -> GoalsTalkResult:
+        """Goals talk - sub-classify into accept/refuse/goal_value/cancel/hesitation."""
+        system = GOALS_TALK_PROMPT.replace("{toggle_state}", toggle_state or "לא זמין")
 
         if recent_messages:
             system += "\nהיסטוריית שיחה אחרונה:\n"
@@ -276,25 +275,25 @@ class FoodAnalyzer:
                     {"role": "system", "content": system},
                     {"role": "user", "content": text},
                 ],
-                response_format=GoalsTalkClassification,
+                response_format=GoalsTalkResult,
                 temperature=0,
                 on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
-                return GoalsTalkClassification(type="accept")
+                return GoalsTalkResult(type="accept")
             return result
         except Exception:
-            logger.exception("GPT tier2 goals_talk failed for: %s", text[:80])
-            return GoalsTalkClassification(type="accept")
+            logger.exception("GPT classify_goals_talk failed for: %s", text[:80])
+            return GoalsTalkResult(type="accept")
 
-    def route_tier2_other(
+    def classify_other(
         self, text: str,
         recent_messages: list[dict] | None = None,
         on_usage: TokenCallback | None = None,
-    ) -> OtherClassification:
-        """Tier 2 Other - sub-classify into conversational/emotional/name/etc."""
-        system = TIER2_OTHER_PROMPT
+    ) -> OtherResult:
+        """Other - sub-classify into conversational/emotional/name/etc."""
+        system = OTHER_PROMPT
 
         if recent_messages:
             system += "\nהיסטוריית שיחה אחרונה:\n"
@@ -309,19 +308,19 @@ class FoodAnalyzer:
                     {"role": "system", "content": system},
                     {"role": "user", "content": text},
                 ],
-                response_format=OtherClassification,
+                response_format=OtherResult,
                 temperature=0,
                 on_usage=on_usage,
             )
             result = response.choices[0].message.parsed
             if result is None:
-                return OtherClassification(type="conversational")
+                return OtherResult(type="conversational")
             return result
         except Exception:
-            logger.exception("GPT tier2 other failed for: %s", text[:80])
-            return OtherClassification(type="conversational")
+            logger.exception("GPT classify_other failed for: %s", text[:80])
+            return OtherResult(type="conversational")
 
-    def route_tiered(
+    def classify_message(
         self, text: str, today_str: str, last_entry: dict | None = None,
         recent_messages: list[dict] | None = None,
         toggle_state: str | None = None,
@@ -329,13 +328,12 @@ class FoodAnalyzer:
         day_name: str = "",
         on_usage: TokenCallback | None = None,
     ) -> RouterClassification:
-        """Tiered router: tier 1 classifies, tier 2 sub-classifies.
+        """Classify a user message through the full pipeline.
 
-        Returns a RouterClassification for backward compatibility with
-        _dispatch_v2. The tiered internals are hidden from the caller.
+        Main classifier determines broad category, then the appropriate
+        sub-classifier extracts details. Returns unified RouterClassification.
         """
-        # Tier 1: classify
-        t1 = self.route_tier1(
+        t1 = self.main_classifier(
             text, today_str, last_entry=last_entry,
             recent_messages=recent_messages,
             reply_context=reply_context,
@@ -344,13 +342,11 @@ class FoodAnalyzer:
         )
 
         if t1.type == "meal":
-            # Tier 2: meal extraction using existing method
             meal_result = self.analyze_food_text(text, today_str, day_name, on_usage=on_usage)
             return RouterClassification(type="meal", meal=meal_result)
 
         if t1.type == "habit_logger":
-            # Tier 2: sub-classify habit
-            t2 = self.route_tier2_habit_logger(
+            t2 = self.classify_habit(
                 text, recent_messages=recent_messages,
                 last_entry=last_entry,
                 today_str=today_str, day_name=day_name,
@@ -365,17 +361,15 @@ class FoodAnalyzer:
             return result
 
         if t1.type == "goals_talk":
-            # Tier 2: sub-classify goal response
-            t2 = self.route_tier2_goals_talk(
+            t2 = self.classify_goals_talk(
                 text, recent_messages=recent_messages,
                 toggle_state=toggle_state, on_usage=on_usage,
             )
-            # Map goals_talk sub-types back to opt_in for dispatch
+            # Map to opt_in for dispatch
             return RouterClassification(type="opt_in", toggle_name=t2.toggle_name)
 
         if t1.type == "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else":
-            # Tier 2: sub-classify other
-            t2 = self.route_tier2_other(
+            t2 = self.classify_other(
                 text, recent_messages=recent_messages,
                 on_usage=on_usage,
             )

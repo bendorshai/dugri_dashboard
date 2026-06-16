@@ -5,7 +5,7 @@ Records strikes for inappropriate messages, logs them permanently,
 and triggers a ban after INAPPROPRIATE_MAX_STRIKES.
 
 Depends on: repositories, models, constants, messages.
-Used by: handlers/base.py (_dispatch_v2).
+Used by: handlers/base.py (_handle_classified).
 """
 
 from __future__ import annotations

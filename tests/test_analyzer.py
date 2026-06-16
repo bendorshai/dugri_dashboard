@@ -20,7 +20,7 @@ correct prompts, models, and structured output formats are used.
 # FOOD TEXT ANALYSIS (analyze_food_text)
 # ---------------------------------------
 # - System prompt must include Hebrew terms: קלוריות, חלבון, תזונתי
-# - Uses structured output (TimedFoodAnalysisResult) for reliable parsing
+# - Uses structured output (MealResult) for reliable parsing
 # - Returns FoodAnalysisResult with calories and protein per item
 # - Returns None on GPT failure (no exceptions propagated to caller)
 #
@@ -73,7 +73,7 @@ import pytest
 from analyzer import (
     FoodAnalyzer, FoodItem, FoodAnalysisResult, FoodPhotoResult,
     CorrectionFoodItem, CorrectionResult,
-    WeeklyFeedbackResult, TimedFoodAnalysisResult,
+    WeeklyFeedbackResult, MealResult,
 )
 
 
@@ -142,7 +142,7 @@ class TestAnalyzeFoodText:
         fa.analyze_food_text("test", "05/05/2026")
 
         call_args = mock_client.beta.chat.completions.parse.call_args
-        assert call_args[1]["response_format"] == TimedFoodAnalysisResult
+        assert call_args[1]["response_format"] == MealResult
 
     def test_handles_gpt_failure(self, analyzer):
         fa, mock_client = analyzer

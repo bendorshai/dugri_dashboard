@@ -1,11 +1,11 @@
 """
-test_tier2_llm.py - TDD tests for Tier 2 sub-classifiers.
+test_sub_classifiers_llm.py - TDD tests for sub-classifiers.
 
 # ============================================================================
 # TIER 2 SPEC
 # ============================================================================
 #
-# Each tier 2 sub-classifier runs after tier 1 routes to its category.
+# Each sub-classifier runs after the main classifier routes to its category.
 # Focused prompt, one classification per call.
 #
 # HABIT_LOGGER: sleep/workout/self_care/correction + extraction
@@ -44,39 +44,39 @@ class TestHabitLoggerTier2:
 
     def test_sleep_report(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_habit_logger("הלכתי לישון ב-23")
+        result = analyzer.classify_habit("הלכתי לישון ב-23")
         assert result.type == "sleep"
         assert result.sleep_time is not None
         assert "23" in result.sleep_time
 
     def test_workout_report(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_habit_logger("התאמנתי היום")
+        result = analyzer.classify_habit("התאמנתי היום")
         assert result.type == "workout"
         assert result.workout_note is not None
 
     def test_workout_with_type(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_habit_logger("עשיתי יוגה בבוקר")
+        result = analyzer.classify_habit("עשיתי יוגה בבוקר")
         assert result.type == "workout"
         assert "יוגה" in result.workout_note
 
     def test_self_care(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_habit_logger("הלכתי לים היום")
+        result = analyzer.classify_habit("הלכתי לים היום")
         assert result.type == "self_care"
         assert result.self_care_description is not None
 
     def test_correction(self):
         analyzer = _make_analyzer()
         last_entry = {"description": "שניצל עם אורז", "calories": 650, "protein": 35}
-        result = analyzer.route_tier2_habit_logger("בלי אורז", last_entry=last_entry)
+        result = analyzer.classify_habit("בלי אורז", last_entry=last_entry)
         assert result.type == "correction"
 
     def test_confirm_log_workout(self):
         """Bot asked to log workout, user agreed."""
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_habit_logger(
+        result = analyzer.classify_habit(
             "אוקיי",
             recent_messages=_build_history(
                 ("user", "רצתי אתמול בים"),
@@ -95,7 +95,7 @@ class TestGoalsTalkTier2:
 
     def test_accept_offer(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_goals_talk(
+        result = analyzer.classify_goals_talk(
             "יאללה",
             recent_messages=_build_history(("bot", SLEEP_OFFER)),
             toggle_state=_build_toggle_state(sleep="offered"),
@@ -105,7 +105,7 @@ class TestGoalsTalkTier2:
 
     def test_refuse_offer(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_goals_talk(
+        result = analyzer.classify_goals_talk(
             "לא, עזוב",
             recent_messages=_build_history(("bot", WORKOUTS_OFFER)),
             toggle_state=_build_toggle_state(workouts="offered"),
@@ -114,7 +114,7 @@ class TestGoalsTalkTier2:
 
     def test_hesitation(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_goals_talk(
+        result = analyzer.classify_goals_talk(
             "לא בטוח",
             recent_messages=_build_history(("bot", SELF_CARE_OFFER)),
             toggle_state=_build_toggle_state(self_care="offered"),
@@ -123,7 +123,7 @@ class TestGoalsTalkTier2:
 
     def test_goal_value_calories(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_goals_talk(
+        result = analyzer.classify_goals_talk(
             "2500 קלוריות ו-200 גרם חלבון",
             recent_messages=_build_history(("bot", NUTRITION_SUGGESTION)),
             toggle_state=_build_toggle_state(nutrition="active_goal_pending"),
@@ -133,7 +133,7 @@ class TestGoalsTalkTier2:
 
     def test_accept_suggestion(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_goals_talk(
+        result = analyzer.classify_goals_talk(
             "אוקיי",
             recent_messages=_build_history(
                 ("bot", NUTRITION_OFFER),
@@ -156,27 +156,27 @@ class TestOtherTier2:
 
     def test_question_about_data(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("כמה אכלתי השבוע?")
+        result = analyzer.classify_other("כמה אכלתי השבוע?")
         assert result.type == "conversational"
 
     def test_general_chat(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("מה דעתך על צום לסירוגין?")
+        result = analyzer.classify_other("מה דעתך על צום לסירוגין?")
         assert result.type == "conversational"
 
     def test_pure_emotion(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("יום קשה היום")
+        result = analyzer.classify_other("יום קשה היום")
         assert result.type == "emotional"
 
     def test_name_declaration(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("קוראים לי שי")
+        result = analyzer.classify_other("קוראים לי שי")
         assert result.type == "name_declaration"
 
     def test_gender_declaration(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other(
+        result = analyzer.classify_other(
             "אני בן",
             recent_messages=_build_history(("bot", "בן או בת?")),
         )
@@ -185,43 +185,43 @@ class TestOtherTier2:
 
     def test_feature_request(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("אפשר להוסיף מעקב שתיית מים?")
+        result = analyzer.classify_other("אפשר להוסיף מעקב שתיית מים?")
         assert result.type == "feature_request"
 
     def test_feedback_request(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("תן לי סיכום שבועי")
+        result = analyzer.classify_other("תן לי סיכום שבועי")
         assert result.type == "feedback_request"
 
     def test_inappropriate(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("לך תזדיין")
+        result = analyzer.classify_other("לך תזדיין")
         assert result.type == "inappropriate"
 
     def test_inappropriate_sexual(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("תראה לי את עצמך בלי בגדים")
+        result = analyzer.classify_other("תראה לי את עצמך בלי בגדים")
         assert result.type == "inappropriate"
 
     def test_inappropriate_threat(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("אני יודע איפה אתה גר, תיזהר")
+        result = analyzer.classify_other("אני יודע איפה אתה גר, תיזהר")
         assert result.type == "inappropriate"
 
     def test_inappropriate_spam(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("קנו עכשיו! הנחה מטורפת! bit.ly/scam")
+        result = analyzer.classify_other("קנו עכשיו! הנחה מטורפת! bit.ly/scam")
         assert result.type == "inappropriate"
 
     def test_inappropriate_trolling(self):
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other("הההה בוט מפגר אתה חתיכת זבל")
+        result = analyzer.classify_other("הההה בוט מפגר אתה חתיכת זבל")
         assert result.type == "inappropriate"
 
     def test_ultra_victimhood_is_emotional(self):
         """Extreme frustration/victimhood directed at bot = emotional, NOT inappropriate."""
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other(
+        result = analyzer.classify_other(
             "שום דבר לא עובד לי ואתה לא עוזר לי ומה זה שווה כל הסיפור הזה אתה לא שווה כלום"
         )
         assert result.type == "emotional", (
@@ -231,7 +231,7 @@ class TestOtherTier2:
     def test_frustration_with_bot_is_emotional(self):
         """Harsh criticism of bot quality = emotional, NOT inappropriate."""
         analyzer = _make_analyzer()
-        result = analyzer.route_tier2_other(
+        result = analyzer.classify_other(
             "אתה הבוט הכי גרוע שיש, אף פעם לא עוזר לי, מה הטעם"
         )
         assert result.type == "emotional", (

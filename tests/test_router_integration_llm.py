@@ -45,7 +45,7 @@ KNOWLEDGE_PATH = Path(__file__).parent.parent / "knowledge" / "dugri-self-knowle
 
 
 def _route(analyzer, text, toggle_state=None, history=None):
-    return analyzer.route_tiered(
+    return analyzer.classify_message(
         text=text,
         today_str=datetime.now().strftime("%d/%m/%Y"),
         last_entry=None,

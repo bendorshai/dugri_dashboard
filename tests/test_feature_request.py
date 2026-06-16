@@ -9,7 +9,7 @@ Covers:
 - LoggerService.classify_feature_request() fallback on GPT failure
 - MessageRouterService.route_feature_request() logs with chat_history and returns ack
 - MessageRouterService.route_help() passes request_type="knowledge_gap" with chat_history
-- _dispatch_v2 routes feature_request to logger + router service, passes recent_messages as chat_history
+- _handle_classified routes feature_request to logger + router service, passes recent_messages as chat_history
 - Menu button callback sets pending_feature_request state
 - Pending feature request consumed on next message, includes chat_history
 """
@@ -394,7 +394,7 @@ class TestDispatchFeatureRequest:
                 rr = RouterClassification(type="feature_request")
                 msg = _make_message("הסיכום לא מראה נכון")
 
-                await h._dispatch_v2(msg, _make_context(), 123, profile, rr, **_DISPATCH_PARAMS)
+                await h._handle_classified(msg, _make_context(), 123, profile, rr, **_DISPATCH_PARAMS)
 
                 mock_logger.classify_feature_request.assert_called_once_with("הסיכום לא מראה נכון")
                 h.message_router.route_feature_request.assert_called_once()
@@ -421,7 +421,7 @@ class TestDispatchFeatureRequest:
                 rr = RouterClassification(type="feature_request")
                 msg = _make_message("אפשר להוסיף גרף?")
 
-                await h._dispatch_v2(msg, _make_context(), 123, profile, rr, **_DISPATCH_PARAMS)
+                await h._handle_classified(msg, _make_context(), 123, profile, rr, **_DISPATCH_PARAMS)
 
                 # Verify _send was called with the ack text
                 mock_send.assert_called_once()

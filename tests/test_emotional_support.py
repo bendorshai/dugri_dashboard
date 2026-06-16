@@ -6,7 +6,7 @@ and creator-mode referral.
 
 Note: Keyboard tests reload the keyboards module to avoid pollution from
 test files that stub sys.modules["telegram"] at module level (e.g.
-test_handlers.py, test_dispatch_v2.py). Without the reload, the
+test_handlers.py, test_handle_classified.py). Without the reload, the
 InlineKeyboardMarkup import in keyboards.py picks up a MagicMock
 when those files are collected first (alphabetical ordering).
 """
@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 
 from services.emotional_support_service import EmotionalSupportService
 
-# Other test files (test_handlers.py, test_dispatch_v2.py) replace
+# Other test files (test_handlers.py, test_handle_classified.py) replace
 # sys.modules["telegram"] with a MagicMock at module level. When pytest
 # collects them first (alphabetical order), keyboards.py ends up importing
 # MagicMock instead of InlineKeyboardMarkup. Fix: force-reimport the real

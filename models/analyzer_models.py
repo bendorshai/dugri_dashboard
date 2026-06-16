@@ -26,7 +26,7 @@ class FoodAnalysisResult(BaseModel):
     total_protein: int
 
 
-class TimedFoodGroup(BaseModel):
+class MealGroup(BaseModel):
     temporal_label: str
     date: str
     time: str
@@ -35,8 +35,8 @@ class TimedFoodGroup(BaseModel):
     total_protein: int
 
 
-class TimedFoodAnalysisResult(BaseModel):
-    groups: list[TimedFoodGroup]
+class MealResult(BaseModel):
+    groups: list[MealGroup]
 
 
 class FoodPhotoResult(BaseModel):
@@ -96,7 +96,7 @@ class RouterClassification(BaseModel):
         "feedback_request", "feedback_reaction", "feature_request", "conversational",
         "inappropriate",
     ]
-    meal: TimedFoodAnalysisResult | None = None
+    meal: MealResult | None = None
     toggle_name: str | None = None
     declared_gender: Literal["male", "female", "other"] | None = None
     workout_note: str | None = None
@@ -113,16 +113,16 @@ class HabitCorrectionResult(BaseModel):
     reclassify_to: Literal["sleep", "workout", "self_care"] | None = None  # change habit type
 
 
-class Tier1Classification(BaseModel):
-    """Tier 1 Intent Router - broad category classification only.
+class MainClassifierResult(BaseModel):
+    """Main classifier - broad category classification only.
 
     Purely contextual (no toggle state). Four categories, no extraction.
     """
     type: Literal["meal", "habit_logger", "goals_talk", "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"]
 
 
-class HabitLoggerClassification(BaseModel):
-    """Tier 2 Habit Logger sub-classifier output."""
+class HabitLoggerResult(BaseModel):
+    """Habit logger sub-classifier output."""
     type: Literal["sleep", "workout", "self_care", "correction"]
     sleep_time: str | None = None
     workout_note: str | None = None
@@ -138,15 +138,15 @@ class GoalValues(BaseModel):
     workout_count: int | None = None
 
 
-class GoalsTalkClassification(BaseModel):
-    """Tier 2 Goals Talk sub-classifier output."""
+class GoalsTalkResult(BaseModel):
+    """Goals talk sub-classifier output."""
     type: Literal["accept", "refuse", "goal_value", "cancel", "hesitation"]
     toggle_name: str | None = None
     goal_values: GoalValues | None = None
 
 
-class OtherClassification(BaseModel):
-    """Tier 2 Other sub-classifier output."""
+class OtherResult(BaseModel):
+    """Other sub-classifier output."""
     type: Literal[
         "conversational", "feedback_request", "feedback_reaction",
         "name_declaration", "gender_declaration", "feature_request",

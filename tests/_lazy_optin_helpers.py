@@ -196,8 +196,8 @@ def _build_history(*messages) -> list[dict]:
 
 
 def _route(analyzer, text, toggle_state=None, history=None, reply_context=None):
-    """Convenience wrapper for route_tiered (production code path)."""
-    return analyzer.route_tiered(
+    """Convenience wrapper for classify_message (production entry point)."""
+    return analyzer.classify_message(
         text=text,
         today_str=datetime.now().strftime("%d/%m/%Y"),
         last_entry=None,

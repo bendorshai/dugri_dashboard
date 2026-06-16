@@ -639,11 +639,11 @@ class HealthHandlers:
         if await self._handle_pending_habit_correction(message, context, tid, profile):
             return
 
-        # Classify via Tiered Router
+        # Classify message
         self._debug_classification = None
         self._debug_router_type = None
 
-        router_result = self.analyzer.route_tiered(
+        router_result = self.analyzer.classify_message(
             message.text, calendar_today, last_entry,
             recent_messages=recent_messages,
             toggle_state=toggle_state,
@@ -665,7 +665,7 @@ class HealthHandlers:
             user_msg["replying_to"] = reply_context
         self.user_repo.push_messages(tid, [user_msg], MAX_RECENT_MESSAGES)
 
-        await self._dispatch_v2(
+        await self._handle_classified(
             message, context, tid, profile, router_result,
             calendar_today, day_name, stats_date, time_str, within_window,
             last_entry, recent_messages, toggle_state, reply_context,
@@ -673,10 +673,10 @@ class HealthHandlers:
         )
 
     # ------------------------------------------------------------------
-    # Router v2 dispatch
+    # Handle classified message
     # ------------------------------------------------------------------
 
-    async def _dispatch_v2(
+    async def _handle_classified(
         self, message, context, tid, profile, router_result,
         calendar_today, day_name, stats_date, time_str, within_window,
         last_entry, recent_messages, toggle_state, reply_context,
@@ -904,7 +904,7 @@ class HealthHandlers:
             return
 
         # Default: meal (with inline extraction from Router)
-        from analyzer import TimedFoodAnalysisResult
+        from analyzer import MealResult
 
         if rtype == "meal" and router_result.meal and router_result.meal.groups:
             food_result = router_result.meal

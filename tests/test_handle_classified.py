@@ -1,7 +1,7 @@
 """
-test_dispatch_v2.py - Unit tests for the Router v2 dispatch layer.
+test_handle_classified.py - Unit tests for the classified message handler.
 
-Covers all untested handler wiring: _dispatch_v2, _handle_conversational,
+Covers all untested handler wiring: _handle_classified, _handle_conversational,
 _handle_opt_in, ConversationalService, and LoggerService.
 
 These tests use mocked services (no LLM calls, no MongoDB). They verify
@@ -40,7 +40,7 @@ if isinstance(mock_ext, MagicMock):
     mock_ext.ContextTypes.DEFAULT_TYPE = MagicMock
 
 from analyzer import (
-    RouterClassification, TimedFoodAnalysisResult, TimedFoodGroup,
+    RouterClassification, MealResult, MealGroup,
     FoodItem,
 )
 from models.profile import User, EatingWindow, Targets, ToggleState, Toggles
@@ -111,7 +111,7 @@ def _make_router_result(rtype, **kwargs):
     return RouterClassification(type=rtype, **kwargs)
 
 
-# Standard params for _dispatch_v2
+# Standard params for _handle_classified
 _DISPATCH_PARAMS = dict(
     calendar_today="13/06/2026",
     day_name="שישי",
@@ -140,7 +140,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("opt_in", toggle_name="sleep")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h._handle_opt_in.assert_called_once()
@@ -153,7 +153,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("conversational")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h._handle_conversational.assert_called_once()
@@ -166,7 +166,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("inappropriate")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("לך תזדיין"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.inappropriate_service.record_strike.assert_called_once_with(123, "לך תזדיין", profile)
@@ -190,7 +190,7 @@ class TestDispatchV2Routing:
         profile = _make_profile(gender="male")
         rr = _make_router_result("inappropriate")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("third offense"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.inappropriate_service.format_ban_message.assert_called_once()
@@ -216,7 +216,7 @@ class TestDispatchV2Routing:
         h.analyzer.analyze_correction.return_value = correction
 
         params = {**_DISPATCH_PARAMS, "last_entry": last_entry}
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("השניצל היה 300 גרם"), _make_context(), 123, profile, rr, **params,
         )
         h._handle_correction.assert_called_once()
@@ -229,7 +229,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("sleep")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.message_router.route_sleep.assert_called_once()
@@ -242,7 +242,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("workout")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("התאמנתי"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.message_router.route_workout.assert_called_once()
@@ -255,7 +255,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("self_care")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("הלכתי לים"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.message_router.route_self_care.assert_called_once()
@@ -269,7 +269,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("name_declaration")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("קוראים לי דני"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.onboarding_service.handle_name_response.assert_called_once()
@@ -284,7 +284,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("feedback_request")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.feedback_service.give_feedback.assert_called_once()
@@ -302,7 +302,7 @@ class TestDispatchV2Routing:
             {"role": "bot", "text": "💬 הנה הסיכום השבועי שלך...", "classification": "feedback_request"},
             {"role": "user", "text": "מעניין, תודה"},
         ]}
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("מעניין, תודה"), _make_context(), 123, profile, rr, **params,
         )
         h.feedback_service.process_reaction.assert_called_once()
@@ -317,7 +317,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("emotional")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("אני מרגיש רע"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         mock_send.assert_called_once()
@@ -334,8 +334,8 @@ class TestDispatchV2Routing:
         h.food_repo.add.side_effect = lambda e: setattr(e, "id", "test_id") or e
         h.food_repo.get_all_for_user.return_value = [MagicMock(), MagicMock()]
         profile = _make_profile()
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
+        timed = MealResult(groups=[
+            MealGroup(
                 temporal_label="עכשיו", date="13/06/2026", time="14:00",
                 items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
                 total_calories=400, total_protein=30,
@@ -343,7 +343,7 @@ class TestDispatchV2Routing:
         ])
         rr = _make_router_result("meal", meal=timed)
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("אכלתי שניצל"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.food_repo.add.assert_called_once()
@@ -359,8 +359,8 @@ class TestDispatchV2Routing:
         h.eating_day_svc.get_eating_day_totals.return_value = (500, 30)
         h.food_repo.add.side_effect = lambda e: setattr(e, "id", "test_id") or e
         h.food_repo.get_all_for_user.return_value = [MagicMock(), MagicMock()]
-        timed = TimedFoodAnalysisResult(groups=[
-            TimedFoodGroup(
+        timed = MealResult(groups=[
+            MealGroup(
                 temporal_label="עכשיו", date="13/06/2026", time="14:00",
                 items=[FoodItem(description="שניצל", estimated_grams=200, calories=400, protein=30)],
                 total_calories=400, total_protein=30,
@@ -370,7 +370,7 @@ class TestDispatchV2Routing:
         profile = _make_profile()
         rr = _make_router_result("meal")  # No inline meal data
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("אכלתי שניצל"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.analyzer.analyze_food_text.assert_called_once()
@@ -394,7 +394,7 @@ class TestDispatchV2NoneGuards:
         rr = _make_router_result("sleep")
 
         # Should fall through to meal default and send fallback
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         # No crash is the assertion
@@ -409,7 +409,7 @@ class TestDispatchV2NoneGuards:
         profile = _make_profile()
         rr = _make_router_result("workout")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -423,7 +423,7 @@ class TestDispatchV2NoneGuards:
         profile = _make_profile()
         rr = _make_router_result("self_care")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -437,7 +437,7 @@ class TestDispatchV2NoneGuards:
         profile = _make_profile()
         rr = _make_router_result("name_declaration")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("דני"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -449,7 +449,7 @@ class TestDispatchV2NoneGuards:
         rr = _make_router_result("feedback_request")
 
         # Should return silently, no crash
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -460,7 +460,7 @@ class TestDispatchV2NoneGuards:
         profile = _make_profile()
         rr = _make_router_result("feedback_reaction")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -474,7 +474,7 @@ class TestDispatchV2NoneGuards:
         profile = _make_profile()
         rr = _make_router_result("emotional")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message(), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -921,7 +921,7 @@ class TestLoggerService:
 # ---------------------------------------------------------------------------
 
 class TestDispatchV2NameDeclaration:
-    """Test name extraction and onboarding delegation in _dispatch_v2."""
+    """Test name extraction and onboarding delegation in _handle_classified."""
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)
@@ -934,7 +934,7 @@ class TestDispatchV2NameDeclaration:
         profile = _make_profile()
         rr = _make_router_result("name_declaration")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("קוראים לי דני"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -954,7 +954,7 @@ class TestDispatchV2NameDeclaration:
         profile = _make_profile()
         rr = _make_router_result("name_declaration")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("דני"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
 
@@ -967,7 +967,7 @@ class TestDispatchV2NameDeclaration:
 # ---------------------------------------------------------------------------
 
 class TestGuardrailIntegration:
-    """Test guardrails integrated at the _dispatch_v2 level."""
+    """Test guardrails integrated at the _handle_classified level."""
 
     @pytest.mark.asyncio
     @patch("handlers.base.send_long_text", new_callable=AsyncMock)
@@ -985,7 +985,7 @@ class TestGuardrailIntegration:
             {"role": "bot", "text": "שווארמה ≈ 720 קל׳, 38 ג' חלבון", "classification": "meal"},
             {"role": "user", "text": "תודה דוגרי"},
         ]}
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("תודה דוגרי"), _make_context(), 123, profile, rr, **params,
         )
         h.conversational_service.respond.assert_called_once()
@@ -1003,7 +1003,7 @@ class TestGuardrailIntegration:
         rr = _make_router_result("correction")
 
         # No correctable context and no last_entry -> conversational
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("בלי אורז"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.conversational_service.respond.assert_called_once()
@@ -1020,7 +1020,7 @@ class TestGuardrailIntegration:
         profile = _make_profile(name="שי")
         rr = _make_router_result("name_declaration")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("קוראים לי דני"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.conversational_service.respond.assert_called_once()
@@ -1037,7 +1037,7 @@ class TestGuardrailIntegration:
         profile = _make_profile(gender="male")
         rr = _make_router_result("gender_declaration", declared_gender="female")
 
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("אני בת"), _make_context(), 123, profile, rr, **_DISPATCH_PARAMS,
         )
         h.conversational_service.respond.assert_called_once()
@@ -1061,7 +1061,7 @@ class TestGuardrailIntegration:
                 {"role": "user", "text": "בלי אורז"},
             ],
         }
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("בלי אורז"), _make_context(), 123, profile, rr, **params,
         )
         h.analyzer.analyze_correction.assert_called_once()
@@ -1082,7 +1082,7 @@ class TestGuardrailIntegration:
             "reply_context": "שווארמה ≈ 720 קל׳, 38 ג' חלבון",
             "recent_messages": [],  # empty history, but reply_context is set
         }
-        await h._dispatch_v2(
+        await h._handle_classified(
             _make_message("בלי אורז"), _make_context(), 123, profile, rr, **params,
         )
         h.analyzer.analyze_correction.assert_called_once()
@@ -1336,4 +1336,4 @@ class TestBannedUser:
 
         await h.handle_message(update, ctx)
 
-        h.analyzer.route_tiered.assert_not_called()
+        h.analyzer.classify_message.assert_not_called()
