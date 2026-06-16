@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.0.1"
-VERSION_NOTES = "Fix simulator: deserialize Update with SimulatorBot so reply_text is captured"
+VERSION = "11.0.2"
+VERSION_NOTES = "Simulate: persist reply_text responses to recent_messages for dashboard visibility"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

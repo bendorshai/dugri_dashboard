@@ -240,6 +240,44 @@ def make_simulate_handler(application: Any, mongo_uri: str, db_name: str,
             finally:
                 self._app._bot = original_bot
 
+            # Ensure captured responses are persisted to recent_messages.
+            # handle_message saves via _save_bot_message, but other
+            # handlers (start_handler, callbacks) use reply_text which
+            # doesn't save. Check DB and save any missing bot messages.
+            if sim_bot.captured:
+                save_client = MongoClient(self._mongo_uri)
+                save_db = save_client[self._db_name]
+                current = save_db["users"].find_one(
+                    {"telegram_user_id": tid}, {"recent_messages": 1},
+                )
+                existing_texts = set()
+                if current:
+                    for m in current.get("recent_messages", []):
+                        if m.get("role") == "bot":
+                            existing_texts.add(m.get("text", "")[:100])
+
+                msgs_to_save = []
+                for cap in sim_bot.captured:
+                    txt = cap.get("text", "")
+                    if txt and txt[:100] not in existing_texts:
+                        msgs_to_save.append({
+                            "role": "bot",
+                            "text": txt[:500],
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        })
+
+                if msgs_to_save:
+                    save_db["users"].update_one(
+                        {"telegram_user_id": tid},
+                        {"$push": {
+                            "recent_messages": {
+                                "$each": msgs_to_save,
+                                "$slice": -12,
+                            },
+                        }},
+                    )
+                save_client.close()
+
             self.set_header("Content-Type", "application/json")
             self.write(json.dumps({"responses": sim_bot.captured}))
 
