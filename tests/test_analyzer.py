@@ -40,10 +40,6 @@ correct prompts, models, and structured output formats are used.
 # - Returns discovered_pattern and pattern_summary fields
 # - Returns None on failure
 #
-# MEAL SUGGESTIONS (suggest_meals)
-# ---------------------------------
-# - Prompt includes remaining_calories, remaining_protein, and today_entries
-#
 # QUESTION ANSWERING (answer_question)
 # -------------------------------------
 # - Sends question with week_csv and targets context
@@ -343,26 +339,6 @@ class TestWeeklyFeedback:
         )
         assert result["discovered_pattern"] == "כשאתה ישן מאוחר אתה מדלג"
         assert result["pattern_summary"] == "late_sleep_skips_breakfast"
-
-
-class TestMealSuggestions:
-    def test_prompt_includes_remaining_values(self, analyzer):
-        fa, mock_client = analyzer
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "1. חזה עוף\n2. סלט\n3. ביצים"
-        mock_client.chat.completions.create.return_value = mock_response
-
-        fa.suggest_meals(
-            remaining_calories=700,
-            remaining_protein=100,
-            today_entries="שניצל 400 cal",
-        )
-
-        call_args = mock_client.chat.completions.create.call_args
-        user_msg = call_args[1]["messages"][1]["content"]
-        assert "700" in user_msg
-        assert "100" in user_msg
 
 
 class TestAnswerQuestion:

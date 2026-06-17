@@ -113,7 +113,6 @@ class HealthHandlers:
         self.handle_menu_callback = self._cb.handle_menu_callback
         self.handle_profile_callback = self._cb.handle_profile_callback
         self.handle_edit_field_callback = self._cb.handle_edit_field_callback
-        self.handle_suggest_callback = self._cb.handle_suggest_callback
         self.handle_ask_callback = self._cb.handle_ask_callback
         self.handle_feature_request_callback = self._cb.handle_feature_request_callback
         self.handle_food_delete_callback = self._cb.handle_food_delete_callback
