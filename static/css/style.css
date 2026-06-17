@@ -2026,6 +2026,33 @@ a:hover {
     border-bottom-left-radius: 4px;
 }
 
+/* Message metadata (double-click to show) */
+.sim-msg-meta {
+    display: flex;
+    gap: 0.375rem;
+    flex-wrap: wrap;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.65rem;
+}
+
+.sim-meta-tag {
+    background: var(--accent);
+    color: var(--white);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.sim-meta-time {
+    color: var(--text-light);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.sim-meta-reply {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
 .sim-msg-typing {
     animation: sim-pulse 1s ease-in-out infinite;
     font-weight: 700;

@@ -378,7 +378,21 @@
                 <div class="sim-chat-messages" x-ref="chatMessages">
                     <template x-for="(msg, i) in chatMessages" :key="msg._id">
                         <div :class="'sim-msg sim-msg--' + msg.role">
-                            <div class="sim-msg-bubble" x-text="msg.text"></div>
+                            <div class="sim-msg-bubble" x-text="msg.text"
+                                 @dblclick="msg.showMeta = !msg.showMeta"
+                                 style="cursor: pointer;"
+                                 :title="msg.meta && msg.meta.classification ? msg.meta.classification : ''"></div>
+                            <div class="sim-msg-meta" x-show="msg.showMeta && msg.meta" x-transition.duration.100ms>
+                                <template x-if="msg.meta && msg.meta.classification">
+                                    <span class="sim-meta-tag" x-text="msg.meta.classification"></span>
+                                </template>
+                                <template x-if="msg.meta && msg.meta.timestamp">
+                                    <span class="sim-meta-time" x-text="msg.meta.timestamp.slice(11, 19)"></span>
+                                </template>
+                                <template x-if="msg.meta && msg.meta.replying_to">
+                                    <span class="sim-meta-reply" x-text="'reply: ' + msg.meta.replying_to"></span>
+                                </template>
+                            </div>
                             <template x-if="msg.reply_markup && msg.reply_markup.inline_keyboard">
                                 <div class="sim-msg-keyboard">
                                     <template x-for="row in msg.reply_markup.inline_keyboard" :key="JSON.stringify(row)">
@@ -498,8 +512,8 @@ function simulator() {
     }
 
     let msgIdCounter = 0;
-    function mkMsg(role, text, reply_markup) {
-        return { _id: ++msgIdCounter, role, text: text || '', reply_markup: reply_markup || null };
+    function mkMsg(role, text, reply_markup, meta) {
+        return { _id: ++msgIdCounter, role, text: text || '', reply_markup: reply_markup || null, meta: meta || null, showMeta: false };
     }
 
     return {
@@ -509,7 +523,9 @@ function simulator() {
         statusMsg: '',
         statusOk: true,
         chatMessages: (rawUser.recent_messages || []).map(m =>
-            mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup)
+            mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup, {
+                classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
+            })
         ),
         chatInput: '',
         chatLoading: false,
@@ -701,7 +717,9 @@ function simulator() {
             if (!data.error) {
                 this.state = data;
                 this.chatMessages = (data.recent_messages || []).map(m =>
-                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup)
+                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup, {
+                        classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
+                    })
                 );
                 if (data.trial_started_at) {
                     try { this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16); } catch(e) {}
