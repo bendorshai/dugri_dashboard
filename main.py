@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.3.0"
-VERSION_NOTES = "Revamp trial expiry message: single LLM call with stats, gem, weekly insights; 20:30-21:30 window"
+VERSION = "11.3.1"
+VERSION_NOTES = "Fix trial expiry: pass analyzer + habit repos to simulator tick"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

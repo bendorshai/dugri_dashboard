@@ -409,11 +409,15 @@ def make_simulate_tick_handler(application: Any, mongo_uri: str, db_name: str,
                     await _check_trial_expiry_message(
                         fake_context, profile, user_repo, toggle_service,
                         trial_service,
+                        analyzer=job_data.get("analyzer"),
                         gem_service=job_data.get("gem_service"),
                         feedback_service=job_data.get("feedback_service"),
                         admin_chat_id=0,
                         landing_page_url=job_data.get("landing_page_url", ""),
                         food_repo=job_data.get("food_repo"),
+                        sleep_repo=job_data.get("sleep_repo"),
+                        workout_repo=job_data.get("workout_repo"),
+                        self_care_repo=job_data.get("self_care_repo"),
                         now_override=fake_now,
                     )
                 except Exception:
