@@ -352,6 +352,9 @@ def simulator_send():
     payload = {"email": SIMULATOR_EMAIL}
     if data.get("text"):
         payload["text"] = data["text"]
+        if data.get("reply_to_message_id"):
+            payload["reply_to_message_id"] = data["reply_to_message_id"]
+            payload["reply_to_text"] = data.get("reply_to_text", "")
     elif data.get("callback_data"):
         payload["callback_data"] = data["callback_data"]
     else:

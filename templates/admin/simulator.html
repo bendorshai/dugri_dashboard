@@ -378,19 +378,18 @@
                 <div class="sim-chat-messages" x-ref="chatMessages">
                     <template x-for="(msg, i) in chatMessages" :key="msg._id">
                         <div :class="'sim-msg sim-msg--' + msg.role">
-                            <div class="sim-msg-bubble" x-text="msg.text"
-                                 @dblclick="msg.showMeta = !msg.showMeta"
-                                 style="cursor: pointer;"
-                                 :title="msg.meta && msg.meta.classification ? msg.meta.classification : ''"></div>
-                            <div class="sim-msg-meta" x-show="msg.showMeta && msg.meta" x-transition.duration.100ms>
+                            <div class="sim-msg-bubble"
+                                 @click="replyTo = msg"
+                                 :class="{ 'sim-msg-selected': replyTo && replyTo._id === msg._id }">
+                                <span x-text="msg.text"></span>
+                            </div>
+                            <!-- Always-visible metadata -->
+                            <div class="sim-msg-meta" x-show="msg.meta && (msg.meta.classification || msg.meta.replying_to)">
                                 <template x-if="msg.meta && msg.meta.classification">
                                     <span class="sim-meta-tag" x-text="msg.meta.classification"></span>
                                 </template>
-                                <template x-if="msg.meta && msg.meta.timestamp">
-                                    <span class="sim-meta-time" x-text="msg.meta.timestamp.slice(11, 19)"></span>
-                                </template>
                                 <template x-if="msg.meta && msg.meta.replying_to">
-                                    <span class="sim-meta-reply" x-text="'reply: ' + msg.meta.replying_to"></span>
+                                    <span class="sim-meta-reply" x-text="'reply: ' + msg.meta.replying_to.slice(0, 40) + (msg.meta.replying_to.length > 40 ? '...' : '')"></span>
                                 </template>
                             </div>
                             <template x-if="msg.reply_markup && msg.reply_markup.inline_keyboard">
@@ -415,8 +414,15 @@
                     </div>
                 </div>
 
+                <!-- Reply indicator -->
+                <div class="sim-reply-bar" x-show="replyTo" x-transition.duration.100ms>
+                    <span class="sim-reply-label">Replying to:</span>
+                    <span class="sim-reply-text" x-text="replyTo ? replyTo.text.slice(0, 60) + (replyTo.text.length > 60 ? '...' : '') : ''"></span>
+                    <button class="sim-reply-cancel" @click="replyTo = null">&times;</button>
+                </div>
+
                 <div class="sim-chat-input">
-                    <input type="text" x-model="chatInput" placeholder="Type a message..."
+                    <input type="text" x-model="chatInput" :placeholder="replyTo ? 'Reply...' : 'Type a message...'"
                            @keydown.enter="sendMessage()" :disabled="chatLoading" x-ref="chatInputField">
                     <button @click="sendMessage()" :disabled="chatLoading || !chatInput.trim()"
                             class="sim-btn sim-btn--send">&gt;</button>
@@ -529,6 +535,7 @@ function simulator() {
         ),
         chatInput: '',
         chatLoading: false,
+        replyTo: null,
         toggleNames: ['nutrition', 'sleep', 'eating_window', 'workouts', 'self_care', 'weekly_summary'],
         historyDays: [],
         historyOpen: {},
@@ -774,11 +781,19 @@ function simulator() {
             const text = this.chatInput.trim();
             if (!text) return;
             this.chatInput = '';
-            this.chatMessages = [...this.chatMessages, mkMsg('user', text)];
+            const payload = { text };
+            if (this.replyTo) {
+                payload.reply_to_message_id = this.replyTo._id;
+                payload.reply_to_text = this.replyTo.text;
+            }
+            this.chatMessages = [...this.chatMessages, mkMsg('user', text, null,
+                this.replyTo ? { replying_to: this.replyTo.text.slice(0, 60) } : null
+            )];
+            this.replyTo = null;
             this.scrollChat();
             this.chatLoading = true;
             try {
-                const result = await this.api('/admin/simulator/send', { text });
+                const result = await this.api('/admin/simulator/send', payload);
                 this._appendBotResponses(result);
                 await this._refreshPanel();
             } catch(e) {}

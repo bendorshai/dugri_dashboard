@@ -2053,6 +2053,56 @@ a:hover {
     font-style: italic;
 }
 
+/* Reply UI */
+.sim-msg-bubble {
+    cursor: pointer;
+}
+
+.sim-msg-selected {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.sim-reply-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    background: var(--bg-alt);
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    margin-bottom: 0.375rem;
+    direction: rtl;
+}
+
+.sim-reply-label {
+    font-weight: 600;
+    color: var(--accent-dark);
+    white-space: nowrap;
+}
+
+.sim-reply-text {
+    flex: 1;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sim-reply-cancel {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 0 0.2rem;
+    line-height: 1;
+}
+
+.sim-reply-cancel:hover {
+    color: var(--error);
+}
+
 .sim-msg-typing {
     animation: sim-pulse 1s ease-in-out infinite;
     font-weight: 700;
