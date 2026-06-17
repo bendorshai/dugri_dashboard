@@ -2124,7 +2124,7 @@ a:hover {
 }
 
 .sim-input--time {
-    max-width: 80px;
+    max-width: 110px;
     flex: 0 0 auto;
 }
 
@@ -2132,6 +2132,59 @@ a:hover {
     font-size: 0.7rem;
     color: var(--text-muted);
     flex-shrink: 0;
+}
+
+/* Collapsible card headers */
+.sim-card-header {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+}
+
+.sim-collapse-icon {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+}
+
+.sim-collapse-icon.open {
+    transform: rotate(0deg);
+}
+
+.sim-collapse-icon:not(.open) {
+    transform: rotate(-90deg);
+}
+
+/* Hook schedule display */
+.sim-hook-schedule {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed var(--border);
+}
+
+.sim-hook-schedule-title {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.sim-hook-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    padding: 0.1rem 0;
+}
+
+.sim-hook-name {
+    color: var(--text-muted);
+}
+
+.sim-hook-time {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-weight: 600;
+    color: var(--accent-dark);
 }
 
 /* Entry History */

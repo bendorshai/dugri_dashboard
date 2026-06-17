@@ -401,6 +401,18 @@ def simulator_history():
     return jsonify({"days": days})
 
 
+@admin_bp.route("/simulator/hook-schedule")
+@admin_required
+def simulator_hook_schedule():
+    """Return the current randomized hook fire times from the bot's hook_schedule collection."""
+    storage = _get_dashboard_storage()
+    doc = storage._db["hook_schedule"].find_one({"_id": "hook_schedule"})
+    if not doc:
+        return jsonify({"hooks": {}})
+    doc.pop("_id", None)
+    return jsonify({"hooks": doc})
+
+
 @admin_bp.route("/simulator/tick", methods=["POST"])
 @admin_required
 def simulator_tick():
