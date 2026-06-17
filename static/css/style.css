@@ -2213,6 +2213,23 @@ a:hover {
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-weight: 600;
     color: var(--accent-dark);
+    flex: 1;
+    text-align: right;
+}
+
+.sim-hook-pending {
+    font-family: inherit;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--text-light);
+    font-size: 0.68rem;
+}
+
+.sim-hook-window {
+    font-size: 0.65rem;
+    color: var(--text-light);
+    min-width: 30px;
+    text-align: right;
 }
 
 /* Entry History */

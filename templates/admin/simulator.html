@@ -316,16 +316,34 @@
                     <button @click="runTick()" class="sim-btn sim-btn--full" :disabled="loading || !fakeClock">
                         Run Tick
                     </button>
-                    <!-- Hook schedule times -->
-                    <div class="sim-hook-schedule" x-show="Object.keys(hookSchedule).length">
-                        <div class="sim-hook-schedule-title">Random hook times:</div>
-                        <template x-for="name in ['sleep','workouts','self_care','weekly_summary']" :key="name">
-                            <div class="sim-hook-row" x-show="hookSchedule[name]">
-                                <span class="sim-hook-name" x-text="name"></span>
-                                <span class="sim-hook-time"
-                                      x-text="hookSchedule[name] ? String(hookSchedule[name].hour).padStart(2,'0') + ':' + String(hookSchedule[name].minute).padStart(2,'0') : '-'"></span>
-                            </div>
-                        </template>
+                    <!-- Schedule reference -->
+                    <div class="sim-hook-schedule">
+                        <div class="sim-hook-schedule-title">Schedule reference:</div>
+                        <div class="sim-hook-row">
+                            <span class="sim-hook-name">Daily: sleep</span>
+                            <span class="sim-hook-time" x-text="hookSchedule.sleep ? String(hookSchedule.sleep.hour).padStart(2,'0') + ':' + String(hookSchedule.sleep.minute).padStart(2,'0') : 'awaiting tomorrow'" :class="{ 'sim-hook-pending': !hookSchedule.sleep }"></span>
+                            <span class="sim-hook-window">8-10</span>
+                        </div>
+                        <div class="sim-hook-row">
+                            <span class="sim-hook-name">Daily: eat window</span>
+                            <span class="sim-hook-time">warns 60m before close</span>
+                            <span class="sim-hook-window"></span>
+                        </div>
+                        <div class="sim-hook-row">
+                            <span class="sim-hook-name">Thu: workouts</span>
+                            <span class="sim-hook-time" x-text="hookSchedule.workouts ? String(hookSchedule.workouts.hour).padStart(2,'0') + ':' + String(hookSchedule.workouts.minute).padStart(2,'0') : 'awaiting Thursday'" :class="{ 'sim-hook-pending': !hookSchedule.workouts }"></span>
+                            <span class="sim-hook-window">16-20</span>
+                        </div>
+                        <div class="sim-hook-row">
+                            <span class="sim-hook-name">Fri: self_care</span>
+                            <span class="sim-hook-time" x-text="hookSchedule.self_care ? String(hookSchedule.self_care.hour).padStart(2,'0') + ':' + String(hookSchedule.self_care.minute).padStart(2,'0') : 'awaiting Friday'" :class="{ 'sim-hook-pending': !hookSchedule.self_care }"></span>
+                            <span class="sim-hook-window">10-14</span>
+                        </div>
+                        <div class="sim-hook-row">
+                            <span class="sim-hook-name">Sun: weekly_summary</span>
+                            <span class="sim-hook-time" x-text="hookSchedule.weekly_summary ? String(hookSchedule.weekly_summary.hour).padStart(2,'0') + ':' + String(hookSchedule.weekly_summary.minute).padStart(2,'0') : 'awaiting Sunday'" :class="{ 'sim-hook-pending': !hookSchedule.weekly_summary }"></span>
+                            <span class="sim-hook-window">9-11</span>
+                        </div>
                     </div>
                 </div>
             </div>
