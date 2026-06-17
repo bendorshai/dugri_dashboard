@@ -108,7 +108,9 @@ class SimulatorBot:
 
 def build_fake_update(telegram_user_id: int, text: str | None = None,
                       callback_data: str | None = None,
-                      bot: Any = None) -> dict:
+                      bot: Any = None,
+                      reply_to_message_id: int | None = None,
+                      reply_to_text: str | None = None) -> dict:
     """Build a raw Telegram Update dict for deserialization."""
     update_id = int(datetime.now(timezone.utc).timestamp() * 1000) % 999999999
 
@@ -159,6 +161,19 @@ def build_fake_update(telegram_user_id: int, text: str | None = None,
                 "offset": 0,
                 "length": len(cmd),
             }]
+        # Add reply_to_message so the bot sees message.reply_to_message.text
+        if reply_to_message_id and reply_to_text is not None:
+            msg["reply_to_message"] = {
+                "message_id": reply_to_message_id,
+                "date": int(datetime.now(timezone.utc).timestamp()),
+                "chat": chat_dict,
+                "from": {
+                    "id": bot.id if bot else 0,
+                    "is_bot": True,
+                    "first_name": "Dugri",
+                },
+                "text": reply_to_text,
+            }
         return {
             "update_id": update_id,
             "message": msg,
@@ -194,6 +209,8 @@ def make_simulate_handler(application: Any, mongo_uri: str, db_name: str,
             email = body.get("email")
             text = body.get("text")
             callback_data = body.get("callback_data")
+            reply_to_message_id = body.get("reply_to_message_id")
+            reply_to_text = body.get("reply_to_text")
 
             if not email:
                 self.set_status(400)
@@ -229,7 +246,9 @@ def make_simulate_handler(application: Any, mongo_uri: str, db_name: str,
             from telegram import Update
             update_dict = build_fake_update(tid, text=text,
                                             callback_data=callback_data,
-                                            bot=self._app.bot)
+                                            bot=self._app.bot,
+                                            reply_to_message_id=reply_to_message_id,
+                                            reply_to_text=reply_to_text)
             update = Update.de_json(update_dict, sim_bot)
 
             try:

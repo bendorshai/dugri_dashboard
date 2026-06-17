@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.2.0"
-VERSION_NOTES = "Emotional awareness in main classifier + dedicated empathy generation at temp 0.9"
+VERSION = "11.2.1"
+VERSION_NOTES = "Simulator: reply-to-message support in /internal/simulate"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(
