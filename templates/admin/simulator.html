@@ -890,10 +890,16 @@ function simulator() {
             const data = await this.api('/admin/simulator/state');
             if (!data.error) {
                 this.state = data;
+                this.chatMessages = (data.recent_messages || []).map(m =>
+                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup, {
+                        classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
+                    })
+                );
                 if (data.trial_started_at) {
                     try { this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16); } catch(e) {}
                 }
             }
+            this.scrollChat();
             await this._loadHistory();
         },
 
