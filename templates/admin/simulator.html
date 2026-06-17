@@ -150,6 +150,12 @@
                     <div class="sim-day-indicator" x-show="state.trial_started_at">
                         Day <span x-text="currentDay"></span> of trial
                     </div>
+                    <div class="sim-field sim-field--row">
+                        <label>Trial expiry msg sent</label>
+                        <input type="checkbox"
+                               :checked="!!state.trial_expiry_message_sent"
+                               @change="saveField('trial_expiry_message_sent', $event.target.checked)">
+                    </div>
                 </div>
             </div>
 
@@ -265,6 +271,14 @@
                                 <option value="remind">goal: remind</option>
                             </select>
                         </div>
+                        <div class="sim-toggle-fired">
+                            <label class="sim-fired-label">
+                                <input type="checkbox"
+                                       :checked="state.toggles.eating_window.last_asked_at && !isBeforeToday(state.toggles.eating_window.last_asked_at)"
+                                       @change="toggleFiredToday('eating_window', $event.target.checked)">
+                                <span>fired today</span>
+                            </label>
+                        </div>
                         <div class="sim-toggle-goals" :class="{ 'sim-disabled': state.toggles.eating_window.status !== 'active' }">
                             <div class="sim-field sim-field--row">
                                 <label>Window</label>
@@ -297,6 +311,14 @@
                                 <option value="remind">goal: remind</option>
                             </select>
                         </div>
+                        <div class="sim-toggle-fired">
+                            <label class="sim-fired-label">
+                                <input type="checkbox"
+                                       :checked="state.toggles.sleep.last_asked_at && !isBeforeToday(state.toggles.sleep.last_asked_at)"
+                                       @change="toggleFiredToday('sleep', $event.target.checked)">
+                                <span>fired today</span>
+                            </label>
+                        </div>
                         <div class="sim-toggle-goals" :class="{ 'sim-disabled': state.toggles.sleep.status !== 'active' }">
                             <div class="sim-field sim-field--row">
                                 <label>Sleep by</label>
@@ -323,6 +345,14 @@
                                 <option value="declined">goal: declined</option>
                                 <option value="remind">goal: remind</option>
                             </select>
+                        </div>
+                        <div class="sim-toggle-fired">
+                            <label class="sim-fired-label">
+                                <input type="checkbox"
+                                       :checked="state.toggles.workouts.last_asked_at && !isBeforeToday(state.toggles.workouts.last_asked_at)"
+                                       @change="toggleFiredToday('workouts', $event.target.checked)">
+                                <span>fired today</span>
+                            </label>
                         </div>
                         <div class="sim-toggle-goals" :class="{ 'sim-disabled': state.toggles.workouts.status !== 'active' }">
                             <div class="sim-field sim-field--row">
@@ -351,6 +381,14 @@
                                 <option value="remind">goal: remind</option>
                             </select>
                         </div>
+                        <div class="sim-toggle-fired">
+                            <label class="sim-fired-label">
+                                <input type="checkbox"
+                                       :checked="state.toggles.self_care.last_asked_at && !isBeforeToday(state.toggles.self_care.last_asked_at)"
+                                       @change="toggleFiredToday('self_care', $event.target.checked)">
+                                <span>fired today</span>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- weekly_summary -->
@@ -368,6 +406,14 @@
                                 <option value="declined">goal: declined</option>
                                 <option value="remind">goal: remind</option>
                             </select>
+                        </div>
+                        <div class="sim-toggle-fired">
+                            <label class="sim-fired-label">
+                                <input type="checkbox"
+                                       :checked="state.toggles.weekly_summary.last_asked_at && !isBeforeToday(state.toggles.weekly_summary.last_asked_at)"
+                                       @change="toggleFiredToday('weekly_summary', $event.target.checked)">
+                                <span>fired today</span>
+                            </label>
                         </div>
                     </div>
 
@@ -1000,6 +1046,20 @@ function simulator() {
                 const el = this.$refs.chatMessages;
                 if (el) el.scrollTop = el.scrollHeight;
             });
+        },
+
+        isBeforeToday(isoStr) {
+            if (!isoStr) return true;
+            const d = new Date(isoStr);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return d < today;
+        },
+
+        async toggleFiredToday(toggleName, checked) {
+            const value = checked ? new Date().toISOString() : null;
+            this.state.toggles[toggleName].last_asked_at = value;
+            await this.saveField('toggles.' + toggleName + '.last_asked_at', value);
         },
     };
 }
