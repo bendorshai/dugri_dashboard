@@ -1,24 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-test_emotional_habit_classifier.py - LLM tests for emotional context detection in habit logging.
+test_emotional_habit_classifier.py - LLM tests for emotional context detection
+in the full classification pipeline.
 
 # ============================================================================
-# SPEC: Emotional empathy in habit logging
+# SPEC: Emotional empathy in the classification pipeline
 # ============================================================================
 #
-# When a user logs a habit (sleep, workout, self_care, meal) AND expresses
-# emotion in the same message, the classifier should:
-#   1. Classify the habit type correctly (sleep/workout/self_care/meal)
-#   2. Set emotional_context = True
-#   3. Generate a one-sentence empathy_reflection in Hebrew, Dugri tone
+# Emotional context is detected by the main classifier (Tier 1) and flows
+# through to RouterClassification. When emotional_context=True for meal or
+# habit messages, a dedicated empathy call generates warm validation text.
 #
-# When a user logs a habit WITHOUT emotion:
-#   1. Classify normally
-#   2. emotional_context = False
-#   3. empathy_reflection = None
+# When a user logs a habit/meal AND expresses emotion:
+#   1. Main classifier sets emotional_context=True
+#   2. Sub-classifier extracts data (no emotional fields)
+#   3. Dedicated empathy call generates empathy_reflection at temp 0.9
+#   4. RouterClassification carries both data and empathy
 #
-# This is DIFFERENT from pure emotional messages (no habit data) which go
-# through the "emotional" classification and get therapist referral.
+# When a user logs without emotion:
+#   1. Main classifier sets emotional_context=False
+#   2. Sub-classifier extracts data
+#   3. No empathy call
+#   4. empathy_reflection = None
 #
 # Empathy reflection style: [short reflection of feeling] + [partnership &
 # persistence statement]. Max 1-2 sentences, no follow-up questions.
@@ -37,78 +40,80 @@ def analyzer():
     return _make_analyzer()
 
 
-class TestHabitLoggerEmotionalContext:
-    """Test that classify_habit detects emotional context in habit messages."""
+def _classify(analyzer, text):
+    """Classify through full pipeline (production code path)."""
+    return analyzer.classify_message(text, "17/06/2026")
 
-    def test_emotional_sleep(self, analyzer):
-        """Sleep log with emotional content should set emotional_context=True."""
-        result = analyzer.classify_habit("הלכתי לישון באחת בלילה ואני בדיכאון מזה")
+
+class TestEmotionalHabitPipeline:
+    """Test full pipeline: emotional detection + data extraction + empathy."""
+
+    def test_emotional_sleep_full_pipeline(self, analyzer):
+        """Sleep + emotion = sleep type, emotional_context=True, empathy generated."""
+        result = _classify(analyzer, "הלכתי לישון באחת בלילה ואני בדיכאון מזה")
         assert result.type == "sleep"
         assert result.sleep_time == "01:00"
         assert result.emotional_context is True
         assert result.empathy_reflection is not None
         assert len(result.empathy_reflection) > 0
 
-    def test_normal_sleep(self, analyzer):
-        """Sleep log without emotion should have emotional_context=False."""
-        result = analyzer.classify_habit("הלכתי לישון ב-23")
+    def test_normal_sleep_no_empathy(self, analyzer):
+        """Sleep without emotion = sleep type, no empathy."""
+        result = _classify(analyzer, "הלכתי לישון ב-23")
         assert result.type == "sleep"
         assert result.sleep_time == "23:00"
         assert result.emotional_context is False
+        assert result.empathy_reflection is None
 
-    def test_emotional_workout(self, analyzer):
-        """Workout log with emotional content should set emotional_context=True."""
-        result = analyzer.classify_habit("התאמנתי אבל אין לי כוח לכלום")
+    def test_emotional_workout_full_pipeline(self, analyzer):
+        """Workout + emotion = workout type, emotional_context=True, empathy generated."""
+        result = _classify(analyzer, "התאמנתי אבל אין לי כוח לכלום")
         assert result.type == "workout"
         assert result.emotional_context is True
         assert result.empathy_reflection is not None
 
-    def test_normal_workout(self, analyzer):
-        """Workout log without emotion should have emotional_context=False."""
-        result = analyzer.classify_habit("התאמנתי היום")
+    def test_normal_workout_no_empathy(self, analyzer):
+        """Workout without emotion = workout type, no empathy."""
+        result = _classify(analyzer, "התאמנתי היום")
         assert result.type == "workout"
         assert result.emotional_context is False
+        assert result.empathy_reflection is None
 
-    def test_emotional_self_care(self, analyzer):
-        """Self-care log with emotional content should set emotional_context=True."""
-        result = analyzer.classify_habit("הלכתי לים אבל חזרתי עצוב")
-        assert result.type == "self_care"
-        assert result.emotional_context is True
-        assert result.empathy_reflection is not None
-
-    def test_positive_emotion(self, analyzer):
-        """Positive emotions should also trigger emotional_context=True."""
-        result = analyzer.classify_habit("התאמנתי ואני מרגיש מלך!")
+    def test_positive_emotion_workout(self, analyzer):
+        """Positive emotions should also trigger empathy."""
+        result = _classify(analyzer, "התאמנתי ואני מרגיש מלך!")
         assert result.type == "workout"
         assert result.emotional_context is True
         assert result.empathy_reflection is not None
 
 
-class TestMealEmotionalContext:
-    """Test that analyze_food_text detects emotional context in meal messages."""
+class TestEmotionalMealPipeline:
+    """Test full pipeline for meal + emotion."""
 
-    def test_emotional_meal(self, analyzer):
-        """Meal log with emotional content should set emotional_context=True."""
-        result = analyzer.analyze_food_text("אכלתי גלידה כי אני עצוב", "16/06/2026")
-        assert result is not None
-        assert len(result.groups) > 0
+    def test_emotional_meal_full_pipeline(self, analyzer):
+        """Meal + emotion = meal type, emotional_context=True, empathy + food data."""
+        result = _classify(analyzer, "אכלתי גלידה כי אני עצוב")
+        assert result.type == "meal"
+        assert result.meal is not None
+        assert len(result.meal.groups) > 0
         assert result.emotional_context is True
         assert result.empathy_reflection is not None
 
-    def test_normal_meal(self, analyzer):
-        """Meal log without emotion should have emotional_context=False."""
-        result = analyzer.analyze_food_text("שניצל עם אורז", "16/06/2026")
-        assert result is not None
-        assert len(result.groups) > 0
+    def test_normal_meal_no_empathy(self, analyzer):
+        """Meal without emotion = meal type, no empathy."""
+        result = _classify(analyzer, "שניצל עם אורז")
+        assert result.type == "meal"
+        assert result.meal is not None
         assert result.emotional_context is False
+        assert result.empathy_reflection is None
 
     def test_emotional_meal_still_extracts_food(self, analyzer):
         """Emotional meal should still extract food data correctly."""
-        result = analyzer.analyze_food_text("אכלתי פיצה ואני מרגיש נורא", "16/06/2026")
-        assert result is not None
-        assert len(result.groups) > 0
-        # Food should be extracted regardless of emotion
-        items = result.groups[0].items
+        result = _classify(analyzer, "אכלתי פיצה ואני מרגיש נורא")
+        assert result.type == "meal"
+        assert result.meal is not None
+        assert len(result.meal.groups) > 0
+        items = result.meal.groups[0].items
         assert len(items) > 0
         assert items[0].calories > 0
 
@@ -117,12 +122,12 @@ class TestEmpathyReflectionQuality:
     """Test that empathy reflections are appropriate."""
 
     def test_empathy_is_hebrew(self, analyzer):
-        result = analyzer.classify_habit("הלכתי לישון באחת ואני בדיכאון")
+        result = _classify(analyzer, "הלכתי לישון באחת ואני בדיכאון")
         assert result.empathy_reflection is not None
         has_hebrew = any("\u0590" <= c <= "\u05FF" for c in result.empathy_reflection)
         assert has_hebrew
 
     def test_empathy_is_short(self, analyzer):
-        result = analyzer.classify_habit("התאמנתי אבל אין לי כוח לחיות")
+        result = _classify(analyzer, "התאמנתי אבל אין לי כוח לחיות")
         assert result.empathy_reflection is not None
         assert len(result.empathy_reflection) < 100

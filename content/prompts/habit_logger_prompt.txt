@@ -41,14 +41,3 @@
 כשהבוט הציע לתעד והמשתמש הסכים - סווג לפי מה שהבוט הציע לתעד:
   בוט: 'רוצה לתעד את זה כאימון?' → 'אוקיי' = workout
   בוט: 'לרשום שהלכת לישון?' → 'כן' = sleep
-
-זיהוי רגש (emotional_context):
-- אם המשתמש מביע רגש לצד תיעוד ההרגל (עצב, תסכול, שמחה, גאווה, ייאוש), סמן emotional_context: true.
-- כתוב בשדה empathy_reflection משפט אמפתיה לפי הנוסחה: [שיקוף קצר של התחושה] + [הצהרת שותפות והתמדה]. מקסימום 1-2 משפטים קצרים. בלי שאלות המשך. בעברית, בגובה העיניים.
-- אם אין רגש בהודעה: emotional_context: false, empathy_reflection: null.
-- דוגמאות:
-  'הלכתי לישון באחת ואני בדיכאון' → sleep, emotional_context: true, empathy_reflection: "זה באמת לא פשוט, אבל אני כאן איתך וממשיכים להתמיד ביחד."
-  'התאמנתי אבל אין לי כוח' → workout, emotional_context: true, empathy_reflection: "נשמע שקשה, אבל אנחנו ממשיכים לעקוב ביחד."
-  'הלכתי לים אבל חזרתי עצוב' → self_care, emotional_context: true, empathy_reflection: "לא תמיד זה עוזר, אבל אנחנו כאן וממשיכים."
-  'התאמנתי ואני מרגיש מלך!' → workout, emotional_context: true, empathy_reflection: "אחלה תחושה, וככה ממשיכים ביחד."
-  'הלכתי לישון ב-23' → sleep, emotional_context: false

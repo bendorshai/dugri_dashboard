@@ -319,6 +319,31 @@ class FoodAnalyzer:
             logger.exception("GPT classify_other failed for: %s", text[:80])
             return OtherResult(type="conversational")
 
+    def _generate_inline_empathy(self, text: str) -> str | None:
+        """Generate creative empathy for emotional messages alongside data logging.
+
+        Uses temperature 0.9 for warm, varied responses. Follows the formula:
+        [short reflection of feeling] + [partnership & persistence statement].
+        """
+        try:
+            response = self._create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": (
+                        "אתה דוגרי. המשתמש מביע רגש לצד דיווח על הרגל. "
+                        "כתוב משפט אמפתיה לפי הנוסחה: [שיקוף קצר של התחושה] + [הצהרת שותפות והתמדה]. "
+                        "מקסימום 1-2 משפטים קצרים. בלי שאלות המשך. בעברית, בגובה העיניים."
+                    )},
+                    {"role": "user", "content": text},
+                ],
+                temperature=0.9,
+                max_tokens=100,
+            )
+            return response.choices[0].message.content or None
+        except Exception:
+            logger.exception("Inline empathy generation failed")
+            return None
+
     def classify_message(
         self, text: str, today_str: str, last_entry: dict | None = None,
         recent_messages: list[dict] | None = None,
@@ -329,8 +354,10 @@ class FoodAnalyzer:
     ) -> RouterClassification:
         """Classify a user message through the full pipeline.
 
-        Main classifier determines broad category, then the appropriate
-        sub-classifier extracts details. Returns unified RouterClassification.
+        Main classifier determines broad category and emotional context,
+        then the appropriate sub-classifier extracts details. When emotional
+        context is detected for meal/habit messages, a dedicated empathy call
+        generates warm validation at high temperature.
         """
         t1 = self.main_classifier(
             text, today_str, last_entry=last_entry,
@@ -342,10 +369,11 @@ class FoodAnalyzer:
 
         if t1.type == "meal":
             meal_result = self.analyze_food_text(text, today_str, day_name, on_usage=on_usage)
+            empathy = self._generate_inline_empathy(text) if t1.emotional_context else None
             return RouterClassification(
                 type="meal", meal=meal_result,
-                emotional_context=meal_result.emotional_context if meal_result else False,
-                empathy_reflection=meal_result.empathy_reflection if meal_result else None,
+                emotional_context=t1.emotional_context,
+                empathy_reflection=empathy,
             )
 
         if t1.type == "habit_logger":
@@ -355,16 +383,16 @@ class FoodAnalyzer:
                 today_str=today_str, day_name=day_name,
                 on_usage=on_usage,
             )
-            result = RouterClassification(
+            empathy = self._generate_inline_empathy(text) if t1.emotional_context else None
+            return RouterClassification(
                 type=t2.type,
                 workout_note=t2.workout_note,
                 self_care_description=t2.self_care_description,
                 sleep_time=t2.sleep_time,
                 resolved_date=t2.resolved_date,
-                emotional_context=t2.emotional_context,
-                empathy_reflection=t2.empathy_reflection,
+                emotional_context=t1.emotional_context,
+                empathy_reflection=empathy,
             )
-            return result
 
         if t1.type == "goals_talk":
             t2 = self.classify_goals_talk(

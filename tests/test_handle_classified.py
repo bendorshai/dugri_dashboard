@@ -917,7 +917,10 @@ class TestLoggerService:
     def test_generate_empathy_happy_path(self):
         from services.logger_service import LoggerService
         analyzer = MagicMock()
-        analyzer.converse.return_value = "נשמע שקשה לך היום"
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "נשמע שקשה לך היום"
+        analyzer._create.return_value = mock_response
         svc = LoggerService(analyzer)
 
         result = svc.generate_empathy("אני מרגיש רע")
@@ -926,7 +929,7 @@ class TestLoggerService:
     def test_generate_empathy_exception_fallback(self):
         from services.logger_service import LoggerService
         analyzer = MagicMock()
-        analyzer.converse.side_effect = Exception("fail")
+        analyzer._create.side_effect = Exception("fail")
         svc = LoggerService(analyzer)
 
         result = svc.generate_empathy("אני מרגיש רע")

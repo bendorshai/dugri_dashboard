@@ -80,19 +80,25 @@ class LoggerService:
         return NameExtraction(declared_name=name or text.strip())
 
     def generate_empathy(self, text: str) -> EmotionalResponse:
-        """Generate empathy reflection for standalone emotional message."""
-        # Use a lightweight prompt for empathy generation
+        """Generate empathy reflection for standalone emotional message.
+
+        Uses temperature 0.9 for warm, varied responses.
+        """
         try:
-            messages = [
-                {"role": "system", "content": (
-                    "אתה דוגרי. המשתמש מביע רגש. "
-                    "כתוב משפט אמפתיה לפי הנוסחה: [שיקוף קצר של התחושה] + [הצהרת שותפות והתמדה]. "
-                    "מקסימום 1-2 משפטים קצרים. בלי שאלות המשך. בעברית, בגובה העיניים."
-                )},
-                {"role": "user", "content": text},
-            ]
-            response = self._analyzer.converse(messages, max_tokens=100)
-            return EmotionalResponse(empathy_reflection=response)
+            response = self._analyzer._create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": (
+                        "אתה דוגרי. המשתמש מביע רגש. "
+                        "כתוב משפט אמפתיה לפי הנוסחה: [שיקוף קצר של התחושה] + [הצהרת שותפות והתמדה]. "
+                        "מקסימום 1-2 משפטים קצרים. בלי שאלות המשך. בעברית, בגובה העיניים."
+                    )},
+                    {"role": "user", "content": text},
+                ],
+                temperature=0.9,
+                max_tokens=100,
+            )
+            return EmotionalResponse(empathy_reflection=response.choices[0].message.content or "")
         except Exception:
             logger.exception("Empathy generation failed")
             return EmotionalResponse(empathy_reflection="נשמע שקשה לך, אבל אנחנו ממשיכים ביחד.")

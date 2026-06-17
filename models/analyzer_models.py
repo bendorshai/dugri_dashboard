@@ -37,8 +37,6 @@ class MealGroup(BaseModel):
 
 class MealResult(BaseModel):
     groups: list[MealGroup]
-    emotional_context: bool = False
-    empathy_reflection: str | None = None
 
 
 class FoodPhotoResult(BaseModel):
@@ -122,8 +120,10 @@ class MainClassifierResult(BaseModel):
     """Main classifier - broad category classification only.
 
     Purely contextual (no toggle state). Four categories, no extraction.
+    Detects emotional content as a secondary signal (does not affect type).
     """
     type: Literal["meal", "habit_logger", "goals_talk", "conversation_or_question_or_feedback_or_feature_request_or_emotion_or_anything_else"]
+    emotional_context: bool = False
 
 
 class HabitLoggerResult(BaseModel):
@@ -133,8 +133,6 @@ class HabitLoggerResult(BaseModel):
     workout_note: str | None = None
     self_care_description: str | None = None
     resolved_date: str | None = None  # DD/MM/YYYY from temporal marker, None = today
-    emotional_context: bool = False
-    empathy_reflection: str | None = None
 
 
 class GoalValues(BaseModel):

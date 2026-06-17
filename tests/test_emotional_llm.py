@@ -45,10 +45,10 @@ Run with: pytest tests/test_emotional_llm.py -v -m integration
 #    This applies regardless of how many emotional messages appear in history -
 #    each message is classified by its own content, independently.
 #
-# NOTE: The Router (RouterClassification) does NOT return emotional_context
-# or empathy_reflection fields. Those are handled downstream by the
-# emotional support layer. The Router only classifies the message type
-# and extracts meal data.
+# NOTE: The main classifier (Tier 1) detects emotional_context as part of
+# its output. For meal/habit messages, classify_message() generates
+# empathy_reflection via a dedicated high-temperature call. For pure
+# emotional messages (type=emotional), empathy is handled downstream.
 #
 # EMOTIONAL SUPPORT MODES (config: emotional_support.mode):
 #
@@ -235,32 +235,31 @@ class TestEmotionalClassification:
     def test_empathy_reflection_on_pure_emotional(self):
         """Pure emotional message -> type=emotional.
 
-        Note: Router does not return empathy_reflection; that field is
-        generated downstream by the emotional support layer. This test
-        validates only the type classification.
+        Pure emotional messages go through classify_other, not meal/habit.
+        Empathy for these is generated downstream by the emotional support layer.
         """
         analyzer = _make_analyzer()
         result = _route(analyzer, "אני מרגיש רע מאוד היום")
         assert result.type == "emotional"
 
     def test_empathy_reflection_on_emotional_context_meal(self):
-        """Meal with emotional context -> type=meal.
+        """Meal with emotional context -> type=meal, emotional_context=True.
 
-        Note: Router does not return emotional_context or empathy_reflection;
-        those are handled downstream. This test validates the type classification
-        and meal data extraction.
+        The main classifier detects emotional context, and a dedicated empathy
+        call generates the empathy_reflection at high temperature.
         """
         analyzer = _make_analyzer()
         result = _route(analyzer, "אכלתי גלידה ואני שונא את עצמי")
         assert result.type == "meal"
         assert result.meal is not None
+        assert result.emotional_context is True
+        assert result.empathy_reflection is not None
 
     def test_empathy_reflection_is_one_liner(self):
         """Pure emotional distress -> type=emotional.
 
-        Note: Router does not return empathy_reflection; the one-liner
-        empathy generation is handled downstream. This test validates
-        only the type classification.
+        Pure emotional messages don't get inline empathy from the pipeline;
+        that's handled by the emotional support layer downstream.
         """
         analyzer = _make_analyzer()
         result = _route(analyzer, "אני בדיכאון כבר שבוע")

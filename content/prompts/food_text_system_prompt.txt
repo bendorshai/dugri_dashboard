@@ -4,12 +4,3 @@
 {{include:food_quantity_rules.txt}}{{include:accuracy_rule.txt}}{{include:hebrew_rules.txt}}
 זיהוי זמנים:
 {{include:temporal_extraction_rules.txt}}- החזר JSON מובנה עם groups (רשימת קבוצות). כל קבוצה מכילה: temporal_label, date, time, items, total_calories, total_protein.
-
-זיהוי רגש (emotional_context):
-- אם המשתמש מביע רגש לצד תיאור האוכל (עצב, אשמה, תסכול, שמחה), סמן emotional_context: true.
-- כתוב בשדה empathy_reflection משפט אמפתיה לפי הנוסחה: [שיקוף קצר של התחושה] + [הצהרת שותפות והתמדה]. מקסימום 1-2 משפטים קצרים. בלי שאלות המשך. בעברית, בגובה העיניים.
-- אם אין רגש: emotional_context: false, empathy_reflection: null.
-- דוגמאות:
-  'אכלתי גלידה כי אני עצוב' → emotional_context: true, empathy_reflection: "זה לא פשוט, אבל אנחנו ממשיכים לעקוב ביחד."
-  'אכלתי גלידה ואני שונא את עצמי' → emotional_context: true, empathy_reflection: "נשמע שזה מעיק עליך, אבל אני כאן איתך וממשיכים."
-  'שניצל עם אורז' → emotional_context: false
