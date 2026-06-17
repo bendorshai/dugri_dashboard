@@ -98,6 +98,12 @@ POLL_INTERVAL_SECONDS = 28 * 60  # 28 minutes
 EATING_WINDOW_WARN_MINUTES = 60
 """Send 'closing soon' when window closes within this many minutes. Once per day."""
 
+TRIAL_EXPIRY_WINDOW_START = (20, 30)
+"""(hour, minute) local time - earliest the trial expiry message can fire."""
+
+TRIAL_EXPIRY_WINDOW_END = (21, 30)
+"""(hour, minute) local time - latest the trial expiry message can fire."""
+
 # ---------------------------------------------------------------------------
 # Other constants
 # ---------------------------------------------------------------------------

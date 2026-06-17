@@ -39,6 +39,7 @@ from constants import (
 class GemResult:
     gem_id: str
     dressed_text: str
+    raw_text: str
     category: str
     pattern_key: str | None
 
@@ -240,6 +241,7 @@ class GemService:
         return GemResult(
             gem_id=gem.id,
             dressed_text=dressed_text,
+            raw_text=gem.text,
             category=gem.categories[0],
             pattern_key=pattern_key,
         )

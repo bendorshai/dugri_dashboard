@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 from constants import (
     HOOK_CONFIG,
@@ -28,6 +29,8 @@ from constants import (
     SELF_CARE_ANCHOR_DAY,
     WEEKLY_SUMMARY_ANCHOR_DAY,
     MAX_RECENT_MESSAGES,
+    TRIAL_EXPIRY_WINDOW_START,
+    TRIAL_EXPIRY_WINDOW_END,
 )
 from models.profile import User, ToggleState
 from parsing import parse_time_window
@@ -103,6 +106,10 @@ def schedule_global_poller(
     trial_service=None,
     feedback_service=None,
     landing_page_url: str = "",
+    analyzer=None,
+    sleep_repo=None,
+    workout_repo=None,
+    self_care_repo=None,
 ):
     """Schedule the single unified polling loop.
 
@@ -136,6 +143,10 @@ def schedule_global_poller(
             "trial_service": trial_service,
             "feedback_service": feedback_service,
             "landing_page_url": landing_page_url,
+            "analyzer": analyzer,
+            "sleep_repo": sleep_repo,
+            "workout_repo": workout_repo,
+            "self_care_repo": self_care_repo,
         },
     )
     logger.info(
@@ -170,6 +181,10 @@ async def _global_tick(context):
     feedback_service = data.get("feedback_service")
     gem_service = data.get("gem_service")
     landing_page_url = data.get("landing_page_url", "")
+    analyzer = data.get("analyzer")
+    sleep_repo = data.get("sleep_repo")
+    workout_repo = data.get("workout_repo")
+    self_care_repo = data.get("self_care_repo")
 
     for profile in all_users:
         if not profile.telegram_user_id:
@@ -179,10 +194,16 @@ async def _global_tick(context):
             if trial_service:
                 await _check_trial_expiry_message(
                     context, profile, user_repo, toggle_service,
-                    trial_service, gem_service, feedback_service,
+                    trial_service,
+                    analyzer=analyzer,
+                    gem_service=gem_service,
+                    feedback_service=feedback_service,
                     admin_chat_id=admin_chat_id,
                     landing_page_url=landing_page_url,
                     food_repo=food_repo,
+                    sleep_repo=sleep_repo,
+                    workout_repo=workout_repo,
+                    self_care_repo=self_care_repo,
                 )
         except Exception:
             logger.exception("Trial expiry check failed for user %d", profile.telegram_user_id)
@@ -200,13 +221,97 @@ async def _global_tick(context):
 # Trial expiry proactive message
 # ---------------------------------------------------------------------------
 
+def _in_trial_expiry_window(clock: UserClock) -> bool:
+    """Check if current local time is within the trial expiry window."""
+    local_now = clock.now()
+    current = (local_now.hour, local_now.minute)
+    return TRIAL_EXPIRY_WINDOW_START <= current < TRIAL_EXPIRY_WINDOW_END
+
+
+def _compute_trial_stats(profile, food_repo, sleep_repo=None,
+                         workout_repo=None, self_care_repo=None) -> dict:
+    """Compute trial-period statistics for the expiry message.
+
+    All averages are computed over active days only (days with at least one entry).
+    """
+    from services.feedback_service import FeedbackService
+
+    tid = profile.telegram_user_id
+    started = profile.trial_started_at
+    now = datetime.now(timezone.utc)
+
+    # Generate trial date range as DD/MM/YYYY strings
+    start_date = started.date() if hasattr(started, 'date') else started
+    end_date = now.date() if hasattr(now, 'date') else now
+    trial_duration = (end_date - start_date).days + 1
+    trial_dates = [
+        (start_date + timedelta(days=i)).strftime("%d/%m/%Y")
+        for i in range(trial_duration)
+    ]
+    trial_date_set = set(trial_dates)
+
+    # --- Food stats ---
+    avg_daily_calories = 0
+    avg_daily_protein = 0
+    active_food_days = 0
+
+    if food_repo:
+        food_entries = food_repo.get_by_user_and_dates(tid, trial_dates)
+        by_date = defaultdict(lambda: {"calories": 0, "protein": 0})
+        for e in food_entries:
+            by_date[e.date]["calories"] += e.calories
+            by_date[e.date]["protein"] += e.protein
+        active_food_days = len(by_date)
+        if active_food_days > 0:
+            total_cal = sum(d["calories"] for d in by_date.values())
+            total_prot = sum(d["protein"] for d in by_date.values())
+            avg_daily_calories = round(total_cal / active_food_days)
+            avg_daily_protein = round(total_prot / active_food_days)
+
+    # --- Workout stats ---
+    total_workouts = 0
+    if workout_repo:
+        all_workouts = workout_repo.get_recent(tid, limit=100)
+        total_workouts = sum(1 for w in all_workouts if w.date in trial_date_set)
+
+    # --- Sleep stats ---
+    avg_sleep_time = None
+    if sleep_repo:
+        all_sleep = sleep_repo.get_recent(tid, limit=100)
+        trial_sleep_times = [s.sleep_time for s in all_sleep if s.date in trial_date_set]
+        if trial_sleep_times:
+            avg_sleep_time = FeedbackService._avg_time(trial_sleep_times)
+
+    # --- Self-care stats ---
+    self_care_count = 0
+    if self_care_repo:
+        all_sc = self_care_repo.get_recent(tid, limit=100)
+        self_care_count = sum(1 for sc in all_sc if sc.date in trial_date_set)
+
+    return {
+        "trial_duration_days": trial_duration,
+        "active_food_days": active_food_days,
+        "avg_daily_calories": avg_daily_calories,
+        "avg_daily_protein": avg_daily_protein,
+        "target_calories": profile.targets.calories,
+        "target_protein": profile.targets.protein,
+        "total_workouts": total_workouts,
+        "target_workouts_per_week": profile.targets.workouts_per_week,
+        "avg_sleep_time": avg_sleep_time,
+        "target_sleep_time": profile.targets.sleep_time,
+        "self_care_count": self_care_count,
+    }
+
+
 async def _check_trial_expiry_message(
     context, profile, user_repo, toggle_service,
-    trial_service, gem_service=None, feedback_service=None,
+    trial_service, analyzer=None,
+    gem_service=None, feedback_service=None,
     admin_chat_id: int = 0, landing_page_url: str = "",
-    food_repo=None, now_override=None,
+    food_repo=None, sleep_repo=None, workout_repo=None, self_care_repo=None,
+    now_override=None,
 ):
-    """Send a one-time celebratory message when a user's trial expires at 19:00."""
+    """Send a one-time celebratory message when trial expires (20:30-21:30 local)."""
     import messages as M
     from keyboards import make_trial_cta_keyboard
 
@@ -218,40 +323,59 @@ async def _check_trial_expiry_message(
     tid = profile.telegram_user_id
     clock = UserClock(profile.timezone, _now_override=now_override)
 
-    # Check if trial has expired
+    # Only fire within the 20:30-21:30 local window
+    if not _in_trial_expiry_window(clock):
+        return
+
+    # Expire the trial (flips status to trial_ended)
     just_expired = trial_service.check_and_expire(profile, clock.now())
     if not just_expired:
         return
 
-    # Build the celebratory message
-    parts = []
+    # Gather data for the LLM
+    celebration_text = M.TRIAL_EXPIRY_CELEBRATION
+    stats = _compute_trial_stats(
+        profile, food_repo, sleep_repo, workout_repo, self_care_repo,
+    )
 
-    # 1. Celebration text
-    try:
-        celebration_text = M.TRIAL_EXPIRY_CELEBRATION
-    except AttributeError:
-        celebration_text = "הניסיון שלך עם דוגרי הסתיים. תודה שנתת לזה צ'אנס."
-    parts.append(celebration_text)
-
-    # 2. Most relevant wisdom gem
+    # Get raw gem text
+    gem_raw_text = None
     if gem_service:
         try:
             gem_result = gem_service.select_best_gem(profile, clock)
             if gem_result:
-                parts.append(f"\n{gem_result.dressed_text}")
+                gem_raw_text = gem_result.raw_text
         except Exception:
-            logger.exception("Failed to select gem for trial expiry message (user %d)", tid)
+            logger.exception("Failed to select gem for trial expiry (user %d)", tid)
 
-    # 3. Weekly report
+    # Get weekly report
+    weekly_report = None
     if feedback_service:
         try:
-            report = feedback_service.give_feedback(tid, profile)
-            if report:
-                parts.append(f"\n{report}")
+            today_str = clock.now().strftime("%d/%m/%Y")
+            weekly_report = feedback_service.give_feedback(
+                tid, today_str, profile, is_first_feedback=False,
+            )
         except Exception:
             logger.exception("Failed to generate weekly report for trial expiry (user %d)", tid)
 
-    text = "\n".join(parts)
+    # Single LLM call to compose the full message
+    text = celebration_text  # fallback
+    if analyzer:
+        try:
+            llm_text = analyzer.generate_trial_expiry_message(
+                celebration_text=celebration_text,
+                trial_stats=stats,
+                gem_text=gem_raw_text,
+                weekly_report=weekly_report,
+                name=profile.name or "",
+                gender=profile.gender or "male",
+            )
+            if llm_text:
+                text = llm_text
+        except Exception:
+            logger.exception("Trial expiry LLM call failed (user %d), using fallback", tid)
+
     keyboard = make_trial_cta_keyboard(landing_page_url)
 
     await _send_and_save(
