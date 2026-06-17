@@ -21,7 +21,7 @@ from keyboards import (
     make_profile_keyboard, make_settings_keyboard,
     make_food_entry_keyboard, format_daily_status,
     make_emotional_support_keyboard, make_emotional_creator_keyboard,
-    CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
+    CB_MENU, CB_PROFILE, CB_EDIT_FIELD,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_WEEKLY, CB_DAILY, CB_BACK,
     CB_FEEDBACK, CB_EMOTIONAL, CB_FEATURE,
     CB_SLEEP_EDIT, CB_SLEEP_DELETE,
@@ -177,47 +177,6 @@ class CallbackHandler:
         }
 
         await query.edit_message_text(f"שלח ערך חדש עבור {label}:")
-
-    async def handle_suggest_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query = update.callback_query
-        if not query:
-            return
-        await safe_answer(query)
-
-        tid = update.effective_user.id
-        self.ctx._setup_token_tracking(tid)
-
-        profile = self.ctx._get_profile(tid)
-        if profile is None:
-            return
-
-        stats_date = self.ctx.eating_day_svc.get_stats_date(profile, get_user_now(profile.timezone))
-        total_cal, total_protein = self.ctx.eating_day_svc.get_eating_day_totals(profile, stats_date)
-        entries = self.ctx.eating_day_svc.get_eating_day_entries(profile, stats_date)
-
-        target_cal = self.ctx._target_cal(profile)
-        target_prot = self.ctx._target_prot(profile)
-        remaining_cal = max(0, target_cal - total_cal)
-        remaining_prot = max(0, target_prot - total_protein)
-
-        today_text = "\n".join(
-            f"- {e.description}: {e.calories} קל׳, {e.protein} גרם חלבון"
-            for e in entries
-        ) or "עדיין לא אכלת היום"
-
-        await query.edit_message_text("🤔 מחפש הצעות...")
-
-        suggestions = self.ctx.analyzer.suggest_meals(remaining_cal, remaining_prot, today_text)
-        if suggestions:
-            await query.edit_message_text(
-                f"🍽 הצעות ארוחה:\n\n{suggestions}",
-                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
-            )
-        else:
-            await query.edit_message_text(
-                "לא הצלחתי להציע ארוחות. נסה שוב.",
-                reply_markup=make_daily_summary_keyboard(self.ctx.landing_page_url),
-            )
 
     async def handle_ask_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query

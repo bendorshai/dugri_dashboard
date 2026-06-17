@@ -51,7 +51,6 @@ from prompts import (
     FOOD_PHOTO_SYSTEM_PROMPT,
     FOOD_TEXT_SYSTEM_PROMPT,
     GEM_DRESSING_PROMPT,
-    MEAL_SUGGESTION_SYSTEM_PROMPT,
     QA_SYSTEM_PROMPT,
     MAIN_CLASSIFIER_PROMPT,
     HABIT_LOGGER_PROMPT,
@@ -572,33 +571,6 @@ class FoodAnalyzer:
             logger.exception("GPT gem dressing failed")
             return gem_text  # fallback to raw gem text
 
-    def suggest_meals(
-        self,
-        remaining_calories: int,
-        remaining_protein: int,
-        today_entries: str,
-        on_usage: TokenCallback | None = None,
-    ) -> str:
-        user_msg = (
-            f"נותרו היום: {remaining_calories} קלוריות, {remaining_protein}g חלבון\n"
-            f"מה שנאכל היום:\n{today_entries}"
-        )
-        try:
-            response = self._create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": MEAL_SUGGESTION_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_msg},
-                ],
-                temperature=0.7,
-                max_tokens=1000,
-                on_usage=on_usage,
-            )
-            return response.choices[0].message.content.strip()
-        except Exception:
-            logger.exception("GPT meal suggestions failed")
-            return ""
-
     def answer_question(
         self,
         question: str,
@@ -750,7 +722,7 @@ class FoodAnalyzer:
         kwargs: dict = dict(
             model="gpt-4o-mini",
             messages=messages,
-            temperature=0.3,
+            temperature=0.6,
             max_tokens=max_tokens,
         )
         if tools:

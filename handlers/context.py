@@ -32,7 +32,7 @@ from keyboards import (
     make_profile_keyboard, make_settings_keyboard,
     make_food_edit_keyboard, make_food_entry_keyboard, format_daily_status,
     make_emotional_support_keyboard, make_emotional_creator_keyboard,
-    CB_MENU, CB_PROFILE, CB_EDIT_FIELD, CB_SUGGEST,
+    CB_MENU, CB_PROFILE, CB_EDIT_FIELD,
     CB_ASK, CB_FOOD_EDIT, CB_FOOD_DELETE, CB_FOOD_AGAIN, CB_WEEKLY, CB_DAILY, CB_BACK,
     CB_FEEDBACK, CB_EMOTIONAL,
 )
