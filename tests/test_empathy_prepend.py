@@ -40,16 +40,16 @@ class TestPrependEmpathy:
         result = RouterClassification(
             type="sleep",
             emotional_context=True,
-            empathy_reflection="נשמע שזה מעיק עליך.",
+            empathy_reflection="נשמע שזה מעיק עליך, אבל אני כאן איתך וממשיכים.",
         )
         text = "רשמתי שינה ב-01:00."
         output = handler._prepend_empathy(text, result)
-        assert output == "נשמע שזה מעיק עליך.\n\nרשמתי שינה ב-01:00."
+        assert output == "נשמע שזה מעיק עליך, אבל אני כאן איתך וממשיכים.\n\nרשמתי שינה ב-01:00."
 
     def test_emotion_without_reflection_uses_fallback(self):
         """When emotional_context is True but no reflection, use static fallback."""
         emo_svc = MagicMock()
-        emo_svc.get_inline_empathy.return_value = "שמעתי."
+        emo_svc.get_inline_empathy.return_value = "שמעתי, ואנחנו ממשיכים ביחד."
         handler = self._make_handler(emotional_support_service=emo_svc)
         result = RouterClassification(
             type="workout",
@@ -58,7 +58,7 @@ class TestPrependEmpathy:
         )
         text = "רשמתי אימון."
         output = handler._prepend_empathy(text, result)
-        assert output == "שמעתי.\n\nרשמתי אימון."
+        assert output == "שמעתי, ואנחנו ממשיכים ביחד.\n\nרשמתי אימון."
         emo_svc.get_inline_empathy.assert_called_once()
 
     def test_emotion_no_reflection_no_service_returns_unchanged(self):
@@ -78,9 +78,9 @@ class TestPrependEmpathy:
         result = RouterClassification(
             type="meal",
             emotional_context=True,
-            empathy_reflection="נשמע שקשה לך עם זה.",
+            empathy_reflection="זה לא פשוט, אבל אנחנו ממשיכים לעקוב ביחד.",
         )
         text = "• גלידה\n  ~150 גרם | 300 קל׳ | 5 גרם חלבון"
         output = handler._prepend_empathy(text, result)
-        assert output.startswith("נשמע שקשה לך עם זה.\n\n")
+        assert output.startswith("זה לא פשוט, אבל אנחנו ממשיכים לעקוב ביחד.\n\n")
         assert "גלידה" in output

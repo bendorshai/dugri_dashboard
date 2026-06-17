@@ -20,8 +20,9 @@ test_emotional_habit_classifier.py - LLM tests for emotional context detection i
 # This is DIFFERENT from pure emotional messages (no habit data) which go
 # through the "emotional" classification and get therapist referral.
 #
-# Empathy reflection style: Carl Rogers, one sentence, reflection only,
-# no advice, no solution, Hebrew, Dugri tone (direct, at eye level).
+# Empathy reflection style: [short reflection of feeling] + [partnership &
+# persistence statement]. Max 1-2 sentences, no follow-up questions.
+# Hebrew, Dugri tone (direct, at eye level).
 # ============================================================================
 """
 

@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.1.0"
-VERSION_NOTES = "Add /internal/simulate-tick endpoint for on-demand scheduler testing with fake clock"
+VERSION = "11.1.1"
+VERSION_NOTES = "Empathy phrases: add partnership + persistence closure to bridge emotion to tracking"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

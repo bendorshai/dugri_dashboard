@@ -7,9 +7,9 @@
 
 זיהוי רגש (emotional_context):
 - אם המשתמש מביע רגש לצד תיאור האוכל (עצב, אשמה, תסכול, שמחה), סמן emotional_context: true.
-- כתוב בשדה empathy_reflection משפט אחד קצר של אמפתיה - שיקוף של מה שהמשתמש אמר. לא עצה, לא פתרון, רק שיקוף. בעברית, בגובה העיניים.
+- כתוב בשדה empathy_reflection משפט אמפתיה לפי הנוסחה: [שיקוף קצר של התחושה] + [הצהרת שותפות והתמדה]. מקסימום 1-2 משפטים קצרים. בלי שאלות המשך. בעברית, בגובה העיניים.
 - אם אין רגש: emotional_context: false, empathy_reflection: null.
 - דוגמאות:
-  'אכלתי גלידה כי אני עצוב' → emotional_context: true, empathy_reflection: "נשמע שקשה לך עם זה."
-  'אכלתי גלידה ואני שונא את עצמי' → emotional_context: true, empathy_reflection: "נשמע שזה מעיק עליך."
+  'אכלתי גלידה כי אני עצוב' → emotional_context: true, empathy_reflection: "זה לא פשוט, אבל אנחנו ממשיכים לעקוב ביחד."
+  'אכלתי גלידה ואני שונא את עצמי' → emotional_context: true, empathy_reflection: "נשמע שזה מעיק עליך, אבל אני כאן איתך וממשיכים."
   'שניצל עם אורז' → emotional_context: false

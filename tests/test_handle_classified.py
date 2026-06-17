@@ -930,7 +930,7 @@ class TestLoggerService:
         svc = LoggerService(analyzer)
 
         result = svc.generate_empathy("אני מרגיש רע")
-        assert result.empathy_reflection == "נשמע שקשה לך."
+        assert result.empathy_reflection == "נשמע שקשה לך, אבל אנחנו ממשיכים ביחד."
 
 
 # ---------------------------------------------------------------------------

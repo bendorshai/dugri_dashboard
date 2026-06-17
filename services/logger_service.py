@@ -86,8 +86,8 @@ class LoggerService:
             messages = [
                 {"role": "system", "content": (
                     "אתה דוגרי. המשתמש מביע רגש. "
-                    "כתוב משפט אחד קצר של אמפתיה - שיקוף של מה שהמשתמש אמר. "
-                    "לא עצה, לא פתרון, רק שיקוף. בעברית, בגובה העיניים."
+                    "כתוב משפט אמפתיה לפי הנוסחה: [שיקוף קצר של התחושה] + [הצהרת שותפות והתמדה]. "
+                    "מקסימום 1-2 משפטים קצרים. בלי שאלות המשך. בעברית, בגובה העיניים."
                 )},
                 {"role": "user", "content": text},
             ]
@@ -95,7 +95,7 @@ class LoggerService:
             return EmotionalResponse(empathy_reflection=response)
         except Exception:
             logger.exception("Empathy generation failed")
-            return EmotionalResponse(empathy_reflection="נשמע שקשה לך.")
+            return EmotionalResponse(empathy_reflection="נשמע שקשה לך, אבל אנחנו ממשיכים ביחד.")
 
     def classify_feature_request(self, text: str) -> FeatureRequestClassification:
         """Classify feature request sub-type and generate Dugri-tone ack."""
