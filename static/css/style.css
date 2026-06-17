@@ -2157,6 +2157,34 @@ a:hover {
     transform: rotate(-90deg);
 }
 
+/* Toggle blocks with inline goals */
+.sim-toggle-block {
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--bg-alt);
+}
+
+.sim-toggle-block:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.sim-toggle-goals {
+    padding: 0.25rem 0 0 0;
+    margin-top: 0.25rem;
+    transition: opacity 0.15s;
+}
+
+.sim-toggle-goals .sim-field {
+    margin-bottom: 0.25rem;
+}
+
+.sim-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
 /* Hook schedule display */
 .sim-hook-schedule {
     margin-top: 0.5rem;

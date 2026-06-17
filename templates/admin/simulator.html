@@ -59,10 +59,10 @@
                 </div>
             </div>
 
-            <!-- Profile & Targets -->
+            <!-- Profile -->
             <div class="sim-card">
                 <h4 class="sim-card-header" @click="panels.profile = !panels.profile">
-                    Profile & Targets <span class="sim-collapse-icon" :class="{ open: panels.profile }">&#9660;</span>
+                    Profile <span class="sim-collapse-icon" :class="{ open: panels.profile }">&#9660;</span>
                 </h4>
                 <div x-show="panels.profile" x-transition.duration.150ms>
                     <div class="sim-field sim-field--row">
@@ -98,68 +98,185 @@
                                @change="saveField('birth_year', $event.target.value ? new Date().getFullYear() - parseInt($event.target.value) : null)"
                                placeholder="-">
                     </div>
-                    <div class="sim-field sim-field--row">
-                        <label>Cal Target</label>
-                        <input type="number" class="sim-input--inline"
-                               :value="state.targets && state.targets.calories"
-                               @change="saveField('targets.calories', parseInt($event.target.value) || null)" placeholder="-">
-                    </div>
-                    <div class="sim-field sim-field--row">
-                        <label>Protein</label>
-                        <input type="number" class="sim-input--inline"
-                               :value="state.targets && state.targets.protein"
-                               @change="saveField('targets.protein', parseInt($event.target.value) || null)" placeholder="-">
-                        <span class="sim-unit">g</span>
-                    </div>
-                    <div class="sim-field sim-field--row">
-                        <label>Goal</label>
-                        <select class="sim-input--inline"
-                                :value="state.targets && state.targets.weight_goal"
-                                @change="saveField('targets.weight_goal', $event.target.value || null)">
-                            <option value="">-</option>
-                            <option value="lose">lose</option>
-                            <option value="maintain">maintain</option>
-                            <option value="gain">gain</option>
-                        </select>
-                    </div>
-                    <div class="sim-field sim-field--row">
-                        <label>Eat Window</label>
-                        <input type="time" class="sim-input--inline sim-input--time"
-                               :value="state.eating_window && state.eating_window.start"
-                               @change="saveEatingWindow('start', $event.target.value)">
-                        <span class="sim-unit">-</span>
-                        <input type="time" class="sim-input--inline sim-input--time"
-                               :value="state.eating_window && state.eating_window.end"
-                               @change="saveEatingWindow('end', $event.target.value)">
-                    </div>
                 </div>
             </div>
 
-            <!-- Toggles -->
+            <!-- Toggles & Goals -->
             <div class="sim-card">
                 <h4 class="sim-card-header" @click="panels.toggles = !panels.toggles">
-                    Toggles <span class="sim-collapse-icon" :class="{ open: panels.toggles }">&#9660;</span>
+                    Toggles & Goals <span class="sim-collapse-icon" :class="{ open: panels.toggles }">&#9660;</span>
                 </h4>
                 <div x-show="panels.toggles" x-transition.duration.150ms>
-                    <template x-for="name in toggleNames" :key="name">
+
+                    <!-- nutrition -->
+                    <div class="sim-toggle-block">
                         <div class="sim-toggle-row">
-                            <span class="sim-toggle-name" x-text="name"></span>
-                            <select x-model="state.toggles[name].status"
-                                    @change="saveToggle(name)">
+                            <span class="sim-toggle-name">nutrition</span>
+                            <select x-model="state.toggles.nutrition.status" @change="saveToggle('nutrition')">
                                 <option value="dormant">dormant</option>
                                 <option value="active">active</option>
                                 <option value="cancelled">cancelled</option>
                             </select>
-                            <select x-model="state.toggles[name].goal_status"
-                                    @change="saveToggle(name)"
-                                    class="sim-select--sm">
+                            <select x-model="state.toggles.nutrition.goal_status" @change="saveToggle('nutrition')" class="sim-select--sm">
                                 <option value="pending">goal: pending</option>
                                 <option value="set">goal: set</option>
                                 <option value="declined">goal: declined</option>
                                 <option value="remind">goal: remind</option>
                             </select>
                         </div>
-                    </template>
+                        <div class="sim-toggle-goals" :class="{ 'sim-disabled': state.toggles.nutrition.status !== 'active' }">
+                            <div class="sim-field sim-field--row">
+                                <label>Cal</label>
+                                <input type="number" class="sim-input--inline"
+                                       :value="state.targets && state.targets.calories"
+                                       :disabled="state.toggles.nutrition.status !== 'active'"
+                                       @change="saveField('targets.calories', parseInt($event.target.value) || null)" placeholder="-">
+                            </div>
+                            <div class="sim-field sim-field--row">
+                                <label>Prot</label>
+                                <input type="number" class="sim-input--inline"
+                                       :value="state.targets && state.targets.protein"
+                                       :disabled="state.toggles.nutrition.status !== 'active'"
+                                       @change="saveField('targets.protein', parseInt($event.target.value) || null)" placeholder="-">
+                                <span class="sim-unit">g</span>
+                            </div>
+                            <div class="sim-field sim-field--row">
+                                <label>Goal</label>
+                                <select class="sim-input--inline"
+                                        :value="state.targets && state.targets.weight_goal"
+                                        :disabled="state.toggles.nutrition.status !== 'active'"
+                                        @change="saveField('targets.weight_goal', $event.target.value || null)">
+                                    <option value="">-</option>
+                                    <option value="lose">lose</option>
+                                    <option value="maintain">maintain</option>
+                                    <option value="gain">gain</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- eating_window -->
+                    <div class="sim-toggle-block">
+                        <div class="sim-toggle-row">
+                            <span class="sim-toggle-name">eating_window</span>
+                            <select x-model="state.toggles.eating_window.status" @change="saveToggle('eating_window')">
+                                <option value="dormant">dormant</option>
+                                <option value="active">active</option>
+                                <option value="cancelled">cancelled</option>
+                            </select>
+                            <select x-model="state.toggles.eating_window.goal_status" @change="saveToggle('eating_window')" class="sim-select--sm">
+                                <option value="pending">goal: pending</option>
+                                <option value="set">goal: set</option>
+                                <option value="declined">goal: declined</option>
+                                <option value="remind">goal: remind</option>
+                            </select>
+                        </div>
+                        <div class="sim-toggle-goals" :class="{ 'sim-disabled': state.toggles.eating_window.status !== 'active' }">
+                            <div class="sim-field sim-field--row">
+                                <label>Window</label>
+                                <input type="time" class="sim-input--inline sim-input--time"
+                                       :value="state.eating_window && state.eating_window.start"
+                                       :disabled="state.toggles.eating_window.status !== 'active'"
+                                       @change="saveEatingWindow('start', $event.target.value)">
+                                <span class="sim-unit">-</span>
+                                <input type="time" class="sim-input--inline sim-input--time"
+                                       :value="state.eating_window && state.eating_window.end"
+                                       :disabled="state.toggles.eating_window.status !== 'active'"
+                                       @change="saveEatingWindow('end', $event.target.value)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- sleep -->
+                    <div class="sim-toggle-block">
+                        <div class="sim-toggle-row">
+                            <span class="sim-toggle-name">sleep</span>
+                            <select x-model="state.toggles.sleep.status" @change="saveToggle('sleep')">
+                                <option value="dormant">dormant</option>
+                                <option value="active">active</option>
+                                <option value="cancelled">cancelled</option>
+                            </select>
+                            <select x-model="state.toggles.sleep.goal_status" @change="saveToggle('sleep')" class="sim-select--sm">
+                                <option value="pending">goal: pending</option>
+                                <option value="set">goal: set</option>
+                                <option value="declined">goal: declined</option>
+                                <option value="remind">goal: remind</option>
+                            </select>
+                        </div>
+                        <div class="sim-toggle-goals" :class="{ 'sim-disabled': state.toggles.sleep.status !== 'active' }">
+                            <div class="sim-field sim-field--row">
+                                <label>Sleep by</label>
+                                <input type="time" class="sim-input--inline sim-input--time"
+                                       :value="state.targets && state.targets.sleep_time"
+                                       :disabled="state.toggles.sleep.status !== 'active'"
+                                       @change="saveField('targets.sleep_time', $event.target.value || null)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- workouts -->
+                    <div class="sim-toggle-block">
+                        <div class="sim-toggle-row">
+                            <span class="sim-toggle-name">workouts</span>
+                            <select x-model="state.toggles.workouts.status" @change="saveToggle('workouts')">
+                                <option value="dormant">dormant</option>
+                                <option value="active">active</option>
+                                <option value="cancelled">cancelled</option>
+                            </select>
+                            <select x-model="state.toggles.workouts.goal_status" @change="saveToggle('workouts')" class="sim-select--sm">
+                                <option value="pending">goal: pending</option>
+                                <option value="set">goal: set</option>
+                                <option value="declined">goal: declined</option>
+                                <option value="remind">goal: remind</option>
+                            </select>
+                        </div>
+                        <div class="sim-toggle-goals" :class="{ 'sim-disabled': state.toggles.workouts.status !== 'active' }">
+                            <div class="sim-field sim-field--row">
+                                <label>Per week</label>
+                                <input type="number" class="sim-input--inline" min="1" max="7"
+                                       :value="state.targets && state.targets.workouts_per_week"
+                                       :disabled="state.toggles.workouts.status !== 'active'"
+                                       @change="saveField('targets.workouts_per_week', parseInt($event.target.value) || null)" placeholder="-">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- self_care -->
+                    <div class="sim-toggle-block">
+                        <div class="sim-toggle-row">
+                            <span class="sim-toggle-name">self_care</span>
+                            <select x-model="state.toggles.self_care.status" @change="saveToggle('self_care')">
+                                <option value="dormant">dormant</option>
+                                <option value="active">active</option>
+                                <option value="cancelled">cancelled</option>
+                            </select>
+                            <select x-model="state.toggles.self_care.goal_status" @change="saveToggle('self_care')" class="sim-select--sm">
+                                <option value="pending">goal: pending</option>
+                                <option value="set">goal: set</option>
+                                <option value="declined">goal: declined</option>
+                                <option value="remind">goal: remind</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- weekly_summary -->
+                    <div class="sim-toggle-block">
+                        <div class="sim-toggle-row">
+                            <span class="sim-toggle-name">weekly_summary</span>
+                            <select x-model="state.toggles.weekly_summary.status" @change="saveToggle('weekly_summary')">
+                                <option value="dormant">dormant</option>
+                                <option value="active">active</option>
+                                <option value="cancelled">cancelled</option>
+                            </select>
+                            <select x-model="state.toggles.weekly_summary.goal_status" @change="saveToggle('weekly_summary')" class="sim-select--sm">
+                                <option value="pending">goal: pending</option>
+                                <option value="set">goal: set</option>
+                                <option value="declined">goal: declined</option>
+                                <option value="remind">goal: remind</option>
+                            </select>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
