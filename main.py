@@ -25,8 +25,8 @@ from repositories.token_log_repository import TokenLogRepository
 from services.eating_day_service import EatingDayService
 from bot import create_bot
 
-VERSION = "11.2.1"
-VERSION_NOTES = "Simulator: reply-to-message support in /internal/simulate"
+VERSION = "11.3.0"
+VERSION_NOTES = "Revamp trial expiry message: single LLM call with stats, gem, weekly insights; 20:30-21:30 window"
 CONFIG_PATH = Path(__file__).parent / "config" / "config.json"
 
 logging.basicConfig(

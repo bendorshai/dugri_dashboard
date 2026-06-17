@@ -73,6 +73,11 @@ class WeeklyFeedbackResult(BaseModel):
     pattern_summary: str | None = None
 
 
+class TrialExpiryCelebrationResult(BaseModel):
+    """Structured output for the trial expiry celebration message."""
+    message_text: str
+
+
 class NormalizedActivity(BaseModel):
     """GPT output for self-care activity normalization."""
     activity_name: str

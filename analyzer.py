@@ -30,6 +30,7 @@ from models.analyzer_models import (  # noqa: E402, F401
     CorrectionFoodItem,
     CorrectionResult,
     WeeklyFeedbackResult,
+    TrialExpiryCelebrationResult,
     NormalizedActivity,
     HabitEntry,
     RouterClassification,
@@ -59,6 +60,7 @@ from prompts import (
     TARGET_SUGGESTION_SYSTEM_PROMPT,
     ENHANCED_WEEKLY_SUMMARY_PROMPT,
     NORMALIZE_SELF_CARE_PROMPT,
+    TRIAL_EXPIRY_MESSAGE_PROMPT,
 )
 
 _EXTRACTION_PROMPTS = {
@@ -774,3 +776,47 @@ class FoodAnalyzer:
             on_usage=on_usage,
         )
         return response.choices[0].message.content
+
+    def generate_trial_expiry_message(
+        self,
+        celebration_text: str,
+        trial_stats: dict,
+        gem_text: str | None = None,
+        weekly_report: str | None = None,
+        name: str = "",
+        gender: str = "male",
+        on_usage: TokenCallback | None = None,
+    ) -> str:
+        """Generate a cohesive trial expiry celebration message via GPT-4o.
+
+        Combines celebration text, trial-period stats, wisdom gem, and weekly
+        report into one flowing Dugri-toned message.
+        """
+        gender_suffix = "ה" if gender == "female" else ""
+        user_msg = json.dumps({
+            "celebration_text": celebration_text,
+            "trial_stats": trial_stats,
+            "gem_text": gem_text,
+            "weekly_report": weekly_report,
+            "name": name or "לא ידוע",
+            "gender_suffix": gender_suffix,
+        }, ensure_ascii=False, indent=1)
+
+        try:
+            response = self._parse(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": TRIAL_EXPIRY_MESSAGE_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format=TrialExpiryCelebrationResult,
+                temperature=0.8,
+                on_usage=on_usage,
+            )
+            result = response.choices[0].message.parsed
+            if result and result.message_text:
+                return result.message_text
+            return celebration_text
+        except Exception:
+            logger.exception("GPT trial expiry message generation failed")
+            return celebration_text

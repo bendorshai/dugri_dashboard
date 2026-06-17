@@ -236,6 +236,10 @@ def create_bot(
         trial_service=trial_service,
         feedback_service=feedback_service,
         landing_page_url=landing_page_url,
+        analyzer=analyzer,
+        sleep_repo=sleep_repo,
+        workout_repo=workout_repo,
+        self_care_repo=self_care_repo,
     )
 
     return app
