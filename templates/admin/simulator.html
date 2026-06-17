@@ -432,74 +432,153 @@
                 </div>
             </div>
 
-            <!-- Entry History -->
+            <!-- Entry History (same markup as history page, read-only) -->
             <div class="sim-history">
                 <h3 class="sim-panel-title">Entry History</h3>
                 <div x-show="historyLoading" class="sim-history-loading">Loading...</div>
                 <div x-show="!historyLoading && historyDays.length === 0" class="sim-history-empty">No entries yet</div>
                 <template x-for="(day, index) in historyDays" :key="day.date">
-                    <div class="history-day-card"
-                         x-show="day.meals.length || day.workouts.length || day.sleep || (day.self_care && day.self_care.length)">
+                    <div class="history-day-card">
+                        <!-- Day header -->
                         <div class="day-card-header" @click="historyOpen[index] = !historyOpen[index]">
+                            <span class="day-card-date-emoji">📅</span>
                             <span class="day-card-date" x-text="day.date_display"></span>
                             <div class="day-card-badges">
-                                <span class="day-badge day-badge--cal" x-show="day.meals_total.calories > 0" x-text="day.meals_total.calories + ' cal'"></span>
-                                <span class="day-badge day-badge--prot" x-show="day.meals_total.protein > 0" x-text="day.meals_total.protein + 'g'"></span>
-                                <span class="day-badge day-badge--workout" x-show="day.workouts.length > 0">&#127947;</span>
+                                <span class="day-badge day-badge--cal" x-show="day.meals_total.calories > 0"
+                                      x-text="day.meals_total.calories + ' קל\''"></span>
+                                <span class="day-badge day-badge--prot" x-show="day.meals_total.protein > 0"
+                                      x-text="day.meals_total.protein + 'g'"></span>
+                                <span class="day-badge day-badge--workout" x-show="day.workouts.length > 0">🏋️</span>
                             </div>
-                            <span class="day-card-toggle" :class="{ open: historyOpen[index] }">&#9660;</span>
+                            <span class="day-card-toggle" :class="{ open: historyOpen[index] }">▼</span>
                         </div>
+
+                        <!-- Day body -->
                         <div class="day-card-body" x-show="historyOpen[index]" x-transition.duration.200ms>
-                            <div class="history-section" x-show="day.meals.length">
+
+                            <!-- Meals -->
+                            <div class="history-section">
                                 <div class="history-section-title history-section-title--meals">
-                                    <span class="history-section-emoji">&#127869;</span><span>Meals</span>
+                                    <span class="history-section-emoji">🍽️</span>
+                                    <span>ארוחות</span>
                                 </div>
-                                <div class="meals-table-wrap">
-                                    <table class="meals-table">
-                                        <thead><tr><th>Time</th><th>Description</th><th>Cal</th><th>Protein</th></tr></thead>
-                                        <tbody>
+                                <template x-if="day.meals.length > 0">
+                                    <div>
+                                        <div class="meals-table-wrap">
+                                            <table class="meals-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>שעה</th>
+                                                        <th>תיאור</th>
+                                                        <th>קלוריות</th>
+                                                        <th>חלבון</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <template x-for="meal in day.meals" :key="meal.id">
+                                                        <tr :class="{ 'meal-out-of-window': !meal.within_window }">
+                                                            <td class="meal-time" x-text="meal.time"></td>
+                                                            <td class="meal-desc" x-text="meal.description"></td>
+                                                            <td class="meal-cal" x-text="meal.calories"></td>
+                                                            <td class="meal-prot" x-text="meal.protein + 'g'"></td>
+                                                        </tr>
+                                                    </template>
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        <!-- Mobile cards -->
+                                        <div class="meals-mobile">
                                             <template x-for="meal in day.meals" :key="meal.id">
-                                                <tr :class="{ 'meal-out-of-window': !meal.within_window }">
-                                                    <td class="meal-time" x-text="meal.time"></td>
-                                                    <td class="meal-desc" x-text="meal.description"></td>
-                                                    <td class="meal-cal" x-text="meal.calories"></td>
-                                                    <td class="meal-prot" x-text="meal.protein + 'g'"></td>
-                                                </tr>
+                                                <div class="meal-mobile-card" :class="{ 'meal-out-of-window': !meal.within_window }">
+                                                    <div class="meal-mobile-top">
+                                                        <span class="meal-mobile-desc" x-text="meal.description"></span>
+                                                        <span class="meal-mobile-time" x-text="meal.time"></span>
+                                                    </div>
+                                                    <div class="meal-mobile-stats">
+                                                        <span class="meal-mobile-cal">⚡ <span x-text="meal.calories"></span> קל'</span>
+                                                        <span class="meal-mobile-prot">💪 <span x-text="meal.protein"></span>g</span>
+                                                    </div>
+                                                </div>
                                             </template>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="meals-total">
-                                    <span class="meals-total-label">Total:</span>
-                                    <span class="meals-total-cal"><span x-text="day.meals_total.calories"></span> cal</span>
-                                    <span class="meals-total-prot"><span x-text="day.meals_total.protein"></span>g protein</span>
-                                </div>
-                            </div>
-                            <div class="history-section" x-show="day.workouts.length">
-                                <div class="history-section-title history-section-title--workout">
-                                    <span class="history-section-emoji">&#127947;</span><span>Workouts</span>
-                                </div>
-                                <template x-for="w in day.workouts" :key="w.id">
-                                    <div class="habit-item"><span>&#9989;</span><span x-text="w.note || 'Logged'"></span></div>
+                                        </div>
+
+                                        <!-- Totals -->
+                                        <div class="meals-total">
+                                            <span class="meals-total-label">סה"כ:</span>
+                                            <span class="meals-total-cal">⚡ <span x-text="day.meals_total.calories"></span> קלוריות</span>
+                                            <span class="meals-total-prot">💪 <span x-text="day.meals_total.protein"></span>g חלבון</span>
+                                        </div>
+                                    </div>
                                 </template>
                             </div>
-                            <div class="history-section" x-show="day.sleep">
+
+                            <!-- Workouts -->
+                            <div class="history-section">
+                                <div class="history-section-title history-section-title--workout">
+                                    <span class="history-section-emoji">🏋️</span>
+                                    <span>אימון</span>
+                                </div>
+                                <template x-if="day.workouts.length > 0">
+                                    <div>
+                                        <template x-for="w in day.workouts" :key="w.id">
+                                            <div class="habit-item">
+                                                <span>✅</span>
+                                                <span x-text="w.note || 'אימון נרשם'" style="flex: 1;"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="day.workouts.length === 0">
+                                    <div class="habit-item habit-item--empty">
+                                        <span>-</span>
+                                        <span>לא נרשם אימון</span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Sleep -->
+                            <div class="history-section">
                                 <div class="history-section-title history-section-title--sleep">
-                                    <span class="history-section-emoji">&#128564;</span><span>Sleep</span>
+                                    <span class="history-section-emoji">😴</span>
+                                    <span>שינה</span>
                                 </div>
                                 <template x-if="day.sleep">
-                                    <div class="habit-item"><span>&#127769;</span><span>Sleep time: <strong x-text="day.sleep.sleep_time"></strong></span></div>
+                                    <div class="habit-item">
+                                        <span>🌙</span>
+                                        <span style="flex: 1;">
+                                            שעת שינה: <strong x-text="day.sleep.sleep_time"></strong>
+                                        </span>
+                                    </div>
+                                </template>
+                                <template x-if="!day.sleep">
+                                    <div class="habit-item habit-item--empty">
+                                        <span>-</span>
+                                        <span>לא נרשמה שינה</span>
+                                    </div>
                                 </template>
                             </div>
-                            <div class="history-section" x-show="day.self_care && day.self_care.length">
+
+                            <!-- Self-care -->
+                            <div class="history-section">
                                 <div class="history-section-title history-section-title--selfcare">
-                                    <span class="history-section-emoji">&#128134;</span><span>Self-care</span>
+                                    <span class="history-section-emoji">💆</span>
+                                    <span>משהו לעצמי</span>
                                 </div>
-                                <div class="self-care-chips">
+                                <div class="self-care-chips" x-show="day.self_care && day.self_care.length > 0">
                                     <template x-for="sc in (day.self_care || [])" :key="sc.id">
-                                        <div class="self-care-chip"><span>&#10024;</span><span x-text="sc.description"></span></div>
+                                        <div class="self-care-chip">
+                                            <span>✨</span>
+                                            <span x-text="sc.description"></span>
+                                        </div>
                                     </template>
                                 </div>
+                            </div>
+
+                            <!-- No activity fallback -->
+                            <div x-show="day.meals.length === 0 && day.workouts.length === 0 && !day.sleep && (!day.self_care || day.self_care.length === 0)"
+                                 style="text-align: center; padding: 1rem; color: var(--text-light);">
+                                <p>📭 לא נרשמה פעילות ביום הזה</p>
                             </div>
                         </div>
                     </div>
