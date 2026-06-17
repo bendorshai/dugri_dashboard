@@ -3,6 +3,100 @@
 {% block title %}Dugri - Simulator{% endblock %}
 
 {% block dashboard_content %}
+<style>
+/* History display styles (copied from history page for visual parity) */
+.history-day-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.history-day-card:hover { box-shadow: var(--shadow-lg); }
+.day-card-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(166,116,72,0.08), rgba(91,168,196,0.06));
+    border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.day-card-header:hover { background: linear-gradient(135deg, rgba(166,116,72,0.12), rgba(91,168,196,0.08)); }
+.day-card-date { font-weight: 700; font-size: 1.05rem; color: var(--primary-dark); }
+.day-card-date-emoji { font-size: 1.2rem; }
+.day-card-badges { display: flex; gap: 0.4rem; margin-right: auto; flex-wrap: wrap; }
+.day-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+.day-badge--cal { background: rgba(166,116,72,0.1); color: var(--primary-dark); }
+.day-badge--prot { background: rgba(91,168,196,0.12); color: var(--accent-dark); }
+.day-badge--workout { background: rgba(143,168,118,0.15); color: #6B8F54; }
+.day-card-toggle { color: var(--text-muted); font-size: 0.8rem; transition: transform 0.2s; }
+.day-card-toggle.open { transform: rotate(180deg); }
+.day-card-body { padding: 1rem 1.5rem; }
+.history-section { margin-bottom: 1.25rem; }
+.history-section:last-child { margin-bottom: 0; }
+.history-section-title {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-weight: 700; font-size: 0.95rem; margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem; border-bottom: 2px solid transparent;
+}
+.history-section-title--meals { color: var(--primary-dark); border-bottom-color: rgba(166,116,72,0.2); }
+.history-section-title--workout { color: #6B8F54; border-bottom-color: rgba(143,168,118,0.2); }
+.history-section-title--sleep { color: var(--accent-dark); border-bottom-color: rgba(91,168,196,0.2); }
+.history-section-title--selfcare { color: #B07CC8; border-bottom-color: rgba(176,124,200,0.2); }
+.history-section-emoji { font-size: 1.1rem; }
+.meals-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9rem; }
+.meals-table th { text-align: right; padding: 0.5rem 0.75rem; font-weight: 700; color: var(--text-muted); font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+.meals-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(224,216,204,0.5); }
+.meals-table tr:last-child td { border-bottom: none; }
+.meals-table tr:nth-child(even) { background: rgba(237,245,248,0.4); }
+.meals-table .meal-time { color: var(--text-muted); font-weight: 600; white-space: nowrap; direction: ltr; text-align: right; }
+.meals-table .meal-desc { font-weight: 500; }
+.meals-table .meal-cal { font-weight: 700; color: var(--primary-dark); text-align: center; }
+.meals-table .meal-prot { font-weight: 700; color: var(--accent-dark); text-align: center; }
+.meal-out-of-window { border-right: 3px solid var(--error); }
+.meal-out-of-window td:first-child { border-right: 3px solid var(--error); }
+.meal-mobile-card.meal-out-of-window { border-right-color: var(--error); }
+.meals-total {
+    display: flex; align-items: center; gap: 1.5rem; padding: 0.75rem;
+    margin-top: 0.5rem; background: rgba(166,116,72,0.05);
+    border-radius: var(--radius-sm); font-weight: 700; font-size: 0.9rem;
+}
+.meals-total-label { color: var(--text-muted); }
+.meals-total-cal { color: var(--primary-dark); }
+.meals-total-prot { color: var(--accent-dark); }
+.habit-item {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem; background: rgba(237,245,248,0.5);
+    border-radius: var(--radius-sm); font-size: 0.9rem; margin-bottom: 0.35rem;
+}
+.habit-item:last-child { margin-bottom: 0; }
+.habit-item--empty { color: var(--text-light); font-style: italic; }
+.self-care-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.self-care-chip {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.4rem 0.85rem; background: rgba(176,124,200,0.1);
+    border: 1.5px solid rgba(176,124,200,0.25); border-radius: 999px;
+    font-size: 0.88rem; font-weight: 600; color: #8B5FA8;
+}
+.meals-mobile { display: none; }
+.meal-mobile-card {
+    padding: 0.6rem 0.75rem; background: rgba(237,245,248,0.4);
+    border-radius: var(--radius-sm); margin-bottom: 0.4rem;
+    border-right: 3px solid var(--primary-light);
+}
+.meal-mobile-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem; }
+.meal-mobile-desc { font-weight: 600; font-size: 0.9rem; }
+.meal-mobile-time { font-size: 0.8rem; color: var(--text-muted); direction: ltr; }
+.meal-mobile-stats { display: flex; gap: 1rem; font-size: 0.82rem; font-weight: 700; }
+.meal-mobile-cal { color: var(--primary-dark); }
+.meal-mobile-prot { color: var(--accent-dark); }
+@media (max-width: 600px) {
+    .meals-table-wrap { display: none; }
+    .meals-mobile { display: block; }
+    .day-card-header { padding: 0.75rem 1rem; }
+    .day-card-body { padding: 0.75rem 1rem; }
+    .meals-total { flex-wrap: wrap; gap: 0.75rem; }
+}
+</style>
 <div class="admin-dashboard" x-data="simulator()">
 
     <!-- Admin Sub-tabs -->
