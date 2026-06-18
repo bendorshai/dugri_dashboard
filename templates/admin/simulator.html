@@ -920,7 +920,7 @@ function simulator() {
                 const fakeNow = new Date(this.fakeClock).toISOString();
                 const result = await this.api('/admin/simulator/tick', { fake_now: fakeNow });
                 if (result.error) {
-                    this.flash(result.error, false);
+                    this.flash(result.error + (result.status ? ' (' + result.status + ')' : ''), false);
                 } else {
                     const count = (result.responses || []).length;
                     this._appendBotResponses(result);

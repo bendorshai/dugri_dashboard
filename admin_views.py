@@ -442,7 +442,11 @@ def simulator_tick():
         if resp.ok:
             return jsonify(resp.json())
         logger.error("Bot simulate-tick error: %s %s", resp.status_code, resp.text)
-        return jsonify({"error": "bot returned error", "status": resp.status_code}), 502
+        try:
+            bot_error = resp.json().get("error", resp.text[:100])
+        except Exception:
+            bot_error = resp.text[:100]
+        return jsonify({"error": f"bot: {bot_error}", "status": resp.status_code}), 502
     except requests.Timeout:
         return jsonify({"error": "bot timeout"}), 504
     except Exception:
