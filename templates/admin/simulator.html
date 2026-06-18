@@ -119,6 +119,34 @@
         <div class="sim-panel">
             <h3 class="sim-panel-title">State Control</h3>
 
+            <!-- As Of Date (primary concept) -->
+            <div class="sim-card" style="border-top-color: var(--accent-air, #5BA8C4);">
+                <div class="sim-field">
+                    <label style="font-weight:700;">As Of Date</label>
+                    <div style="display:flex;gap:0.25rem;">
+                        <input type="datetime-local" x-model="fakeClock" style="flex:1;">
+                        <button @click="fakeClock = _localIso(new Date())" class="sim-btn sim-btn--xs">Now</button>
+                    </div>
+                </div>
+                <div class="sim-quick-days">
+                    <button @click="setAsOfDay(0)" class="sim-btn sim-btn--sm">Fresh</button>
+                    <button @click="setAsOfDay(1)" class="sim-btn sim-btn--sm">D1</button>
+                    <button @click="setAsOfDay(2)" class="sim-btn sim-btn--sm">D2</button>
+                    <button @click="setAsOfDay(3)" class="sim-btn sim-btn--sm">D3</button>
+                    <button @click="setAsOfDay(4)" class="sim-btn sim-btn--sm">D4</button>
+                    <button @click="setAsOfDay(5)" class="sim-btn sim-btn--sm">D5</button>
+                    <button @click="setAsOfDay(7)" class="sim-btn sim-btn--sm">D7</button>
+                    <button @click="setAsOfDay(10)" class="sim-btn sim-btn--sm">D10</button>
+                    <button @click="setAsOfDay(12)" class="sim-btn sim-btn--sm">D12</button>
+                </div>
+                <div class="sim-day-indicator" x-show="state.trial_started_at">
+                    Day <span x-text="currentDay"></span> of trial
+                </div>
+                <button @click="runTick()" class="sim-btn sim-btn--full" :disabled="loading || !fakeClock" style="margin-top:0.5rem;">
+                    Run Tick
+                </button>
+            </div>
+
             <!-- Trial & Subscription -->
             <div class="sim-card">
                 <h4 class="sim-card-header" @click="panels.trial = !panels.trial">
@@ -137,18 +165,6 @@
                         <label>Trial Started</label>
                         <input type="datetime-local" x-model="trialStartedLocal"
                                @change="saveTrialStarted()">
-                    </div>
-                    <div class="sim-quick-days">
-                        <button @click="setTrialDay(0)" class="sim-btn sim-btn--sm">Fresh</button>
-                        <button @click="setTrialDay(1)" class="sim-btn sim-btn--sm">D1</button>
-                        <button @click="setTrialDay(3)" class="sim-btn sim-btn--sm">D3</button>
-                        <button @click="setTrialDay(5)" class="sim-btn sim-btn--sm">D5</button>
-                        <button @click="setTrialDay(7)" class="sim-btn sim-btn--sm">D7</button>
-                        <button @click="setTrialDay(10)" class="sim-btn sim-btn--sm">D10</button>
-                        <button @click="setTrialDay(12)" class="sim-btn sim-btn--sm">D12</button>
-                    </div>
-                    <div class="sim-day-indicator" x-show="state.trial_started_at">
-                        Day <span x-text="currentDay"></span> of trial
                     </div>
                     <div class="sim-field sim-field--row">
                         <label>Trial expiry msg sent</label>
@@ -446,16 +462,6 @@
                     Scheduler <span class="sim-collapse-icon" :class="{ open: panels.scheduler }">&#9660;</span>
                 </h4>
                 <div x-show="panels.scheduler" x-transition.duration.150ms>
-                    <div class="sim-field">
-                        <label>Fake Clock</label>
-                        <div style="display:flex;gap:0.25rem;">
-                            <input type="datetime-local" x-model="fakeClock" style="flex:1;">
-                            <button @click="fakeClock = new Date().toISOString().slice(0,16)" class="sim-btn sim-btn--xs">Now</button>
-                        </div>
-                    </div>
-                    <button @click="runTick()" class="sim-btn sim-btn--full" :disabled="loading || !fakeClock">
-                        Run Tick
-                    </button>
                     <!-- Schedule reference -->
                     <div class="sim-hook-schedule">
                         <div class="sim-hook-schedule-title">Schedule reference:</div>
@@ -490,6 +496,28 @@
                             <span class="sim-hook-window"></span>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Snapshots -->
+            <div class="sim-card">
+                <h4 class="sim-card-header" @click="panels.snapshots = !panels.snapshots">
+                    Snapshots <span class="sim-collapse-icon" :class="{ open: panels.snapshots }">&#9660;</span>
+                </h4>
+                <div x-show="panels.snapshots" x-transition.duration.150ms>
+                    <div style="display:flex;gap:0.25rem;margin-bottom:0.5rem;">
+                        <input type="text" x-model="snapshotName" placeholder="Snapshot name..." style="flex:1;font-size:0.85rem;padding:0.3rem 0.5rem;">
+                        <button @click="saveSnapshot()" class="sim-btn sim-btn--sm" :disabled="loading">Save</button>
+                    </div>
+                    <template x-for="snap in snapshots" :key="snap._id">
+                        <div style="display:flex;align-items:center;gap:0.4rem;padding:0.3rem 0;border-bottom:1px solid var(--border);">
+                            <span style="flex:1;font-size:0.82rem;" x-text="snap.name"></span>
+                            <span style="font-size:0.7rem;color:var(--text-muted);" x-text="new Date(snap.created_at).toLocaleDateString()"></span>
+                            <button @click="loadSnapshot(snap._id)" class="sim-btn sim-btn--xs">Load</button>
+                            <button @click="deleteSnapshot(snap._id)" class="sim-btn sim-btn--xs sim-btn--danger">Del</button>
+                        </div>
+                    </template>
+                    <div x-show="snapshots.length === 0" style="font-size:0.82rem;color:var(--text-muted);padding:0.4rem 0;">No snapshots yet</div>
                 </div>
             </div>
 
@@ -734,11 +762,15 @@
 </div>
 
 <script>
+function _localIso(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
 function simulator() {
     const rawUser = {{ sim_user | tojson }};
     let trialLocal = '';
     if (rawUser.trial_started_at) {
-        try { trialLocal = new Date(rawUser.trial_started_at).toISOString().slice(0, 16); } catch(e) {}
+        try { trialLocal = _localIso(new Date(rawUser.trial_started_at)); } catch(e) {}
     }
 
     let msgIdCounter = 0;
@@ -764,19 +796,29 @@ function simulator() {
         historyDays: [],
         historyOpen: {},
         historyLoading: false,
-        fakeClock: new Date().toISOString().slice(0, 16),
+        fakeClock: _localIso(new Date()),
         hookSchedule: {},
-        panels: { trial: true, profile: true, toggles: true, moderation: true, scheduler: true, danger: false },
+        snapshots: [],
+        snapshotName: '',
+        panels: { trial: true, profile: true, toggles: true, moderation: true, scheduler: true, snapshots: true, danger: false },
 
         init() {
             this._loadHistory();
             this._loadHookSchedule();
+            this._loadSnapshots();
+            this._prevFakeClock = this.fakeClock;
+            this.$watch('fakeClock', (newVal) => {
+                if (this._skipTimeTravelCheck) { this._skipTimeTravelCheck = false; return; }
+                this._checkTimeTravel(this._prevFakeClock, newVal);
+                this._prevFakeClock = newVal;
+            });
         },
 
         get currentDay() {
             if (!this.state.trial_started_at) return '-';
             const started = new Date(this.state.trial_started_at);
-            return Math.floor((new Date() - started) / (1000 * 60 * 60 * 24));
+            const asOf = this.fakeClock ? new Date(this.fakeClock) : new Date();
+            return Math.floor((asOf - started) / (1000 * 60 * 60 * 24));
         },
 
         flash(msg, ok = true) {
@@ -819,20 +861,17 @@ function simulator() {
             await this.saveField('trial_started_at', isoVal);
         },
 
-        async setTrialDay(daysAgo) {
-            const d = new Date();
-            d.setDate(d.getDate() - daysAgo);
-            d.setHours(9, 0, 0, 0);
-            const isoVal = d.toISOString();
-            this.state.trial_started_at = isoVal;
-            this.trialStartedLocal = isoVal.slice(0, 16);
-            this.state.subscription_status = 'trial_active';
-            await this.api('/admin/simulator/state', {
-                trial_started_at: isoVal,
-                subscription_status: 'trial_active',
-            });
-            this.flash('Set to day ' + daysAgo);
-            await this._refreshPanel();
+        setAsOfDay(dayNum) {
+            if (!this.state.trial_started_at) {
+                this.flash('Set trial_started_at first', false);
+                return;
+            }
+            const started = new Date(this.state.trial_started_at);
+            const target = new Date(started);
+            target.setDate(started.getDate() + dayNum);
+            const cur = this.fakeClock ? new Date(this.fakeClock) : new Date();
+            target.setHours(cur.getHours(), cur.getMinutes(), 0, 0);
+            this.fakeClock = _localIso(target);
         },
 
         async saveToggle(name) {
@@ -988,8 +1027,8 @@ function simulator() {
             }
 
             target.setHours(hour, minute, 0, 0);
-            const pad = n => String(n).padStart(2, '0');
-            this.fakeClock = target.getFullYear() + '-' + pad(target.getMonth() + 1) + '-' + pad(target.getDate()) + 'T' + pad(target.getHours()) + ':' + pad(target.getMinutes());
+            this._skipTimeTravelCheck = true;
+            this.fakeClock = _localIso(target);
         },
 
         async _refreshPanel() {
@@ -1002,7 +1041,7 @@ function simulator() {
                     })
                 );
                 if (data.trial_started_at) {
-                    try { this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16); } catch(e) {}
+                    try { this.trialStartedLocal = _localIso(new Date(data.trial_started_at)); } catch(e) {}
                 }
             }
             this.scrollChat();
@@ -1019,7 +1058,7 @@ function simulator() {
                     })
                 );
                 if (data.trial_started_at) {
-                    try { this.trialStartedLocal = new Date(data.trial_started_at).toISOString().slice(0, 16); } catch(e) {}
+                    try { this.trialStartedLocal = _localIso(new Date(data.trial_started_at)); } catch(e) {}
                 }
             }
             this.scrollChat();
@@ -1071,7 +1110,7 @@ function simulator() {
             const text = this.chatInput.trim();
             if (!text) return;
             this.chatInput = '';
-            const payload = { text };
+            const payload = { text, fake_now: new Date(this.fakeClock).toISOString() };
             if (this.replyTo) {
                 payload.reply_to_message_id = this.replyTo._id;
                 payload.reply_to_text = this.replyTo.text;
@@ -1094,7 +1133,7 @@ function simulator() {
         async sendCallback(callbackData) {
             this.chatLoading = true;
             try {
-                const result = await this.api('/admin/simulator/send', { callback_data: callbackData });
+                const result = await this.api('/admin/simulator/send', { callback_data: callbackData, fake_now: new Date(this.fakeClock).toISOString() });
                 this._appendBotResponses(result);
                 await this._refreshPanel();
             } catch(e) {}
@@ -1120,6 +1159,78 @@ function simulator() {
             const value = checked ? new Date().toISOString() : null;
             this.state.toggles[toggleName].last_asked_at = value;
             await this.saveField('toggles.' + toggleName + '.last_asked_at', value);
+        },
+
+        _checkTimeTravel(oldClock, newClock) {
+            if (!this.chatMessages.length || !oldClock || !newClock) return;
+            const newTime = new Date(newClock);
+            let latestTs = null;
+            for (const msg of this.chatMessages) {
+                if (msg.meta && msg.meta.timestamp) {
+                    const t = new Date(msg.meta.timestamp);
+                    if (!latestTs || t > latestTs) latestTs = t;
+                }
+            }
+            if (latestTs && newTime < latestTs) {
+                if (confirm('Moving As Of Date before existing messages.\nMessages after ' + _localIso(newTime) + ' will be wiped.\nContinue?')) {
+                    this.chatMessages = this.chatMessages.filter(m => {
+                        if (!m.meta || !m.meta.timestamp) return true;
+                        return new Date(m.meta.timestamp) <= newTime;
+                    });
+                    const trimmed = this.chatMessages.map(m => ({
+                        role: m.role, text: m.text,
+                        timestamp: m.meta && m.meta.timestamp,
+                        classification: m.meta && m.meta.classification,
+                        replying_to: m.meta && m.meta.replying_to,
+                    }));
+                    this.api('/admin/simulator/state', { recent_messages: trimmed });
+                } else {
+                    this._skipTimeTravelCheck = true;
+                    this.fakeClock = oldClock;
+                }
+            }
+        },
+
+        async saveSnapshot() {
+            if (!this.snapshotName.trim()) { this.flash('Enter a name', false); return; }
+            this.loading = true;
+            try {
+                await this.api('/admin/simulator/snapshots', {
+                    name: this.snapshotName.trim(),
+                    as_of_date: new Date(this.fakeClock).toISOString(),
+                });
+                this.snapshotName = '';
+                this.flash('Snapshot saved');
+                await this._loadSnapshots();
+            } finally { this.loading = false; }
+        },
+
+        async _loadSnapshots() {
+            try {
+                const data = await this.api('/admin/simulator/snapshots');
+                this.snapshots = data.snapshots || [];
+            } catch(e) {}
+        },
+
+        async loadSnapshot(id) {
+            if (!confirm('Load this snapshot? Current state will be overwritten.')) return;
+            this.loading = true;
+            try {
+                const result = await this.api('/admin/simulator/snapshots/' + id + '/load', {}, 'POST');
+                if (result.as_of_date) {
+                    this._skipTimeTravelCheck = true;
+                    this.fakeClock = _localIso(new Date(result.as_of_date));
+                }
+                await this._loadState();
+                this.flash('Snapshot loaded');
+            } finally { this.loading = false; }
+        },
+
+        async deleteSnapshot(id) {
+            if (!confirm('Delete this snapshot?')) return;
+            await this.api('/admin/simulator/snapshots/' + id, null, 'DELETE');
+            this.flash('Snapshot deleted');
+            await this._loadSnapshots();
         },
     };
 }

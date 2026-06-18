@@ -5,6 +5,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 import requests
+from bson import ObjectId
 from flask import Blueprint, render_template, current_app, request, jsonify
 
 from admin_storage import AdminStorage
@@ -390,6 +391,9 @@ def simulator_send():
     else:
         return jsonify({"error": "text or callback_data required"}), 400
 
+    if data.get("fake_now"):
+        payload["fake_now"] = data["fake_now"]
+
     try:
         resp = requests.post(
             f"{bot_url}/internal/simulate",
@@ -444,6 +448,114 @@ def simulator_hook_schedule():
         return jsonify({"hooks": {}})
     doc.pop("_id", None)
     return jsonify({"hooks": doc})
+
+
+@admin_bp.route("/simulator/snapshots", methods=["POST"])
+@admin_required
+def simulator_save_snapshot():
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+
+    storage = _get_dashboard_storage()
+    db = storage._db
+
+    user_doc = db["users"].find_one({"_id": SIMULATOR_EMAIL})
+    if not user_doc:
+        return jsonify({"error": "simulator user not found"}), 404
+
+    # Strip _id from user doc for snapshot
+    user_doc.pop("_id", None)
+
+    # Collect all log entries
+    def collect(collection_name):
+        docs = list(db[collection_name].find({"telegram_user_id": SIMULATOR_TID}))
+        for d in docs:
+            d.pop("_id", None)
+        return docs
+
+    snapshot = {
+        "name": name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "as_of_date": data.get("as_of_date"),
+        "user_doc": user_doc,
+        "food_entries": collect("food_entries"),
+        "sleep_logs": collect("sleep_logs"),
+        "workout_logs": collect("workout_logs"),
+        "self_care_logs": collect("self_care_logs"),
+        "weekly_feedback": collect("weekly_feedback"),
+        "hook_schedule": db["hook_schedule"].find_one({"_id": "hook_schedule"}) or {},
+    }
+    # Strip _id from hook_schedule too
+    snapshot["hook_schedule"].pop("_id", None)
+
+    result = db["simulator_snapshots"].insert_one(snapshot)
+    return jsonify({"ok": True, "_id": str(result.inserted_id)})
+
+
+@admin_bp.route("/simulator/snapshots")
+@admin_required
+def simulator_list_snapshots():
+    storage = _get_dashboard_storage()
+    db = storage._db
+    snapshots = list(db["simulator_snapshots"].find(
+        {}, {"name": 1, "created_at": 1}
+    ).sort("created_at", -1))
+    for s in snapshots:
+        s["_id"] = str(s["_id"])
+    return jsonify({"snapshots": snapshots})
+
+
+@admin_bp.route("/simulator/snapshots/<snapshot_id>/load", methods=["POST"])
+@admin_required
+def simulator_load_snapshot(snapshot_id):
+    storage = _get_dashboard_storage()
+    db = storage._db
+
+    try:
+        snap = db["simulator_snapshots"].find_one({"_id": ObjectId(snapshot_id)})
+    except Exception:
+        return jsonify({"error": "invalid snapshot id"}), 400
+    if not snap:
+        return jsonify({"error": "snapshot not found"}), 404
+
+    # Delete existing logs
+    for coll in ["food_entries", "sleep_logs", "workout_logs", "self_care_logs", "weekly_feedback"]:
+        db[coll].delete_many({"telegram_user_id": SIMULATOR_TID})
+
+    # Restore user doc
+    user_doc = snap["user_doc"]
+    db["users"].update_one(
+        {"_id": SIMULATOR_EMAIL},
+        {"$set": user_doc},
+    )
+
+    # Restore log entries
+    for coll in ["food_entries", "sleep_logs", "workout_logs", "self_care_logs", "weekly_feedback"]:
+        docs = snap.get(coll, [])
+        if docs:
+            db[coll].insert_many(docs)
+
+    # Restore hook_schedule
+    hook_sched = snap.get("hook_schedule", {})
+    if hook_sched:
+        hook_sched["_id"] = "hook_schedule"
+        db["hook_schedule"].replace_one({"_id": "hook_schedule"}, hook_sched, upsert=True)
+
+    return jsonify({"ok": True, "as_of_date": snap.get("as_of_date")})
+
+
+@admin_bp.route("/simulator/snapshots/<snapshot_id>", methods=["DELETE"])
+@admin_required
+def simulator_delete_snapshot(snapshot_id):
+    storage = _get_dashboard_storage()
+    db = storage._db
+    try:
+        db["simulator_snapshots"].delete_one({"_id": ObjectId(snapshot_id)})
+    except Exception:
+        return jsonify({"error": "invalid snapshot id"}), 400
+    return jsonify({"ok": True})
 
 
 @admin_bp.route("/simulator/tick", methods=["POST"])
