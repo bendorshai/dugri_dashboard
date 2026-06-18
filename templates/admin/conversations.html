@@ -1,0 +1,109 @@
+{% extends "dashboard/layout.html" %}
+
+{% block title %}Dugri - Conversations{% endblock %}
+
+{% block dashboard_content %}
+<div class="admin-dashboard">
+
+    <!-- Admin Sub-tabs -->
+    <div class="admin-tabs">
+        <a href="{{ url_for('admin.dashboard') }}" class="admin-tab">Dashboard</a>
+        <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
+        <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
+        <a href="{{ url_for('admin.tokens') }}" class="admin-tab">Tokens</a>
+        <a href="{{ url_for('admin.simulator') }}" class="admin-tab">Simulator</a>
+    </div>
+
+    <!-- Conversation header -->
+    <div class="conv-header">
+        <a href="{{ url_for('admin.dashboard') }}" class="conv-back">&larr; Back to Dashboard</a>
+        <h2 class="conv-title">
+            {{ user.get('name') or 'Unknown' }}
+            <span class="conv-email">{{ user.get('_id', '') }}</span>
+        </h2>
+        <span class="conv-count">{{ total_messages }} messages</span>
+    </div>
+
+    <!-- Chat view -->
+    <div class="conv-chat" dir="rtl">
+        {% if sorted_days %}
+            {% for day in sorted_days %}
+            <div class="conv-day-separator">{{ day }}</div>
+            {% for msg in grouped_logs[day] %}
+            <div class="sim-msg sim-msg--{{ msg.role }}">
+                <div class="sim-msg-bubble">{{ msg.text }}</div>
+                <div class="sim-msg-meta">
+                    {% if msg.classification %}
+                    <span class="sim-meta-tag">{{ msg.classification }}</span>
+                    {% endif %}
+                    {% if msg.timestamp %}
+                    <span class="sim-meta-time">{{ msg.timestamp.strftime('%H:%M') if msg.timestamp.strftime is defined else '' }}</span>
+                    {% endif %}
+                    {% if msg.get('reply_context') %}
+                    <span class="sim-meta-reply">reply: {{ msg.reply_context[:40] }}{{ '...' if msg.reply_context|length > 40 else '' }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% endfor %}
+        {% else %}
+            <p class="conv-empty">No conversation logs found for this user.</p>
+        {% endif %}
+    </div>
+
+</div>
+
+<style>
+.conv-header {
+    margin-bottom: 1.5rem;
+}
+.conv-back {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+.conv-back:hover {
+    text-decoration: underline;
+}
+.conv-title {
+    margin: 0.5rem 0 0.25rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+.conv-email {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+    margin-inline-start: 0.5rem;
+}
+.conv-count {
+    color: var(--text-light);
+    font-size: 0.8rem;
+}
+.conv-chat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 700px;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 1rem;
+    background: #F7F5F0;
+    border-radius: var(--radius-sm);
+}
+.conv-day-separator {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.5rem 0;
+    margin: 0.5rem 0;
+    border-bottom: 1px solid var(--border-light, #e0ddd5);
+}
+.conv-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 2rem;
+}
+</style>
+{% endblock %}

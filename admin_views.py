@@ -103,6 +103,36 @@ def dashboard():
     )
 
 
+@admin_bp.route("/conversations/<int:telegram_user_id>")
+@admin_required
+def conversations(telegram_user_id: int):
+    storage = _get_admin_storage()
+    user = storage.get_user_by_telegram_id(telegram_user_id)
+    logs = storage.get_conversation_logs(telegram_user_id)
+
+    # Group messages by date for display
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for msg in logs:
+        ts = msg.get("timestamp")
+        if ts:
+            day_key = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+        else:
+            day_key = "unknown"
+        grouped[day_key].append(msg)
+
+    return render_template(
+        "admin/conversations.html",
+        user=user or {},
+        telegram_user_id=telegram_user_id,
+        grouped_logs=dict(grouped),
+        sorted_days=sorted(grouped.keys()),
+        total_messages=len(logs),
+        active_tab="admin",
+        active_sub="conversations",
+    )
+
+
 @admin_bp.route("/errors")
 @admin_required
 def errors():

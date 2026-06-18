@@ -77,6 +77,7 @@ class AdminStorage:
         self._errors = self._db["error_logs"]
         self._feature_requests = self._db["feature_requests"]
         self._token_logs = self._db["token_logs"]
+        self._conversation_logs = self._db["conversation_logs"]
 
     # -- Token Analytics --
 
@@ -626,3 +627,18 @@ class AdminStorage:
                 lead["active_days"] = r["active_days"]
             result.append(lead)
         return result
+
+    # -- Conversation Logs --
+
+    def get_conversation_logs(self, telegram_user_id: int, limit: int = 500) -> list[dict]:
+        """Fetch conversation log entries for a user, oldest first."""
+        return list(
+            self._conversation_logs
+            .find({"telegram_user_id": telegram_user_id})
+            .sort("timestamp", 1)
+            .limit(limit)
+        )
+
+    def get_user_by_telegram_id(self, telegram_user_id: int) -> dict | None:
+        """Fetch a user document by telegram_user_id."""
+        return self._users.find_one({"telegram_user_id": telegram_user_id})

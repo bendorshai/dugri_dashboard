@@ -115,12 +115,12 @@
                 </thead>
                 <tbody>
                     {% for lead in super_active %}
-                    <tr>
+                    <tr{% if lead.telegram_user_id %} class="lead-row-clickable" onclick="openConversation({{ lead.telegram_user_id }})"{% endif %}>
                         <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
-                        <td class="lead-actions">
+                        <td class="lead-actions" onclick="event.stopPropagation()">
                             {% if lead.telegram_user_id %}
                             <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
@@ -146,12 +146,12 @@
                 </thead>
                 <tbody>
                     {% for lead in consistently_active %}
-                    <tr>
+                    <tr{% if lead.telegram_user_id %} class="lead-row-clickable" onclick="openConversation({{ lead.telegram_user_id }})"{% endif %}>
                         <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
-                        <td class="lead-actions">
+                        <td class="lead-actions" onclick="event.stopPropagation()">
                             {% if lead.telegram_user_id %}
                             <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
@@ -177,12 +177,12 @@
                 </thead>
                 <tbody>
                     {% for lead in inconsistently_active %}
-                    <tr>
+                    <tr{% if lead.telegram_user_id %} class="lead-row-clickable" onclick="openConversation({{ lead.telegram_user_id }})"{% endif %}>
                         <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.active_days }}/7</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
-                        <td class="lead-actions">
+                        <td class="lead-actions" onclick="event.stopPropagation()">
                             {% if lead.telegram_user_id %}
                             <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
@@ -208,12 +208,12 @@
                 </thead>
                 <tbody>
                     {% for lead in stopped %}
-                    <tr>
+                    <tr{% if lead.telegram_user_id %} class="lead-row-clickable" onclick="openConversation({{ lead.telegram_user_id }})"{% endif %}>
                         <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
                         <td>{{ lead.last_active[:10] if lead.last_active and lead.last_active is string else '-' }}</td>
-                        <td class="lead-actions">
+                        <td class="lead-actions" onclick="event.stopPropagation()">
                             {% if lead.telegram_user_id %}
                             <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
@@ -239,7 +239,7 @@
                 </thead>
                 <tbody>
                     {% for lead in stuck %}
-                    <tr>
+                    <tr{% if lead.telegram_user_id %} class="lead-row-clickable" onclick="openConversation({{ lead.telegram_user_id }})"{% endif %}>
                         <td title="{{ lead.tokens_tooltip or '' }}">{{ lead.name or '-' }}</td>
                         <td>{{ lead.email or '-' }}</td>
                         <td>{{ lead.signup_date[:10] if lead.signup_date else '-' }}</td>
@@ -250,7 +250,7 @@
                             <span class="badge badge-info">Linked, no entries</span>
                             {% endif %}
                         </td>
-                        <td class="lead-actions">
+                        <td class="lead-actions" onclick="event.stopPropagation()">
                             {% if lead.telegram_user_id %}
                             <button class="btn-outreach" onclick="sendOutreach({{ lead.telegram_user_id }}, '{{ lead.name or '' }}', this)">Dugri Outreach</button>
                             {% endif %}
@@ -311,6 +311,11 @@ function sendOutreach(telegramUserId, name, btn) {
         btn.disabled = false;
         showToast('Network error');
     });
+}
+
+// -- Open conversation logs for a user --
+function openConversation(telegramUserId) {
+    window.location.href = '/admin/conversations/' + telegramUserId;
 }
 
 // -- Chart.js setup --

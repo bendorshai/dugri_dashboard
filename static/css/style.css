@@ -1619,6 +1619,10 @@ a:hover {
     background: #FAF7F2;
 }
 
+.lead-row-clickable {
+    cursor: pointer;
+}
+
 .lead-actions {
     display: flex;
     gap: 0.4rem;
