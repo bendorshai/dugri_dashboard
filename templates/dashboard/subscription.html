@@ -1,18 +1,100 @@
 {% extends "dashboard/layout.html" %}
 
 {% block dashboard_content %}
-<h1>מנוי</h1>
+<h1>{{ hs.SUB_TITLE }}</h1>
 
-<div class="card">
-    <h3 style="margin-bottom: 1rem;">חודש ניסיון חינם</h3>
-    <p style="color: var(--text-muted);">
-        אתה נמצא כרגע בתקופת הניסיון החינמית. בקרוב נוסיף כאן אפשרויות לניהול המנוי שלך.
-    </p>
-    <ul style="color: var(--text-muted); margin: 1.5rem 0; padding-right: 1.25rem;">
-        <li>עדכון פרטי תשלום</li>
-        <li>שינוי תוכנית</li>
-        <li>ביטול מנוי</li>
-    </ul>
-    <p class="form-hint">יש שאלות? צור קשר ב-<a href="#">יצירת קשר</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div style="margin-bottom: 1rem;">
+    {% for category, message in messages %}
+    <div class="card" style="border-right: 3px solid {{ 'var(--accent)' if category == 'success' else 'var(--danger, #e74c3c)' }}; padding: 0.75rem 1rem;">
+        <p style="margin: 0;">{{ message }}</p>
+    </div>
+    {% endfor %}
 </div>
+{% endif %}
+{% endwith %}
+
+<div class="card" x-data="{ showCancel: false }">
+
+    {# ---- Trial active / pending ---- #}
+    {% if status in ('trial_active', 'trial_pending') %}
+    <h3 style="margin-bottom: 1rem;">{{ hs.SUB_TRIAL_ACTIVE_HEADING }}</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        {{ hs.SUB_TRIAL_ACTIVE_BODY }}
+    </p>
+    <form method="POST" action="{{ url_for('dashboard_views.subscription_start') }}">
+        <button type="submit" class="btn btn--primary btn--full">
+            {{ hs.SUB_SUBSCRIBE_CTA.format(price) }}
+        </button>
+    </form>
+
+    {# ---- Trial ended ---- #}
+    {% elif status == 'trial_ended' %}
+    <h3 style="margin-bottom: 1rem; color: var(--danger, #e74c3c);">{{ hs.SUB_TRIAL_ENDED_HEADING }}</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        {{ hs.SUB_TRIAL_ENDED_BODY }}
+    </p>
+    <form method="POST" action="{{ url_for('dashboard_views.subscription_start') }}">
+        <button type="submit" class="btn btn--primary btn--full">
+            {{ hs.SUB_SUBSCRIBE_CTA.format(price) }}
+        </button>
+    </form>
+
+    {# ---- Paid (active subscription) ---- #}
+    {% elif status == 'paid' %}
+    <h3 style="margin-bottom: 1rem;">{{ hs.SUB_ACTIVE_HEADING }}</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        {{ hs.SUB_ACTIVE_BODY.format(expires_at) }}
+    </p>
+
+    <template x-if="!showCancel">
+        <button class="btn btn--secondary btn--full" @click="showCancel = true">
+            {{ hs.SUB_CANCEL_BTN }}
+        </button>
+    </template>
+    <template x-if="showCancel">
+        <div style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem;">
+            <p style="margin-bottom: 1rem;">{{ hs.SUB_CANCEL_CONFIRM.format(expires_at) }}</p>
+            <div style="display: flex; gap: 0.75rem;">
+                <form method="POST" action="{{ url_for('dashboard_views.subscription_cancel') }}" style="flex: 1;">
+                    <button type="submit" class="btn btn--danger btn--full">{{ hs.SUB_CANCEL_BTN }}</button>
+                </form>
+                <button class="btn btn--secondary" style="flex: 1;" @click="showCancel = false">חזרה</button>
+            </div>
+        </div>
+    </template>
+
+    {# ---- Cancelled (still has access) ---- #}
+    {% elif status == 'cancelled' %}
+    <h3 style="margin-bottom: 1rem;">{{ hs.SUB_CANCELLED_HEADING }}</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        {{ hs.SUB_CANCELLED_BODY.format(expires_at) }}
+    </p>
+    <form method="POST" action="{{ url_for('dashboard_views.subscription_start') }}">
+        <button type="submit" class="btn btn--primary btn--full">
+            {{ hs.SUB_RESUBSCRIBE_CTA }}
+        </button>
+    </form>
+
+    {# ---- Subscription ended ---- #}
+    {% elif status == 'subscription_ended' %}
+    <h3 style="margin-bottom: 1rem; color: var(--danger, #e74c3c);">{{ hs.SUB_ENDED_HEADING }}</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+        {{ hs.SUB_ENDED_BODY }}
+    </p>
+    <form method="POST" action="{{ url_for('dashboard_views.subscription_start') }}">
+        <button type="submit" class="btn btn--primary btn--full">
+            {{ hs.SUB_SUBSCRIBE_CTA.format(price) }}
+        </button>
+    </form>
+
+    {% endif %}
+</div>
+
+{% if contact_email %}
+<p class="form-hint" style="margin-top: 1rem; text-align: center;">
+    {{ hs.SUB_CONTACT.format('<a href="mailto:' + contact_email + '">' + contact_email + '</a>') | safe }}
+</p>
+{% endif %}
 {% endblock %}
