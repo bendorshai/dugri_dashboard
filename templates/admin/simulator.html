@@ -557,7 +557,10 @@
                                 <span x-text="msg.text"></span>
                             </div>
                             <!-- Always-visible metadata -->
-                            <div class="sim-msg-meta" x-show="msg.meta && (msg.meta.classification || msg.meta.replying_to)">
+                            <div class="sim-msg-meta">
+                                <template x-if="msg.meta && msg.meta.timestamp">
+                                    <span class="sim-meta-time" x-text="new Date(msg.meta.timestamp).toLocaleString('he-IL', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})"></span>
+                                </template>
                                 <template x-if="msg.meta && msg.meta.classification">
                                     <span class="sim-meta-tag" x-text="msg.meta.classification"></span>
                                 </template>
