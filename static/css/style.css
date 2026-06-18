@@ -1190,6 +1190,7 @@ a:hover {
 
     .dashboard-nav {
         width: 100%;
+        height: auto;
         border-left: none;
         border-top: 1px solid var(--border);
         padding: 0;
@@ -1201,6 +1202,7 @@ a:hover {
         z-index: 100;
         background: var(--white);
         overflow-x: auto;
+        overflow-y: visible;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
     }
@@ -1235,6 +1237,8 @@ a:hover {
     .dashboard-content {
         padding: 1.5rem 1rem;
         padding-bottom: 5rem; /* space for fixed nav */
+        max-width: 100%;
+        width: 100%;
     }
 
     .toast {
