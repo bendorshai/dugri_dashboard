@@ -78,7 +78,6 @@ class GreenInvoiceService:
             "currency": "ILS",
             "amount": amount_ils,
             "maxPayments": 1,
-            "pluginId": "dugri-subscription",
             "description": "דוגרי - מנוי חודשי",
             "client": {
                 "name": user_name or user_email,
