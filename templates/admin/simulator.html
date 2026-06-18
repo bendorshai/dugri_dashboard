@@ -976,7 +976,8 @@ function simulator() {
             }
 
             target.setHours(hour, minute, 0, 0);
-            this.fakeClock = target.toISOString().slice(0, 16);
+            const pad = n => String(n).padStart(2, '0');
+            this.fakeClock = target.getFullYear() + '-' + pad(target.getMonth() + 1) + '-' + pad(target.getDate()) + 'T' + pad(target.getHours()) + ':' + pad(target.getMinutes());
         },
 
         async _refreshPanel() {
