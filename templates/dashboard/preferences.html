@@ -146,7 +146,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
             איפוס להגדרות ברירת מחדל
         </button>
-        <p class="text-muted" style="font-size: 0.8rem; margin-top: 6px;">מחזיר את כל ההרגלים למצב התחלתי — דוגרי יציע אותם מחדש. היעדים נשמרים.</p>
+        <p class="text-muted" style="font-size: 0.8rem; margin-top: 6px;">מחזיר את כל ההרגלים למצב התחלתי - דוגרי יציע אותם מחדש. היעדים נשמרים.</p>
     </div>
 
     <!-- Toast -->
@@ -191,6 +191,17 @@
     transition: .2s;
 }
 .btn-restore:hover { background: #f0ece6; }
+
+@media (max-width: 600px) {
+    .pref-fields { padding: 12px 0 4px 0; }
+    .field-row { flex-direction: column; align-items: stretch; gap: 4px; }
+    .field-row label { min-width: unset; }
+    .field-row .form-input { max-width: 100%; }
+    .pref-row { padding: 12px 0; }
+    .pref-desc { font-size: 0.8rem; }
+    .state-toggle { display: flex; width: 100%; }
+    .state-btn { flex: 1; text-align: center; padding: 6px 8px; }
+}
 
 .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

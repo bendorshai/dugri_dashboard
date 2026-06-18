@@ -12,7 +12,7 @@
     <p class="text-muted">ההתקדמות שלך לאורך זמן.</p>
 
     <!-- Metric tabs -->
-    <div style="display: flex; gap: 6px; margin: 16px 0 8px;">
+    <div class="metric-tabs" style="display: flex; gap: 6px; margin: 16px 0 8px;">
         <template x-for="m in metrics" :key="m.key">
             <button @click="switchMetric(m.key)"
                     :class="activeMetric === m.key ? 'btn-metric active' : 'btn-metric'"
@@ -21,7 +21,7 @@
     </div>
 
     <!-- Range buttons -->
-    <div style="display: flex; gap: 8px; margin: 8px 0 16px;">
+    <div class="range-tabs" style="display: flex; gap: 8px; margin: 8px 0 16px;">
         <template x-for="option in rangeOptions" :key="option.days">
             <button @click="switchRange(option.days)"
                     :class="activeDays === option.days ? 'btn-range active' : 'btn-range'"
@@ -85,6 +85,11 @@
     background: var(--text, #5A554D);
     border-color: var(--text, #5A554D);
     color: white;
+}
+
+@media (max-width: 600px) {
+    .metric-tabs, .range-tabs { flex-wrap: wrap !important; gap: 4px !important; }
+    .btn-metric, .btn-range { padding: 5px 10px; font-size: 0.8rem; }
 }
 </style>
 

@@ -1184,6 +1184,10 @@ a:hover {
         flex-direction: column-reverse;
     }
 
+    .card {
+        padding: 1.25rem;
+    }
+
     .dashboard-nav {
         width: 100%;
         border-left: none;
@@ -1196,15 +1200,23 @@ a:hover {
         left: 0;
         z-index: 100;
         background: var(--white);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .dashboard-nav::-webkit-scrollbar {
+        display: none;
     }
 
     .dashboard-nav-item {
-        flex: 1;
+        min-width: 60px;
+        flex: 0 0 auto;
         flex-direction: column;
         justify-content: center;
         text-align: center;
         gap: 0.25rem;
-        padding: 0.5rem 0.25rem;
+        padding: 0.5rem 0.5rem;
         font-size: 0.7rem;
         border-right: none;
         border-top: 3px solid transparent;
@@ -1223,6 +1235,10 @@ a:hover {
     .dashboard-content {
         padding: 1.5rem 1rem;
         padding-bottom: 5rem; /* space for fixed nav */
+    }
+
+    .toast {
+        bottom: 80px;
     }
 }
 
@@ -2266,6 +2282,31 @@ a:hover {
 
 .sim-toggle-goals .sim-field {
     margin-bottom: 0.25rem;
+}
+
+.sim-toggle-fired {
+    padding: 0.15rem 0 0 0;
+    margin-top: 0.15rem;
+}
+
+.sim-fired-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.sim-fired-label input[type="checkbox"] {
+    margin: 0;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+.sim-fired-label span {
+    user-select: none;
 }
 
 .sim-toggle-fired {
