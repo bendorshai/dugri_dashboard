@@ -965,10 +965,13 @@ function simulator() {
                 target.setDate(base.getDate() + daysAhead);
 
                 // Gate check: if target date is before gate_days from trial start, skip ahead
+                // Compare calendar dates to avoid UTC/local timezone mismatch
                 if (cfg.gateDays > 0 && this.state.trial_started_at) {
-                    const trialStart = new Date(this.state.trial_started_at);
+                    const ts = new Date(this.state.trial_started_at);
+                    const trialDateNum = Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate());
                     for (let i = 0; i < 8; i++) { // max 8 weeks safety
-                        const dayNum = Math.floor((target - trialStart) / 86400000);
+                        const targetDateNum = Date.UTC(target.getFullYear(), target.getMonth(), target.getDate());
+                        const dayNum = Math.round((targetDateNum - trialDateNum) / 86400000);
                         if (dayNum >= cfg.gateDays) break;
                         target.setDate(target.getDate() + 7);
                     }
