@@ -1126,6 +1126,7 @@ function simulator() {
             this.chatLoading = true;
             try {
                 const result = await this.api('/admin/simulator/send', payload);
+                if (result.debug_fake_now) this.flash('Bot used fake_now: ' + result.debug_fake_now);
                 this._appendBotResponses(result);
                 await this._refreshPanel();
             } catch(e) {}
