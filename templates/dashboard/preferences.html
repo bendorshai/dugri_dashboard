@@ -193,14 +193,20 @@
 .btn-restore:hover { background: #f0ece6; }
 
 @media (max-width: 600px) {
-    .pref-fields { padding: 12px 0 4px 0; }
-    .field-row { flex-direction: column; align-items: stretch; gap: 4px; }
-    .field-row label { min-width: unset; }
+    .pref-fields { padding: 10px 0 4px 0; }
+    .field-row { flex-direction: column; align-items: stretch; gap: 3px; }
+    .field-row label { min-width: unset; font-size: 0.82rem; }
     .field-row .form-input { max-width: 100%; }
-    .pref-row { padding: 12px 0; }
-    .pref-desc { font-size: 0.8rem; }
+    .pref-row { padding: 10px 0; }
+    .pref-header { gap: 10px; }
+    .pref-label { font-size: 0.9rem; }
+    .pref-desc { font-size: 0.78rem; }
+    .toggle-switch { width: 42px; height: 24px; }
+    .toggle-slider::before { height: 18px; width: 18px; }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
     .state-toggle { display: flex; width: 100%; }
-    .state-btn { flex: 1; text-align: center; padding: 6px 8px; }
+    .state-btn { flex: 1; text-align: center; padding: 5px 6px; font-size: 0.72rem; }
+    .btn-restore { padding: 6px 12px; font-size: 0.8rem; }
 }
 
 .toast {

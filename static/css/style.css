@@ -1239,10 +1239,21 @@ a:hover {
     }
 
     .dashboard-content {
-        padding: 1.5rem 1rem;
+        padding: 1.5rem 1.25rem;
         padding-bottom: 5rem; /* space for fixed nav */
         max-width: 100%;
         width: 100%;
+    }
+
+    .form-input {
+        padding: 0.6rem 0.85rem;
+        font-size: 0.9rem;
+    }
+
+    .btn {
+        padding: 0.7rem 1.5rem;
+        font-size: 1rem;
+        min-height: 42px;
     }
 
     .toast {
