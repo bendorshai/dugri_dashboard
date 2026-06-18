@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 content/loader.py - Load .txt content files into a namespace object.
 
