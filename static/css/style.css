@@ -1179,9 +1179,9 @@ a:hover {
         padding: 2rem 1.25rem;
     }
 
-    /* Mobile dashboard: nav becomes bottom bar */
+    /* Mobile dashboard: nav becomes fixed bottom bar */
     .dashboard-layout {
-        flex-direction: column-reverse;
+        display: block;
     }
 
     .card {
@@ -1189,18 +1189,19 @@ a:hover {
     }
 
     .dashboard-nav {
-        width: 100%;
-        height: auto;
-        border-left: none;
-        border-top: 1px solid var(--border);
-        padding: 0;
-        display: flex;
         position: fixed;
         bottom: 0;
         right: 0;
         left: 0;
         z-index: 100;
+        width: 100%;
+        height: auto;
+        display: flex;
+        flex-direction: row;
         background: var(--white);
+        border-left: none;
+        border-top: 1px solid var(--border);
+        padding: 0;
         overflow-x: auto;
         overflow-y: visible;
         -webkit-overflow-scrolling: touch;
@@ -1214,7 +1215,9 @@ a:hover {
     .dashboard-nav-item {
         min-width: 60px;
         flex: 0 0 auto;
+        display: flex;
         flex-direction: column;
+        align-items: center;
         justify-content: center;
         text-align: center;
         gap: 0.25rem;
