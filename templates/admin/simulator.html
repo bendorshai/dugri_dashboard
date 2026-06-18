@@ -459,7 +459,7 @@
                     <!-- Schedule reference -->
                     <div class="sim-hook-schedule">
                         <div class="sim-hook-schedule-title">Schedule reference:</div>
-                        <div class="sim-hook-row">
+                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('sleep')" title="Set clock to fire time">
                             <span class="sim-hook-name">Daily: sleep</span>
                             <span class="sim-hook-time" x-text="hookSchedule.sleep ? String(hookSchedule.sleep.hour).padStart(2,'0') + ':' + String(hookSchedule.sleep.minute).padStart(2,'0') : 'awaiting tomorrow'" :class="{ 'sim-hook-pending': !hookSchedule.sleep }"></span>
                             <span class="sim-hook-window">8-10</span>
@@ -469,17 +469,17 @@
                             <span class="sim-hook-time">warns 60m before close</span>
                             <span class="sim-hook-window"></span>
                         </div>
-                        <div class="sim-hook-row">
+                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('workouts')" title="Set clock to fire time">
                             <span class="sim-hook-name">Thu: workouts</span>
                             <span class="sim-hook-time" x-text="hookSchedule.workouts ? String(hookSchedule.workouts.hour).padStart(2,'0') + ':' + String(hookSchedule.workouts.minute).padStart(2,'0') : 'awaiting Thursday'" :class="{ 'sim-hook-pending': !hookSchedule.workouts }"></span>
                             <span class="sim-hook-window">16-20</span>
                         </div>
-                        <div class="sim-hook-row">
+                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('self_care')" title="Set clock to fire time">
                             <span class="sim-hook-name">Fri: self_care</span>
                             <span class="sim-hook-time" x-text="hookSchedule.self_care ? String(hookSchedule.self_care.hour).padStart(2,'0') + ':' + String(hookSchedule.self_care.minute).padStart(2,'0') : 'awaiting Friday'" :class="{ 'sim-hook-pending': !hookSchedule.self_care }"></span>
                             <span class="sim-hook-window">10-14</span>
                         </div>
-                        <div class="sim-hook-row">
+                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('weekly_summary')" title="Set clock to fire time">
                             <span class="sim-hook-name">Sun: weekly_summary</span>
                             <span class="sim-hook-time" x-text="hookSchedule.weekly_summary ? String(hookSchedule.weekly_summary.hour).padStart(2,'0') + ':' + String(hookSchedule.weekly_summary.minute).padStart(2,'0') : 'awaiting Sunday'" :class="{ 'sim-hook-pending': !hookSchedule.weekly_summary }"></span>
                             <span class="sim-hook-window">9-11</span>
@@ -930,6 +930,53 @@ function simulator() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        jumpToHook(hookName) {
+            // Duplicated from health_tracker/constants.py HOOK_CONFIG - update both places
+            const HOOK_CFG = {
+                sleep:          { anchorDay: null, window: [8, 10],  gateDays: 1 },
+                workouts:       { anchorDay: 4,    window: [16, 20], gateDays: 4 },
+                self_care:      { anchorDay: 5,    window: [10, 14], gateDays: 4 },
+                weekly_summary: { anchorDay: 0,    window: [9, 11],  gateDays: 0 },
+            };
+            const cfg = HOOK_CFG[hookName];
+            if (!cfg) return;
+
+            const sched = this.hookSchedule[hookName];
+            let hour, minute;
+            if (sched) {
+                hour = sched.hour;
+                minute = sched.minute + 1;
+                if (minute >= 60) { hour++; minute = 0; }
+            } else {
+                hour = cfg.window[0];
+                minute = 1;
+            }
+
+            const base = this.fakeClock ? new Date(this.fakeClock) : new Date();
+            let target = new Date(base);
+
+            if (cfg.anchorDay !== null) {
+                // Weekly hook: advance to next anchor day (JS getDay: 0=Sun..6=Sat)
+                const currentDay = base.getDay();
+                let daysAhead = (cfg.anchorDay - currentDay + 7) % 7;
+                if (daysAhead === 0) daysAhead = 7; // always jump forward
+                target.setDate(base.getDate() + daysAhead);
+
+                // Gate check: if target date is before gate_days from trial start, skip ahead
+                if (cfg.gateDays > 0 && this.state.trial_started_at) {
+                    const trialStart = new Date(this.state.trial_started_at);
+                    for (let i = 0; i < 8; i++) { // max 8 weeks safety
+                        const dayNum = Math.floor((target - trialStart) / 86400000);
+                        if (dayNum >= cfg.gateDays) break;
+                        target.setDate(target.getDate() + 7);
+                    }
+                }
+            }
+
+            target.setHours(hour, minute, 0, 0);
+            this.fakeClock = target.toISOString().slice(0, 16);
         },
 
         async _refreshPanel() {

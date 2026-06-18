@@ -2378,6 +2378,17 @@ a:hover {
     padding: 0.1rem 0;
 }
 
+.sim-hook-clickable {
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0.1rem 0.2rem;
+    margin: 0 -0.2rem;
+}
+
+.sim-hook-clickable:hover {
+    background: var(--accent-bg, rgba(166, 116, 72, 0.1));
+}
+
 .sim-hook-name {
     color: var(--text-muted);
 }
