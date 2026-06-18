@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import hmac
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import (
-    Blueprint, jsonify, render_template, redirect, url_for, request, session, current_app,
+    Blueprint, flash, jsonify, render_template, redirect, url_for, request, session, current_app,
 )
 
 from auth import login_required
 from storage import DashboardStorage
+from services.green_invoice import GreenInvoiceService, GreenInvoiceError
 
 logger = logging.getLogger(__name__)
 
@@ -306,12 +308,160 @@ def profile_post():
 
 
 # ------------------------------------------------------------------
-# Subscription (unchanged)
+# Subscription
 # ------------------------------------------------------------------
+
+def _get_gi_service() -> GreenInvoiceService:
+    cfg = current_app.config["APP_CONFIG"]
+    gi_cfg = cfg["green_invoice"]
+    return GreenInvoiceService(
+        api_id=gi_cfg["api_id"],
+        api_secret=gi_cfg["api_secret"],
+        sandbox=gi_cfg.get("sandbox", True),
+    )
+
+
+def _subscription_price() -> int:
+    cfg = current_app.config["APP_CONFIG"]
+    return cfg.get("green_invoice", {}).get("subscription_price_ils", 47)
+
+
+def _format_date_he(iso_str: str | None) -> str:
+    """Format an ISO datetime string as DD/MM/YYYY for Hebrew display."""
+    if not iso_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(iso_str))
+        return dt.strftime("%d/%m/%Y")
+    except (ValueError, TypeError):
+        return ""
+
 
 @dashboard_bp.route("/subscription")
 @login_required
 def subscription():
+    import hebrew_strings as hs
+
     storage = _get_storage()
     user = storage.get_user(session["user_email"])
-    return render_template("dashboard/subscription.html", user=user, active_tab="subscription")
+    cfg = current_app.config["APP_CONFIG"]
+    price = _subscription_price()
+    contact_email = cfg.get("contact_email", "")
+
+    status = user.get("subscription_status", "trial_pending") if user else "trial_pending"
+    expires_at = _format_date_he(user.get("subscription_expires_at")) if user else ""
+
+    return render_template(
+        "dashboard/subscription.html",
+        user=user,
+        active_tab="subscription",
+        price=price,
+        status=status,
+        expires_at=expires_at,
+        contact_email=contact_email,
+        hs=hs,
+    )
+
+
+@dashboard_bp.route("/subscription/start", methods=["POST"])
+@login_required
+def subscription_start():
+    """Generate Green Invoice payment form URL and redirect user."""
+    storage = _get_storage()
+    email = session["user_email"]
+    user = storage.get_user(email)
+
+    price = _subscription_price()
+    base_url = request.url_root.rstrip("/")
+    success_url = f"{base_url}{url_for('dashboard_views.subscription_success')}"
+    failure_url = f"{base_url}{url_for('dashboard_views.subscription_failure')}"
+    notify_url = f"{base_url}{url_for('dashboard_views.subscription_webhook')}"
+
+    try:
+        gi = _get_gi_service()
+        form_url = gi.get_payment_form_url(
+            user_email=email,
+            user_name=user.get("name", "") if user else "",
+            amount_ils=price,
+            success_url=success_url,
+            failure_url=failure_url,
+            notify_url=notify_url,
+        )
+        return redirect(form_url)
+    except GreenInvoiceError:
+        logger.exception("Failed to create payment form")
+        import hebrew_strings as hs
+        flash(hs.SUB_FAILURE_FLASH, "error")
+        return redirect(url_for("dashboard_views.subscription"))
+
+
+@dashboard_bp.route("/subscription/success")
+@login_required
+def subscription_success():
+    import hebrew_strings as hs
+    flash(hs.SUB_SUCCESS_FLASH, "success")
+    return redirect(url_for("dashboard_views.subscription"))
+
+
+@dashboard_bp.route("/subscription/failure")
+@login_required
+def subscription_failure():
+    import hebrew_strings as hs
+    flash(hs.SUB_FAILURE_FLASH, "error")
+    return redirect(url_for("dashboard_views.subscription"))
+
+
+@dashboard_bp.route("/subscription/cancel", methods=["POST"])
+@login_required
+def subscription_cancel():
+    """Cancel subscription - keeps access until period ends."""
+    storage = _get_storage()
+    email = session["user_email"]
+    user = storage.get_user(email)
+
+    if user and user.get("subscription_status") == "paid":
+        storage.update_user_profile(email, {
+            "subscription_status": "cancelled",
+            "subscription_cancelled_at": DashboardStorage._now(),
+        })
+
+    return redirect(url_for("dashboard_views.subscription"))
+
+
+@dashboard_bp.route("/subscription/webhook", methods=["POST"])
+def subscription_webhook():
+    """Green Invoice IPN webhook - called by GI servers after payment."""
+    gi_type = request.args.get("gi-type", "")
+
+    if gi_type != "ipn":
+        return jsonify({"status": "ignored"}), 200
+
+    data = request.json or request.form.to_dict()
+    user_email = data.get("custom", "")
+    token_id = data.get("tokenId") or data.get("token_id", "")
+
+    if not user_email:
+        logger.warning("Webhook missing user email in custom field")
+        return jsonify({"error": "missing user email"}), 400
+
+    storage = _get_storage()
+    user = storage.get_user(user_email)
+    if not user:
+        logger.warning("Webhook for unknown user: %s", user_email)
+        return jsonify({"error": "user not found"}), 404
+
+    now = DashboardStorage._now()
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+
+    storage.update_user_profile(user_email, {
+        "subscription_status": "paid",
+        "subscription_token_id": token_id,
+        "subscription_started_at": now,
+        "subscription_expires_at": expires_at,
+        "subscription_last_charged_at": now,
+        "subscription_expiry_message_sent": False,
+        "subscription_end_acknowledged": False,
+    })
+
+    logger.info("Subscription activated for %s (token: %s)", user_email, token_id[:8] if token_id else "none")
+    return jsonify({"status": "ok"}), 200

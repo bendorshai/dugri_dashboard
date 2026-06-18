@@ -20,5 +20,11 @@
     "telegram_bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
     "founder_telegram_username": "your_username",
     "bot_internal_url": "https://your-bot-domain.railway.app/internal/notify-target-update",
-    "internal_secret": "YOUR_INTERNAL_SECRET"
+    "internal_secret": "YOUR_INTERNAL_SECRET",
+    "green_invoice": {
+        "api_id": "YOUR_GREEN_INVOICE_API_ID",
+        "api_secret": "YOUR_GREEN_INVOICE_API_SECRET",
+        "sandbox": true,
+        "subscription_price_ils": 1
+    }
 }

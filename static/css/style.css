@@ -124,6 +124,17 @@ a:hover {
     color: var(--white);
 }
 
+.btn--danger {
+    background: var(--danger, #e74c3c);
+    color: var(--white);
+    border-color: var(--danger, #e74c3c);
+}
+
+.btn--danger:hover {
+    background: #c0392b;
+    border-color: #c0392b;
+}
+
 .btn--full {
     width: 100%;
 }

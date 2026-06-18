@@ -69,5 +69,22 @@ PRIVACY_SUBTITLE = (
     "בהתאם לחוק הגנת הפרטיות (ישראל) וסעיף 30א לחוק התקשורת (בזק ושידורים)"
 )
 
-# -- Payment placeholder --
-PAYMENT_PLACEHOLDER = "בקרוב"
+# -- Subscription page --
+SUB_TITLE = "מנוי"
+SUB_TRIAL_ACTIVE_HEADING = "חודש ניסיון חינם"
+SUB_TRIAL_ACTIVE_BODY = "אתה כרגע בתקופת ניסיון חינמית. בסיומה תוכל להמשיך עם מנוי."
+SUB_TRIAL_ENDED_HEADING = "תקופת הניסיון הסתיימה"
+SUB_TRIAL_ENDED_BODY = "כדי להמשיך לתעד ולקבל אימון מדוגרי, הפעל מנוי."
+SUB_SUBSCRIBE_CTA = "להתחיל מנוי - {} ₪ לחודש"
+SUB_ACTIVE_HEADING = "מנוי פעיל"
+SUB_ACTIVE_BODY = "המנוי שלך פעיל. החיוב הבא: {}."
+SUB_CANCEL_BTN = "ביטול מנוי"
+SUB_CANCEL_CONFIRM = "בטוח? הגישה תישאר עד {}."
+SUB_CANCELLED_HEADING = "המנוי בוטל"
+SUB_CANCELLED_BODY = "הגישה לדוגרי ממשיכה עד {}. אחרי זה אפשר תמיד לחדש."
+SUB_RESUBSCRIBE_CTA = "לחדש מנוי"
+SUB_ENDED_HEADING = "המנוי שלך הסתיים"
+SUB_ENDED_BODY = "הנתונים שלך שמורים ומחכים. הפעל מנוי כדי להמשיך."
+SUB_SUCCESS_FLASH = "המנוי הופעל בהצלחה. תודה!"
+SUB_FAILURE_FLASH = "התשלום לא הושלם. נסה שוב."
+SUB_CONTACT = "שאלות? צור קשר ב-{}"
