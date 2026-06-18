@@ -1118,9 +1118,9 @@ function simulator() {
                 payload.reply_to_message_id = this.replyTo._id;
                 payload.reply_to_text = this.replyTo.text;
             }
-            this.chatMessages = [...this.chatMessages, mkMsg('user', text, null,
-                this.replyTo ? { replying_to: this.replyTo.text.slice(0, 60) } : null
-            )];
+            const userMeta = { timestamp: new Date(this.fakeClock).toISOString() };
+            if (this.replyTo) userMeta.replying_to = this.replyTo.text.slice(0, 60);
+            this.chatMessages = [...this.chatMessages, mkMsg('user', text, null, userMeta)];
             this.replyTo = null;
             this.scrollChat();
             this.chatLoading = true;
