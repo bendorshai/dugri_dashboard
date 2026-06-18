@@ -954,7 +954,16 @@ function simulator() {
                 minute = 1;
             }
 
-            const base = this.fakeClock ? new Date(this.fakeClock) : new Date();
+            // Start from the day after last_asked_at (so the hook will fire again)
+            const toggle = this.state.toggles && this.state.toggles[hookName];
+            const lastAsked = toggle && toggle.last_asked_at;
+            let base;
+            if (lastAsked) {
+                base = new Date(lastAsked);
+                base.setDate(base.getDate() + 1); // day after last log
+            } else {
+                base = this.fakeClock ? new Date(this.fakeClock) : new Date();
+            }
             let target = new Date(base);
 
             if (cfg.anchorDay !== null) {
