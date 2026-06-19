@@ -4,6 +4,28 @@
 
 {% block dashboard_content %}
 <style>
+/* Version banner */
+.sim-version-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, rgba(166,116,72,0.1), rgba(91,168,196,0.08));
+    border: 1.5px solid rgba(166,116,72,0.25);
+    border-radius: var(--radius, 8px);
+}
+.sim-version-label {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--primary-dark, #A67448);
+    white-space: nowrap;
+}
+.sim-version-notes {
+    font-size: 0.95rem;
+    color: var(--text, #5A554D);
+    font-weight: 500;
+}
 /* History display styles (copied from history page for visual parity) */
 .history-day-card {
     background: var(--white);
@@ -106,6 +128,12 @@
         <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
         <a href="{{ url_for('admin.tokens') }}" class="admin-tab">Tokens</a>
         <a href="{{ url_for('admin.simulator') }}" class="admin-tab active">Simulator</a>
+    </div>
+
+    <!-- Version Banner -->
+    <div class="sim-version-banner" x-show="botVersion" x-transition>
+        <span class="sim-version-label" x-text="'v' + botVersion"></span>
+        <span class="sim-version-notes" x-text="botVersionNotes"></span>
     </div>
 
     <!-- Status Bar -->
@@ -805,9 +833,12 @@ function simulator() {
         hookSchedule: {},
         snapshots: [],
         snapshotName: '',
+        botVersion: '',
+        botVersionNotes: '',
         panels: { trial: true, profile: true, toggles: true, moderation: true, scheduler: true, snapshots: true, danger: false },
 
         init() {
+            this._loadVersion();
             this._loadHistory();
             this._loadHookSchedule();
             this._loadSnapshots();
@@ -1091,6 +1122,16 @@ function simulator() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        async _loadVersion() {
+            try {
+                const data = await this.api('/admin/simulator/version');
+                if (!data.error) {
+                    this.botVersion = data.version || '';
+                    this.botVersionNotes = data.version_notes || '';
+                }
+            } catch(e) {}
         },
 
         async _loadHistory() {

@@ -415,6 +415,31 @@ def simulator_send():
 SIMULATOR_TID = 999999999
 
 
+@admin_bp.route("/simulator/version")
+@admin_required
+def simulator_version():
+    """Fetch current bot version from the bot's /internal/version endpoint."""
+    cfg = current_app.config["APP_CONFIG"]
+    bot_url = cfg.get("bot_internal_url", "")
+    secret = cfg.get("internal_secret", "")
+
+    if not bot_url:
+        return jsonify({"error": "bot_internal_url not configured"}), 500
+
+    try:
+        resp = requests.get(
+            f"{bot_url}/internal/version",
+            headers={"X-Internal-Secret": secret},
+            timeout=5,
+        )
+        if resp.ok:
+            return jsonify(resp.json())
+        return jsonify({"error": "bot returned error"}), 502
+    except Exception:
+        logger.exception("Failed to fetch bot version")
+        return jsonify({"error": "bot unreachable"}), 502
+
+
 @admin_bp.route("/simulator/history")
 @admin_required
 def simulator_history():
