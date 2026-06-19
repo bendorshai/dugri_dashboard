@@ -180,6 +180,46 @@
                 <button @click="runTick()" class="sim-btn sim-btn--full" :disabled="loading || !fakeClock" style="margin-top:0.5rem;">
                     Run Tick
                 </button>
+
+                <!-- Schedule reference (inline) -->
+                <div class="sim-hook-schedule">
+                    <div class="sim-hook-schedule-title">Schedule reference:</div>
+                    <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('sleep')" title="Set clock to fire time">
+                        <span class="sim-hook-name">Daily: sleep</span>
+                        <span class="sim-hook-time" x-text="hookSchedule.sleep ? String(hookSchedule.sleep.hour).padStart(2,'0') + ':' + String(hookSchedule.sleep.minute).padStart(2,'0') : 'awaiting tomorrow'" :class="{ 'sim-hook-pending': !hookSchedule.sleep }"></span>
+                        <span class="sim-hook-window">8-10</span>
+                    </div>
+                    <div class="sim-hook-row">
+                        <span class="sim-hook-name">Daily: food nudge</span>
+                        <span class="sim-hook-time">re-engagement</span>
+                        <span class="sim-hook-window">8-10</span>
+                    </div>
+                    <div class="sim-hook-row">
+                        <span class="sim-hook-name">Daily: eat window</span>
+                        <span class="sim-hook-time">warns 60m before close</span>
+                        <span class="sim-hook-window"></span>
+                    </div>
+                    <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('workouts')" title="Set clock to fire time">
+                        <span class="sim-hook-name">Thu: workouts</span>
+                        <span class="sim-hook-time" x-text="hookSchedule.workouts ? String(hookSchedule.workouts.hour).padStart(2,'0') + ':' + String(hookSchedule.workouts.minute).padStart(2,'0') : 'awaiting Thursday'" :class="{ 'sim-hook-pending': !hookSchedule.workouts }"></span>
+                        <span class="sim-hook-window">16-20</span>
+                    </div>
+                    <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('self_care')" title="Set clock to fire time">
+                        <span class="sim-hook-name">Fri: self_care</span>
+                        <span class="sim-hook-time" x-text="hookSchedule.self_care ? String(hookSchedule.self_care.hour).padStart(2,'0') + ':' + String(hookSchedule.self_care.minute).padStart(2,'0') : 'awaiting Friday'" :class="{ 'sim-hook-pending': !hookSchedule.self_care }"></span>
+                        <span class="sim-hook-window">10-14</span>
+                    </div>
+                    <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('weekly_summary')" title="Set clock to fire time">
+                        <span class="sim-hook-name">Sun: weekly_summary</span>
+                        <span class="sim-hook-time" x-text="hookSchedule.weekly_summary ? String(hookSchedule.weekly_summary.hour).padStart(2,'0') + ':' + String(hookSchedule.weekly_summary.minute).padStart(2,'0') : 'awaiting Sunday'" :class="{ 'sim-hook-pending': !hookSchedule.weekly_summary }"></span>
+                        <span class="sim-hook-window">9-11</span>
+                    </div>
+                    <div class="sim-hook-row" style="margin-top: 0.25rem; border-top: 1px dashed var(--border); padding-top: 0.25rem;">
+                        <span class="sim-hook-name">Trial end</span>
+                        <span class="sim-hook-time">after 12 days, after 20:30</span>
+                        <span class="sim-hook-window"></span>
+                    </div>
+                </div>
             </div>
 
             <!-- Trial & Subscription -->
@@ -482,49 +522,6 @@
                         <span class="sim-strikes-count" x-text="(state.strikes || []).length"></span>
                         <button @click="addStrike()" class="sim-btn sim-btn--xs">+1</button>
                         <button @click="clearStrikes()" class="sim-btn sim-btn--xs sim-btn--muted">Clear</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Scheduler -->
-            <div class="sim-card">
-                <h4 class="sim-card-header" @click="panels.scheduler = !panels.scheduler">
-                    Scheduler <span class="sim-collapse-icon" :class="{ open: panels.scheduler }">&#9660;</span>
-                </h4>
-                <div x-show="panels.scheduler" x-transition.duration.150ms>
-                    <!-- Schedule reference -->
-                    <div class="sim-hook-schedule">
-                        <div class="sim-hook-schedule-title">Schedule reference:</div>
-                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('sleep')" title="Set clock to fire time">
-                            <span class="sim-hook-name">Daily: sleep</span>
-                            <span class="sim-hook-time" x-text="hookSchedule.sleep ? String(hookSchedule.sleep.hour).padStart(2,'0') + ':' + String(hookSchedule.sleep.minute).padStart(2,'0') : 'awaiting tomorrow'" :class="{ 'sim-hook-pending': !hookSchedule.sleep }"></span>
-                            <span class="sim-hook-window">8-10</span>
-                        </div>
-                        <div class="sim-hook-row">
-                            <span class="sim-hook-name">Daily: eat window</span>
-                            <span class="sim-hook-time">warns 60m before close</span>
-                            <span class="sim-hook-window"></span>
-                        </div>
-                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('workouts')" title="Set clock to fire time">
-                            <span class="sim-hook-name">Thu: workouts</span>
-                            <span class="sim-hook-time" x-text="hookSchedule.workouts ? String(hookSchedule.workouts.hour).padStart(2,'0') + ':' + String(hookSchedule.workouts.minute).padStart(2,'0') : 'awaiting Thursday'" :class="{ 'sim-hook-pending': !hookSchedule.workouts }"></span>
-                            <span class="sim-hook-window">16-20</span>
-                        </div>
-                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('self_care')" title="Set clock to fire time">
-                            <span class="sim-hook-name">Fri: self_care</span>
-                            <span class="sim-hook-time" x-text="hookSchedule.self_care ? String(hookSchedule.self_care.hour).padStart(2,'0') + ':' + String(hookSchedule.self_care.minute).padStart(2,'0') : 'awaiting Friday'" :class="{ 'sim-hook-pending': !hookSchedule.self_care }"></span>
-                            <span class="sim-hook-window">10-14</span>
-                        </div>
-                        <div class="sim-hook-row sim-hook-clickable" @click="jumpToHook('weekly_summary')" title="Set clock to fire time">
-                            <span class="sim-hook-name">Sun: weekly_summary</span>
-                            <span class="sim-hook-time" x-text="hookSchedule.weekly_summary ? String(hookSchedule.weekly_summary.hour).padStart(2,'0') + ':' + String(hookSchedule.weekly_summary.minute).padStart(2,'0') : 'awaiting Sunday'" :class="{ 'sim-hook-pending': !hookSchedule.weekly_summary }"></span>
-                            <span class="sim-hook-window">9-11</span>
-                        </div>
-                        <div class="sim-hook-row" style="margin-top: 0.25rem; border-top: 1px dashed var(--border); padding-top: 0.25rem;">
-                            <span class="sim-hook-name">Trial end</span>
-                            <span class="sim-hook-time">after 12 days, after 20:30</span>
-                            <span class="sim-hook-window"></span>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -835,7 +832,7 @@ function simulator() {
         snapshotName: '',
         botVersion: '',
         botVersionNotes: '',
-        panels: { trial: true, profile: true, toggles: true, moderation: true, scheduler: true, snapshots: true, danger: false },
+        panels: { trial: true, profile: true, toggles: true, moderation: true, snapshots: true, danger: false },
 
         init() {
             this._loadVersion();
