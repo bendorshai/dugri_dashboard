@@ -27,6 +27,7 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_email" not in session:
+            session["redirect_after_login"] = request.path
             return redirect(url_for("auth.login", returning="1"))
         return f(*args, **kwargs)
     return decorated
@@ -178,15 +179,18 @@ def callback():
     session["user_email"] = email
     session["user_name"] = name
 
+    # Redirect to original page if user was trying to reach a specific route
+    redirect_target = session.pop("redirect_after_login", None)
+
     # Returning user with telegram linked → dashboard
     if user.get("telegram_user_id"):
-        return redirect(url_for("dashboard_views.home"))
+        return redirect(redirect_target or url_for("dashboard_views.home"))
 
     # Generate fresh signup session token for Telegram deep link
     token = storage.regenerate_signup_session_token(email)
     session["signup_session_token"] = token
 
-    return redirect(url_for("welcome"))
+    return redirect(redirect_target or url_for("welcome"))
 
 
 @auth_bp.route("/logout")

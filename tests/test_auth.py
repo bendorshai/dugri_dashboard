@@ -141,6 +141,77 @@ class TestCallbackNewUser:
         mock_storage.create_user.assert_not_called()
 
 
+class TestLoginRequiredRedirect:
+    """login_required saves original path so callback can redirect back."""
+
+    def test_unauthenticated_request_saves_path_in_session(self, client):
+        resp = client.get("/dashboard/profile")
+        assert resp.status_code == 302
+        with client.session_transaction() as sess:
+            assert sess["redirect_after_login"] == "/dashboard/profile"
+
+    @patch("auth.DashboardStorage")
+    @patch("auth.requests")
+    def test_callback_redirects_to_saved_path(self, mock_requests, mock_storage_cls, client):
+        _setup_oauth_mocks(mock_requests)
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = {
+            "_id": "user@example.com",
+            "telegram_user_id": 12345,
+            "photo_url": None,
+        }
+        mock_storage_cls.return_value = mock_storage
+
+        with client.session_transaction() as sess:
+            sess["oauth_state"] = "test-state"
+            sess["redirect_after_login"] = "/dashboard/profile"
+
+        resp = client.get("/auth/callback?code=test-code&state=test-state")
+        assert resp.status_code == 302
+        assert "/dashboard/profile" in resp.headers["Location"]
+
+    @patch("auth.DashboardStorage")
+    @patch("auth.requests")
+    def test_callback_clears_redirect_from_session(self, mock_requests, mock_storage_cls, client):
+        _setup_oauth_mocks(mock_requests)
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = {
+            "_id": "user@example.com",
+            "telegram_user_id": 12345,
+            "photo_url": None,
+        }
+        mock_storage_cls.return_value = mock_storage
+
+        with client.session_transaction() as sess:
+            sess["oauth_state"] = "test-state"
+            sess["redirect_after_login"] = "/dashboard/profile"
+
+        client.get("/auth/callback?code=test-code&state=test-state")
+        with client.session_transaction() as sess:
+            assert "redirect_after_login" not in sess
+
+    @patch("auth.DashboardStorage")
+    @patch("auth.requests")
+    def test_new_user_without_telegram_redirects_to_saved_path(self, mock_requests, mock_storage_cls, client):
+        _setup_oauth_mocks(mock_requests)
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = {
+            "_id": "user@example.com",
+            "telegram_user_id": None,
+            "photo_url": None,
+        }
+        mock_storage.regenerate_signup_session_token.return_value = "tok"
+        mock_storage_cls.return_value = mock_storage
+
+        with client.session_transaction() as sess:
+            sess["oauth_state"] = "test-state"
+            sess["redirect_after_login"] = "/dashboard/preferences"
+
+        resp = client.get("/auth/callback?code=test-code&state=test-state")
+        assert resp.status_code == 302
+        assert "/dashboard/preferences" in resp.headers["Location"]
+
+
 class TestCallbackReturningUser:
     @patch("auth.DashboardStorage")
     @patch("auth.requests")

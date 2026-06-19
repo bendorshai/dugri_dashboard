@@ -2,7 +2,7 @@
 
 {% block dashboard_content %}
 <div class="dashboard-card" style="max-width: 600px;" x-data="preferencesForm()">
-    <h2>העדפות אישיות</h2>
+    <h2>העדפות אישיות ויעדים</h2>
     <p class="text-muted">הדלקה וכיבוי של מעקב הרגלים + יעדים. שינויים נשמרים אוטומטית.</p>
 
     {% set toggles = user.get('toggles', {}) if user else {} %}
