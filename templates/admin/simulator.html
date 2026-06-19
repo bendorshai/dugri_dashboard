@@ -189,9 +189,9 @@
                         <span class="sim-hook-time" x-text="hookSchedule.sleep ? String(hookSchedule.sleep.hour).padStart(2,'0') + ':' + String(hookSchedule.sleep.minute).padStart(2,'0') : 'awaiting tomorrow'" :class="{ 'sim-hook-pending': !hookSchedule.sleep }"></span>
                         <span class="sim-hook-window">8-10</span>
                     </div>
-                    <div class="sim-hook-row">
+                    <div class="sim-hook-row sim-hook-clickable" @click="jumpToFoodNudge()" title="Set clock to 08:01">
                         <span class="sim-hook-name">Daily: food nudge</span>
-                        <span class="sim-hook-time">re-engagement</span>
+                        <span class="sim-hook-time">first tick in window</span>
                         <span class="sim-hook-window">8-10</span>
                     </div>
                     <div class="sim-hook-row">
@@ -1073,6 +1073,14 @@ function simulator() {
             }
 
             target.setHours(hour, minute, 0, 0);
+            this.fakeClock = _localIso(target);
+            this._prevFakeClock = this.fakeClock;
+        },
+
+        jumpToFoodNudge() {
+            const base = this.fakeClock ? new Date(this.fakeClock) : new Date();
+            const target = new Date(base);
+            target.setHours(8, 1, 0, 0);
             this.fakeClock = _localIso(target);
             this._prevFakeClock = this.fakeClock;
         },
