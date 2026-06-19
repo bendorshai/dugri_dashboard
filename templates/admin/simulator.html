@@ -129,6 +129,7 @@
                     </div>
                 </div>
                 <div class="sim-quick-days">
+                    <button @click="nudgeDay(-1)" class="sim-btn sim-btn--sm">&laquo;</button>
                     <button @click="setAsOfDay(0)" class="sim-btn sim-btn--sm">Fresh</button>
                     <button @click="setAsOfDay(1)" class="sim-btn sim-btn--sm">D1</button>
                     <button @click="setAsOfDay(2)" class="sim-btn sim-btn--sm">D2</button>
@@ -138,6 +139,7 @@
                     <button @click="setAsOfDay(7)" class="sim-btn sim-btn--sm">D7</button>
                     <button @click="setAsOfDay(10)" class="sim-btn sim-btn--sm">D10</button>
                     <button @click="setAsOfDay(12)" class="sim-btn sim-btn--sm">D12</button>
+                    <button @click="nudgeDay(1)" class="sim-btn sim-btn--sm">&raquo;</button>
                 </div>
                 <div class="sim-day-indicator" x-show="state.trial_started_at">
                     Day <span x-text="currentDay"></span> of trial
@@ -870,6 +872,14 @@ function simulator() {
             const cur = this.fakeClock ? new Date(this.fakeClock) : new Date();
             target.setHours(cur.getHours(), cur.getMinutes(), 0, 0);
             const newVal = _localIso(target);
+            if (!this._applyTimeTravel(newVal)) return;
+            this.fakeClock = newVal;
+        },
+
+        nudgeDay(delta) {
+            const cur = this.fakeClock ? new Date(this.fakeClock) : new Date();
+            cur.setDate(cur.getDate() + delta);
+            const newVal = _localIso(cur);
             if (!this._applyTimeTravel(newVal)) return;
             this.fakeClock = newVal;
         },
