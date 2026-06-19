@@ -119,8 +119,13 @@
         <div class="sim-panel">
             <h3 class="sim-panel-title">State Control</h3>
 
-            <!-- As Of Date (primary concept) -->
+            <!-- Timeline: Trial Start + As Of Date -->
             <div class="sim-card" style="border-top-color: var(--accent-air, #5BA8C4);">
+                <div class="sim-field">
+                    <label>Trial Started</label>
+                    <input type="datetime-local" x-model="trialStartedLocal"
+                           @change="saveTrialStarted()" style="font-size:0.85rem;">
+                </div>
                 <div class="sim-field">
                     <label style="font-weight:700;">As Of Date</label>
                     <div style="display:flex;gap:0.25rem;">
@@ -162,11 +167,6 @@
                             <option value="trial_active">trial_active</option>
                             <option value="trial_ended">trial_ended</option>
                         </select>
-                    </div>
-                    <div class="sim-field">
-                        <label>Trial Started</label>
-                        <input type="datetime-local" x-model="trialStartedLocal"
-                               @change="saveTrialStarted()">
                     </div>
                     <div class="sim-field sim-field--row">
                         <label>Trial expiry msg sent</label>
