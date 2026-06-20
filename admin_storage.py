@@ -639,6 +639,11 @@ class AdminStorage:
             .limit(limit)
         )
 
+    def delete_conversation_logs(self, telegram_user_id: int) -> int:
+        """Delete all conversation log entries for a user. Returns deleted count."""
+        result = self._conversation_logs.delete_many({"telegram_user_id": telegram_user_id})
+        return result.deleted_count
+
     def get_user_by_telegram_id(self, telegram_user_id: int) -> dict | None:
         """Fetch a user document by telegram_user_id."""
         return self._users.find_one({"telegram_user_id": telegram_user_id})

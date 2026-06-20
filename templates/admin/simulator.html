@@ -588,7 +588,7 @@
                                 <template x-if="msg.meta && msg.meta.timestamp">
                                     <span class="sim-meta-time" x-text="new Date(msg.meta.timestamp).toLocaleString('he-IL', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})"></span>
                                 </template>
-                                <template x-if="msg.meta && msg.meta.classification">
+                                <template x-if="msg.role === 'user' && msg.meta && msg.meta.classification">
                                     <span class="sim-meta-tag" x-text="msg.meta.classification"></span>
                                 </template>
                                 <template x-if="msg.meta && msg.meta.replying_to">
@@ -814,11 +814,7 @@ function simulator() {
         loading: false,
         statusMsg: '',
         statusOk: true,
-        chatMessages: (rawUser.recent_messages || []).map(m =>
-            mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup, {
-                classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
-            })
-        ),
+        chatMessages: [],
         chatInput: '',
         chatLoading: false,
         replyTo: null,
@@ -835,6 +831,7 @@ function simulator() {
         panels: { trial: true, profile: true, toggles: true, moderation: true, snapshots: true, danger: false },
 
         init() {
+            this._loadConversation();
             this._loadVersion();
             this._loadHistory();
             this._loadHookSchedule();
@@ -1085,20 +1082,27 @@ function simulator() {
             this._prevFakeClock = this.fakeClock;
         },
 
+        async _loadConversation() {
+            const data = await this.api('/admin/simulator/conversation');
+            if (!data.error && data.messages) {
+                this.chatMessages = data.messages.map(m =>
+                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, null, {
+                        classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
+                    })
+                );
+            }
+            this.scrollChat();
+        },
+
         async _refreshPanel() {
             const data = await this.api('/admin/simulator/state');
             if (!data.error) {
                 this.state = data;
-                this.chatMessages = (data.recent_messages || []).map(m =>
-                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup, {
-                        classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
-                    })
-                );
                 if (data.trial_started_at) {
                     try { this.trialStartedLocal = _localIso(new Date(data.trial_started_at)); } catch(e) {}
                 }
             }
-            this.scrollChat();
+            await this._loadConversation();
             await this._loadHistory();
         },
 
@@ -1106,16 +1110,11 @@ function simulator() {
             const data = await this.api('/admin/simulator/state');
             if (!data.error) {
                 this.state = data;
-                this.chatMessages = (data.recent_messages || []).map(m =>
-                    mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, m.reply_markup, {
-                        classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
-                    })
-                );
                 if (data.trial_started_at) {
                     try { this.trialStartedLocal = _localIso(new Date(data.trial_started_at)); } catch(e) {}
                 }
             }
-            this.scrollChat();
+            await this._loadConversation();
             await this._loadHistory();
         },
 

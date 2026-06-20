@@ -215,6 +215,7 @@ def tokens():
 
 
 SIMULATOR_EMAIL = "test@dugri.simulator"
+SIMULATOR_TID = 999999999
 
 
 def _get_dashboard_storage() -> DashboardStorage:
@@ -261,6 +262,26 @@ def simulator_update_state():
     return jsonify({"ok": True})
 
 
+@admin_bp.route("/simulator/conversation")
+@admin_required
+def simulator_conversation():
+    """Return full conversation history from conversation_logs collection."""
+    admin_storage = _get_admin_storage()
+    logs = admin_storage.get_conversation_logs(SIMULATOR_TID)
+    messages = []
+    for doc in logs:
+        ts = doc.get("timestamp")
+        msg = {
+            "role": doc.get("role", "bot"),
+            "text": doc.get("text", ""),
+            "classification": doc.get("classification"),
+            "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else ts,
+            "replying_to": doc.get("reply_context"),
+        }
+        messages.append(msg)
+    return jsonify({"messages": messages})
+
+
 @admin_bp.route("/simulator/reset", methods=["POST"])
 @admin_required
 def simulator_reset():
@@ -289,7 +310,10 @@ def simulator_reset():
     # Clear activity logs BEFORE resetting telegram_user_id (delete_user_logs
     # needs the current tid to find entries in food_entries, sleep_logs, etc.)
     log_counts = storage.delete_user_logs(SIMULATOR_EMAIL)
-    logger.info("Simulator reset: deleted logs %s", log_counts)
+    # Also clear conversation_logs
+    admin_storage = _get_admin_storage()
+    conv_deleted = admin_storage.delete_conversation_logs(SIMULATOR_TID)
+    logger.info("Simulator reset: deleted logs %s, conversation_logs %d", log_counts, conv_deleted)
 
     reset_fields = {
         "toggles": {
@@ -362,6 +386,8 @@ def simulator_reset():
 def simulator_clear_logs():
     storage = _get_dashboard_storage()
     counts = storage.delete_user_logs(SIMULATOR_EMAIL)
+    admin_storage = _get_admin_storage()
+    counts["conversation_logs"] = admin_storage.delete_conversation_logs(SIMULATOR_TID)
     return jsonify({"ok": True, "deleted": counts})
 
 
@@ -410,9 +436,6 @@ def simulator_send():
     except Exception:
         logger.exception("Failed to reach bot simulate endpoint")
         return jsonify({"error": "bot unreachable"}), 502
-
-
-SIMULATOR_TID = 999999999
 
 
 @admin_bp.route("/simulator/version")
@@ -510,6 +533,7 @@ def simulator_save_snapshot():
         "workout_logs": collect("workout_logs"),
         "self_care_logs": collect("self_care_logs"),
         "weekly_feedback": collect("weekly_feedback"),
+        "conversation_logs": collect("conversation_logs"),
         "hook_schedule": db["hook_schedule"].find_one({"_id": "hook_schedule"}) or {},
     }
     # Strip _id from hook_schedule too
@@ -546,7 +570,8 @@ def simulator_load_snapshot(snapshot_id):
         return jsonify({"error": "snapshot not found"}), 404
 
     # Delete existing logs
-    for coll in ["food_entries", "sleep_logs", "workout_logs", "self_care_logs", "weekly_feedback"]:
+    for coll in ["food_entries", "sleep_logs", "workout_logs", "self_care_logs",
+                 "weekly_feedback", "conversation_logs"]:
         db[coll].delete_many({"telegram_user_id": SIMULATOR_TID})
 
     # Restore user doc
@@ -561,6 +586,34 @@ def simulator_load_snapshot(snapshot_id):
         docs = snap.get(coll, [])
         if docs:
             db[coll].insert_many(docs)
+
+    # Restore conversation_logs (new snapshots have them; old ones fall back
+    # to converting recent_messages from the user doc)
+    conv_docs = snap.get("conversation_logs", [])
+    if conv_docs:
+        db["conversation_logs"].insert_many(conv_docs)
+    elif user_doc.get("recent_messages"):
+        # Backward compat: seed conversation_logs from recent_messages
+        seed_docs = []
+        for m in user_doc["recent_messages"]:
+            ts = m.get("timestamp")
+            if isinstance(ts, str):
+                try:
+                    ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                except Exception:
+                    ts = datetime.now(timezone.utc)
+            seed_docs.append({
+                "telegram_user_id": SIMULATOR_TID,
+                "user_email": SIMULATOR_EMAIL,
+                "user_name": None,
+                "role": m.get("role", "user"),
+                "text": m.get("text", ""),
+                "classification": m.get("classification"),
+                "timestamp": ts,
+                "reply_context": m.get("replying_to"),
+            })
+        if seed_docs:
+            db["conversation_logs"].insert_many(seed_docs)
 
     # Restore hook_schedule
     hook_sched = snap.get("hook_schedule", {})
