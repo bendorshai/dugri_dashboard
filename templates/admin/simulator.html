@@ -971,7 +971,7 @@ function simulator() {
                 this.chatMessages = [];
                 const resetResult = await this.api('/admin/simulator/reset', null, 'POST');
                 if (resetResult.signup_token) {
-                    await this.api('/admin/simulator/send', { text: '/start ' + resetResult.signup_token });
+                    await this.api('/admin/simulator/send', { text: '/start ' + resetResult.signup_token, fake_now: new Date(this.fakeClock).toISOString() });
                     await this.api('/admin/simulator/state', {
                         trial_started_at: new Date().toISOString(),
                     });
