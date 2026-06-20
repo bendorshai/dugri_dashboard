@@ -2096,6 +2096,11 @@ a:hover {
 .sim-meta-time {
     color: var(--text-light);
     font-family: 'SF Mono', 'Fira Code', monospace;
+    cursor: pointer;
+}
+.sim-meta-time:hover {
+    color: var(--accent);
+    text-decoration: underline;
 }
 
 .sim-meta-reply {

@@ -586,7 +586,10 @@
                             <!-- Always-visible metadata -->
                             <div class="sim-msg-meta">
                                 <template x-if="msg.meta && msg.meta.timestamp">
-                                    <span class="sim-meta-time" x-text="new Date(msg.meta.timestamp).toLocaleString('he-IL', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})"></span>
+                                    <span class="sim-meta-time" style="cursor:pointer;"
+                                          @click.stop="setClockFromMessage(msg.meta.timestamp)"
+                                          title="Set clock to this time + 1 min"
+                                          x-text="new Date(msg.meta.timestamp).toLocaleString('he-IL', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
                                 </template>
                                 <template x-if="msg.role === 'user' && msg.meta && msg.meta.classification">
                                     <span class="sim-meta-tag" x-text="msg.meta.classification"></span>
@@ -917,6 +920,13 @@ function simulator() {
             } else {
                 this._prevFakeClock = this.fakeClock;
             }
+        },
+
+        setClockFromMessage(timestamp) {
+            const t = new Date(new Date(timestamp).getTime() + 60000);
+            const newVal = _localIso(t);
+            this.fakeClock = newVal;
+            this._prevFakeClock = newVal;
         },
 
         async saveToggle(name) {
