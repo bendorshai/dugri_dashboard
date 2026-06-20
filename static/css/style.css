@@ -2103,6 +2103,21 @@ a:hover {
     font-style: italic;
 }
 
+.sim-msg-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    padding: 0 0.2rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+    margin-inline-start: auto;
+}
+.sim-msg:hover .sim-msg-delete { opacity: 1; }
+.sim-msg-delete:hover { color: var(--danger, #C97A6B); }
+
 /* Reply UI */
 .sim-msg-bubble {
     cursor: pointer;

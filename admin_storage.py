@@ -644,6 +644,22 @@ class AdminStorage:
         result = self._conversation_logs.delete_many({"telegram_user_id": telegram_user_id})
         return result.deleted_count
 
+    def delete_conversation_logs_after(self, telegram_user_id: int, after: datetime) -> int:
+        """Delete conversation log entries strictly after a timestamp. Returns deleted count."""
+        result = self._conversation_logs.delete_many({
+            "telegram_user_id": telegram_user_id,
+            "timestamp": {"$gt": after},
+        })
+        return result.deleted_count
+
+    def delete_conversation_log_by_id(self, object_id) -> int:
+        """Delete a single conversation log entry by its _id. Returns deleted count."""
+        from bson import ObjectId
+        if not isinstance(object_id, ObjectId):
+            object_id = ObjectId(object_id)
+        result = self._conversation_logs.delete_one({"_id": object_id})
+        return result.deleted_count
+
     def get_user_by_telegram_id(self, telegram_user_id: int) -> dict | None:
         """Fetch a user document by telegram_user_id."""
         return self._users.find_one({"telegram_user_id": telegram_user_id})

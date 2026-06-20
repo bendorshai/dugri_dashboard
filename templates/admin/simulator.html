@@ -594,6 +594,8 @@
                                 <template x-if="msg.meta && msg.meta.replying_to">
                                     <span class="sim-meta-reply" x-text="'reply: ' + msg.meta.replying_to.slice(0, 40) + (msg.meta.replying_to.length > 40 ? '...' : '')"></span>
                                 </template>
+                                <button class="sim-msg-delete" @click.stop="deleteMessage(msg, i)"
+                                        title="Delete message">&times;</button>
                             </div>
                             <template x-if="msg.reply_markup && msg.reply_markup.inline_keyboard">
                                 <div class="sim-msg-keyboard">
@@ -1088,6 +1090,7 @@ function simulator() {
                 this.chatMessages = data.messages.map(m =>
                     mkMsg(m.role === 'bot' ? 'bot' : 'user', m.text, null, {
                         classification: m.classification, timestamp: m.timestamp, replying_to: m.replying_to,
+                        log_id: m.log_id,
                     })
                 );
             }
@@ -1204,6 +1207,14 @@ function simulator() {
             this.chatLoading = false;
         },
 
+        async deleteMessage(msg, index) {
+            if (msg.meta && msg.meta.log_id) {
+                await this.api('/admin/simulator/conversation/' + msg.meta.log_id, null, 'DELETE');
+            }
+            this.chatMessages = this.chatMessages.filter((_, j) => j !== index);
+            if (this.replyTo && this.replyTo._id === msg._id) this.replyTo = null;
+        },
+
         scrollChat() {
             this.$nextTick(() => {
                 const el = this.$refs.chatMessages;
@@ -1250,6 +1261,7 @@ function simulator() {
                 replying_to: m.meta && m.meta.replying_to,
             }));
             this.api('/admin/simulator/state', { recent_messages: trimmed });
+            this.api('/admin/simulator/conversation/trim', { after: newTime.toISOString() });
             this._prevFakeClock = newClock;
             return true;
         },

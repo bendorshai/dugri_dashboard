@@ -277,9 +277,41 @@ def simulator_conversation():
             "classification": doc.get("classification"),
             "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else ts,
             "replying_to": doc.get("reply_context"),
+            "log_id": str(doc["_id"]),
         }
         messages.append(msg)
     return jsonify({"messages": messages})
+
+
+@admin_bp.route("/simulator/conversation/trim", methods=["POST"])
+@admin_required
+def simulator_conversation_trim():
+    """Delete conversation log entries strictly after a given timestamp."""
+    data = request.get_json() or {}
+    after_iso = data.get("after")
+    if not after_iso:
+        return jsonify({"error": "missing 'after' timestamp"}), 400
+    try:
+        after_dt = datetime.fromisoformat(after_iso)
+    except (ValueError, TypeError):
+        return jsonify({"error": "invalid timestamp"}), 400
+    admin_storage = _get_admin_storage()
+    deleted = admin_storage.delete_conversation_logs_after(SIMULATOR_TID, after_dt)
+    logger.info("Simulator conversation trim: deleted %d logs after %s", deleted, after_iso)
+    return jsonify({"ok": True, "deleted": deleted})
+
+
+@admin_bp.route("/simulator/conversation/<log_id>", methods=["DELETE"])
+@admin_required
+def simulator_conversation_delete(log_id):
+    """Delete a single conversation log entry by its _id."""
+    try:
+        ObjectId(log_id)
+    except Exception:
+        return jsonify({"error": "invalid log_id"}), 400
+    admin_storage = _get_admin_storage()
+    deleted = admin_storage.delete_conversation_log_by_id(log_id)
+    return jsonify({"ok": True, "deleted": deleted})
 
 
 @admin_bp.route("/simulator/reset", methods=["POST"])
