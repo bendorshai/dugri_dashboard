@@ -506,6 +506,39 @@
                 </div>
             </div>
 
+            <!-- Re-engagement -->
+            <div class="sim-card">
+                <h4 class="sim-card-header" @click="panels.reengagement = !panels.reengagement">
+                    Re-engagement <span class="sim-collapse-icon" :class="{ open: panels.reengagement }">&#9660;</span>
+                </h4>
+                <div x-show="panels.reengagement" x-transition.duration.150ms>
+                    <div class="sim-field sim-field--row">
+                        <label>Stage</label>
+                        <select class="sim-input--inline" x-model="state.re_engagement_stage"
+                                @change="saveField('re_engagement_stage', state.re_engagement_stage)">
+                            <option value="none">none</option>
+                            <option value="food_nudge_pending">food_nudge_pending</option>
+                            <option value="silence_day1">silence_day1</option>
+                            <option value="silence_day2">silence_day2</option>
+                            <option value="silence_day3">silence_day3</option>
+                            <option value="silenced">silenced</option>
+                        </select>
+                    </div>
+                    <div class="sim-field sim-field--row">
+                        <label>Last user msg</label>
+                        <input type="datetime-local" class="sim-input--inline" style="font-size:0.8rem;"
+                               :value="state.last_user_message_at ? _localIso(new Date(state.last_user_message_at)) : ''"
+                               @change="saveField('last_user_message_at', $event.target.value ? new Date($event.target.value).toISOString() : null)">
+                    </div>
+                    <div class="sim-field sim-field--row">
+                        <label>Last re-eng sent</label>
+                        <input type="datetime-local" class="sim-input--inline" style="font-size:0.8rem;"
+                               :value="state.re_engagement_last_sent_at ? _localIso(new Date(state.re_engagement_last_sent_at)) : ''"
+                               @change="saveField('re_engagement_last_sent_at', $event.target.value ? new Date($event.target.value).toISOString() : null)">
+                    </div>
+                </div>
+            </div>
+
             <!-- Moderation -->
             <div class="sim-card">
                 <h4 class="sim-card-header" @click="panels.moderation = !panels.moderation">
@@ -833,7 +866,7 @@ function simulator() {
         snapshotName: '',
         botVersion: '',
         botVersionNotes: '',
-        panels: { trial: true, profile: true, toggles: true, moderation: true, snapshots: true, danger: false },
+        panels: { trial: true, profile: true, toggles: true, reengagement: true, moderation: true, snapshots: true, danger: false },
 
         init() {
             this._loadConversation();
