@@ -345,6 +345,7 @@ def simulator_reset():
         "height_cm": None,
         "weight_kg": None,
         "gender": None,
+        "address_form": None,
         "feedback_steering_prompt": None,
         "last_feedback_offered_at": None,
         "discovered_patterns": [],
