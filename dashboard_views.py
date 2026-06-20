@@ -290,6 +290,11 @@ def profile_post():
         profile_data["gender"] = gender
     else:
         profile_data["gender"] = None
+    address_form = request.form.get("address_form", "").strip()
+    if gender == "other" and address_form in ("male", "female"):
+        profile_data["address_form"] = address_form
+    elif gender in ("male", "female"):
+        profile_data["address_form"] = None
     if birth_year:
         profile_data["birth_year"] = int(birth_year)
     else:

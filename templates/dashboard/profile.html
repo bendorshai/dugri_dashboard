@@ -3,7 +3,8 @@
 {% block dashboard_content %}
 <h1>פרטים אישיים</h1>
 
-<form method="POST" action="{{ url_for('dashboard_views.profile_post') }}">
+<form method="POST" action="{{ url_for('dashboard_views.profile_post') }}"
+      x-data="{ gender: '{{ user.get('gender', '') or '' }}' }">
     <div class="card">
         <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
             הנתונים האלה עוזרים לדוגרי להציע לך יעדים מותאמים אישית. לא חובה למלא.
@@ -21,18 +22,40 @@
             <div style="display: flex; gap: 1.5rem; margin-top: 0.25rem;">
                 <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
                     <input type="radio" name="gender" value="male"
-                           {{ 'checked' if user.get('gender') == 'male' else '' }}>
+                           {{ 'checked' if user.get('gender') == 'male' else '' }}
+                           @change="gender = 'male'">
                     בן
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
                     <input type="radio" name="gender" value="female"
-                           {{ 'checked' if user.get('gender') == 'female' else '' }}>
+                           {{ 'checked' if user.get('gender') == 'female' else '' }}
+                           @change="gender = 'female'">
                     בת
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
                     <input type="radio" name="gender" value="other"
-                           {{ 'checked' if user.get('gender') == 'other' else '' }}>
+                           {{ 'checked' if user.get('gender') == 'other' else '' }}
+                           @change="gender = 'other'">
                     אחר
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group" x-show="gender === 'other'" x-cloak>
+            <label class="form-label">לשון פנייה</label>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.5rem;">
+                דוגרי חייב לבחור לשון פנייה - באיזו לשון לדבר איתך?
+            </p>
+            <div style="display: flex; gap: 1.5rem; margin-top: 0.25rem;">
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                    <input type="radio" name="address_form" value="male"
+                           {{ 'checked' if user.get('address_form') == 'male' else '' }}>
+                    בן (זכר)
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+                    <input type="radio" name="address_form" value="female"
+                           {{ 'checked' if user.get('address_form') == 'female' else '' }}>
+                    בת (נקבה)
                 </label>
             </div>
         </div>
