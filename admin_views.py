@@ -337,7 +337,8 @@ def simulator_reset():
     # Generate a signup token so /start {token} triggers the real linking flow
     import secrets
     signup_token = secrets.token_urlsafe(24)
-    token_expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    # Use a far-future expiry so the token works regardless of fake clock position
+    token_expires = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
 
     # Clear activity logs BEFORE resetting telegram_user_id (delete_user_logs
     # needs the current tid to find entries in food_entries, sleep_logs, etc.)
