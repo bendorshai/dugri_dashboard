@@ -4,7 +4,6 @@ import hmac
 import logging
 from datetime import datetime, timedelta, timezone
 
-import requests
 from flask import (
     Blueprint, flash, jsonify, render_template, redirect, url_for, request, session, current_app,
 )
@@ -104,7 +103,7 @@ def preferences_post():
     calories = int(cal_str) if cal_str else None
     protein = int(prot_str) if prot_str else None
 
-    old_targets = storage.update_user_targets(email, calories, protein)
+    storage.update_user_targets(email, calories, protein)
 
     # Additional targets: weight_goal, sleep_time, workouts_per_week
     extra = {}
@@ -130,11 +129,9 @@ def preferences_post():
     if extra:
         storage.update_user_profile(email, extra)
 
-    # Notify bot if calorie/protein targets changed
-    new_targets = {"calories": calories, "protein": protein}
-    if old_targets.get("calories") != calories or old_targets.get("protein") != protein:
-        _notify_bot_target_change(email, old_targets, new_targets)
-
+    # Dashboard goal changes apply silently. The bot reads targets/toggles
+    # fresh from MongoDB on the user's next message - the deprecated
+    # notify-target-update webhook was removed.
     return redirect(url_for("dashboard_views.preferences"))
 
 
@@ -180,34 +177,6 @@ def _apply_toggle_status(existing: dict, new_status: str) -> dict:
     # cancelled: preserve existing timestamps, no special fields needed
 
     return toggle
-
-
-def _notify_bot_target_change(email: str, old_targets: dict, new_targets: dict):
-    """Send target change notification to bot's internal webhook."""
-    cfg = current_app.config["APP_CONFIG"]
-    bot_url = cfg.get("bot_internal_url", "")
-    secret = cfg.get("internal_secret", "")
-
-    if not bot_url:
-        return
-
-    user = _get_storage().get_user(email)
-    if not user or not user.get("telegram_user_id"):
-        return
-
-    try:
-        requests.post(
-            f"{bot_url}/internal/notify-target-update",
-            json={
-                "telegram_user_id": user["telegram_user_id"],
-                "old_targets": old_targets,
-                "new_targets": new_targets,
-            },
-            headers={"X-Internal-Secret": secret},
-            timeout=5,
-        )
-    except Exception:
-        logger.exception("Failed to notify bot about target change")
 
 
 # ------------------------------------------------------------------
