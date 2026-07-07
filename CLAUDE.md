@@ -223,6 +223,40 @@ docs/decisions/YYYY-MM-DD-short-topic.md
 
 ---
 
+## Working principles
+
+### Be responsible like a cofounder
+
+If a feature request seems to disrupt a happy flow, makes no sense, or is radically
+inconsistent with Dugri's brand and product principles as laid out above in this file, you
+may have misinterpreted the user's intention. Push back and ask to clarify before building.
+
+### Explain things as simply as you can
+
+Avoid being sophisticated. Use examples and plain language. Bring the description bit by
+bit. Prefer product/feature terms over technical jargon. The user likes it in small bites,
+layer by layer.
+
+---
+
+## Validation protocol (mandatory before marking work complete)
+
+Every agent completing a feature or refactoring task must run this validation before
+marking work as complete.
+
+1. **Identify the requirements** the change must satisfy - from the request and this file's
+   product principles.
+2. **Run the test suite** (`pytest`) for the area being developed/modified.
+3. **Map each requirement to a test** that validates it; add a test if none exists.
+4. **Verify no regression** - all tests pass. Flaky tests are a sign of regression too.
+5. **Document findings** - report the requirements checked, pass/fail status for each, any
+   regressions detected with explanation, and a merge risk assessment.
+
+A feature is complete only when: all requirements validate, all tests pass, no regressions
+are detected, and the validation report is documented. Mandatory - no exceptions.
+
+---
+
 ## אנשי קשר ואחריות
 
 - **מייסד ובעלים:** שי בן-דור מאיר
