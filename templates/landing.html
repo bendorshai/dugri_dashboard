@@ -38,15 +38,12 @@
         <div class="container hero-grid">
             <div class="hero-copy">
                 <img src="{{ url_for('static', filename='images/1.png') }}" alt="הלוגו של דוגרי - בועת דיבור בצבע קינמון עם הכיתוב 'דוגרי, איתך על ההרגלים'" class="hero-logo">
-                <h1 class="hero-promise">מעקב הרגלים בעברית, בטלגרם, בגובה העיניים.</h1>
-                <p class="hero-sub">סוף סוף להיות על זה. בלי להפוך כל ארוחה לפרויקט.</p>
-                <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
-                <p class="hero-lede">חמישה הרגלים שמשנים את היום-יום שלך - תיעוד בשיחה, לא בטופס.</p>
+                <h1 class="hero-promise">סוף סוף להיות על זה.<br>בלי להפוך כל ארוחה לפרויקט.</h1>
                 <div class="hero-actions">
                     <a href="{{ url_for('signup') }}" class="btn btn--primary">התחבר עם גוגל</a>
                 </div>
                 <div class="trust-row" aria-label="פרטים חשובים">
-                    <span>21 יום ניסיון</span>
+                    <span>14 יום ניסיון</span>
                     <span>בלי כרטיס אשראי</span>
                     <span>עובד בטלגרם</span>
                 </div>
@@ -63,17 +60,28 @@
                     </div>
                     <div class="chat-body">
                         <div class="bubble bubble--user">אכלתי פיתה עם חומוס, ביצה קשה וסלט</div>
-                        <div class="bubble bubble--bot">רשמתי. בערך <strong>520 קלוריות</strong> ו-<strong>21 גרם חלבון</strong>. רוצה לדייק?</div>
-                        <div class="chat-metrics">
-                            <div class="metric"><b>1,640</b><span>קלוריות היום</span></div>
-                            <div class="metric"><b>93g</b><span>חלבון</span></div>
-                            <div class="metric"><b>14:8</b><span>חלון אכילה</span></div>
-                            <div class="metric"><b>1</b><span>משהו לעצמי</span></div>
-                        </div>
-                        <div class="bubble bubble--user">ראיתי שקיעה בים</div>
-                        <div class="bubble bubble--bot">יפה. רשמתי "משהו לעצמי" השבוע.</div>
+                        <div class="bubble bubble--bot bubble--food">• פיתה
+  ~60 גרם | 160 קל׳ | 5 גרם חלבון
+• חומוס
+  ~100 גרם | 170 קל׳ | 8 גרם חלבון
+• ביצה קשה
+  ~50 גרם | 77 קל׳ | 6 גרם חלבון
+• סלט
+  ~150 גרם | 50 קל׳ | 2 גרם חלבון
+
+סה"כ: 457 קל׳ | 21 גרם חלבון
+
+📊 סיכום יומי:
+✅ קלוריות: 457/2000 (23%, נותרו: 1543)
+⚠️ גרם חלבון: 21/150 (14%, נותרו: 129)</div>
                         <div class="bubble bubble--user">אימון כוח 45 דקות</div>
-                        <div class="bubble bubble--bot">יפה. הוספתי אימון לשבוע שלך.</div>
+                        <div class="bubble bubble--bot">רשמתי אימון. (אם התכוונת למשהו אחר, תכתוב לי.)</div>
+                        <div class="bubble bubble--user">ראיתי שקיעה בים</div>
+                        <div class="bubble bubble--bot">יפה. רשמתי 'משהו לעצמי' השבוע.</div>
+                        <div class="bubble bubble--user">אכלתי גלידה בשבוע שעבר?</div>
+                        <div class="bubble bubble--bot">כן, אכלת גלידה בשבוע שעבר, ביום חמישי, 02/07/2026. זו הייתה גלידה של בן אנד ג'ריס עם 470 קלוריות ו-8 גרם חלבון.</div>
+                        <div class="chat-daybreak"><span>היום</span></div>
+                        <div class="bubble bubble--bot">בוקר טוב. עבר עוד שבוע - רוצה לראות את הסיכום שלו?</div>
                         <div class="chat-input">כתוב הודעה...</div>
                     </div>
                 </div>
@@ -104,11 +112,12 @@
         <div class="container split">
             <div class="solution-text">
                 <h2>דוגרי הוא בוט בטלגרם. אתם כותבים, הוא מבין.</h2>
+                <p class="solution-lede">מעקב הרגלים בעברית, בטלגרם, בגובה העיניים.</p>
                 <p>אתם כותבים "אכלתי פיתה עם חומוס וסלט". דוגרי עונה: "395 קלוריות, 14 גרם חלבון. רוצה לעדכן?".</p>
                 <p>אתם שולחים "00:30" לפני השינה. זהו. אין מסכים, אין תפריטים, אין הורדה של אפליקציה נוספת - דוגרי יושב בצ'אט שכבר פתוח אצלכם כל היום.</p>
             </div>
             <div>
-                <p>חמישה הרגלים, לא חמישים:</p>
+                <p>חמישה הרגלים שמשנים את היום-יום שלך, לא חמישים - תיעוד בשיחה, לא בטופס:</p>
                 <ul class="habits-list">
                     <li>מודעות תזונתית</li>
                     <li>חלון אכילה</li>
@@ -127,6 +136,7 @@
     <section class="section-panel reveal">
         <div class="container">
             <h2>דוגרי בנוי לשאפתנים עייפים.</h2>
+            <p class="section-intro">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</p>
             <ul class="features-list">
                 <li><strong>מבין עברית באמת.</strong> "שווארמה בלאפה", "שניצל ביתי של אמא"  - דוגרי מכיר את האוכל שלנו, לא רק broccoli ו-grilled chicken.</li>
                 <li><strong>משפט אחד וזהו.</strong> כותבים מה אכלתם בשפה רגילה, מקבלים את המספרים. בלי טפסים, בלי פרויקט קטן בכל ארוחה.</li>
@@ -135,22 +145,21 @@
         </div>
     </section>
 
-    <!-- CTA band -->
-    <section class="cta-band reveal">
-        <div class="container">
-            <h2>תוך חמש דקות יש לכם את דוגרי בטלגרם.</h2>
-            <p class="tagline">המעקב הכי טוב הוא זה שאנחנו באמת עושים.</p>
-            <p class="cta-highlight">21 יום לראות אם אתה באמת מצליח להיות על זה. בלי כרטיס אשראי.</p>
-            <p>אחר כך אפשר להצטרף בעלות של 47 ₪ לחודש - אפשר לבטל בלחיצה.</p>
-            <a href="{{ url_for('signup') }}" class="btn btn--primary">התחבר עם גוגל</a>
-        </div>
-    </section>
-
-    <!-- About -->
+    <!-- About (founder story - moved up, before the price, to defuse "hollow gimmick" doubt) -->
     <section class="section-panel reveal">
         <div class="container about-section">
             <h2>מי אני?</h2>
             <p>קוראים לי שי, אני יוצר רב תחומי ומטפל. לא באתי מעולם הכושר והתזונה אבל במשך שנים ממש ניסיתי לרזות ולהגביר את רמת החיוניות בגוף שלי. כי בסופו של יום זה עשה אותי שמח. ניסיתי המון תוכניות כולל אבא חטוב, שומרי משקל, דיאטניות וכולי... ובסופו של דבר דוגרי מאוד עזר לי. כי בפעם הראשונה בחיים קיבלתי פידבק אמיתי, כנה וישיר שעזר לי להגביר את המודעות להרגלי התזונה שלי. זה היה גם כיף וגם ממש מעצים לקבל שליטה בחזרה על הגוף שלי. ראיתי את הקסם והחלטתי שלא בריא לי לשמור אותו רק לעצמי.</p>
+        </div>
+    </section>
+
+    <!-- CTA band -->
+    <section class="cta-band reveal">
+        <div class="container">
+            <h2>תוך חמש דקות יש לכם את דוגרי בטלגרם.</h2>
+            <p class="cta-highlight">14 יום לראות אם אתה באמת מצליח להיות על זה. בלי כרטיס אשראי.</p>
+            <p>אחר כך אפשר להצטרף בעלות של 47 ₪ לחודש - אפשר לבטל בלחיצה.</p>
+            <a href="{{ url_for('signup') }}" class="btn btn--primary">התחבר עם גוגל</a>
         </div>
     </section>
 </main>

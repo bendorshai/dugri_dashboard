@@ -71,7 +71,7 @@ PRIVACY_SUBTITLE = (
 
 # -- Subscription page --
 SUB_TITLE = "מנוי"
-SUB_TRIAL_ACTIVE_HEADING = "חודש ניסיון חינם"
+SUB_TRIAL_ACTIVE_HEADING = "14 יום ניסיון חינם"
 SUB_TRIAL_ACTIVE_BODY = "אתה כרגע בתקופת ניסיון חינמית. בסיומה תוכל להמשיך עם מנוי."
 SUB_TRIAL_ENDED_HEADING = "תקופת הניסיון הסתיימה"
 SUB_TRIAL_ENDED_BODY = "כדי להמשיך לתעד ולקבל אימון מדוגרי, הפעל מנוי."

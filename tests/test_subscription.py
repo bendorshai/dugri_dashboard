@@ -47,7 +47,7 @@ class TestSubscriptionPage:
         _login(client)
         resp = client.get("/dashboard/subscription")
         assert resp.status_code == 200
-        assert "חודש ניסיון חינם".encode("utf-8") in resp.data
+        assert "14 יום ניסיון חינם".encode("utf-8") in resp.data
         assert "subscription/start".encode("utf-8") in resp.data
 
     @patch("dashboard_views.DashboardStorage")

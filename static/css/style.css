@@ -357,30 +357,27 @@ a:hover {
     color: var(--cinnamon-dark);
 }
 
-.chat-metrics {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.55rem;
-    margin: 1rem 0;
-}
-
-.metric {
-    padding: 0.7rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid rgba(91, 168, 196, 0.15);
-}
-
-.metric b {
-    display: block;
-    font-size: 1.25rem;
-    color: var(--cinnamon-dark);
-    line-height: 1.2;
-}
-
-.metric span {
-    color: var(--muted);
+/* Multi-line food-log bubble: preserve dugri's real line breaks + indentation */
+.bubble--food {
+    white-space: pre-wrap;
     font-size: 0.86rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Telegram-style date divider between the two demo days */
+.chat-daybreak {
+    display: flex;
+    justify-content: center;
+    margin: 0.9rem 0;
+}
+
+.chat-daybreak span {
+    padding: 0.22rem 0.85rem;
+    border-radius: 999px;
+    background: rgba(166, 116, 72, 0.12);
+    color: var(--cinnamon-dark);
+    font-size: 0.76rem;
     font-weight: 700;
 }
 
@@ -890,11 +887,6 @@ a:hover {
 .bubble {
     border-radius: 16px;
     font-size: 0.92rem;
-}
-
-.metric {
-    border-color: rgba(91, 168, 196, 0.18);
-    box-shadow: 0 8px 18px rgba(30, 58, 74, 0.05);
 }
 
 .section-panel {
@@ -3034,10 +3026,12 @@ a:hover {
 }
 
 .hero-promise {
-    max-width: 700px;
-    margin: 0 auto 0.8rem;
-    font-size: clamp(1.9rem, 3.4vw, 2.95rem);
-    line-height: 1.16;
+    max-width: 600px;
+    margin: 0 auto 2.6rem;
+    font-size: clamp(1.5rem, 2.4vw, 2.05rem);
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
 }
 
 .hero-sub {
@@ -3106,22 +3100,6 @@ a:hover {
     margin-bottom: 0.55rem;
     font-size: 0.82rem;
     line-height: 1.4;
-}
-
-.chat-metrics {
-    margin: 0.7rem 0;
-}
-
-.metric {
-    padding: 0.52rem;
-}
-
-.metric b {
-    font-size: 1rem;
-}
-
-.metric span {
-    font-size: 0.72rem;
 }
 
 .chat-input {
