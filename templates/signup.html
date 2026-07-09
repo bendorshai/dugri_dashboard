@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}דוגרי - מתחילים{% endblock %}
+
+{% block meta %}
+    <meta name="description" content="מתחילים עם דוגרי: מעקב הרגלים בעברית, בטלגרם, בלי עוד אפליקציה.">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="דוגרי - מתחילים">
+    <meta property="og:description" content="21 יום לנסות את דוגרי בטלגרם. בלי כרטיס אשראי.">
+    <meta property="og:image" content="{{ og_image_url }}">
+    <meta property="og:url" content="{{ og_page_url }}">
+    <meta property="og:locale" content="he_IL">
+{% endblock %}
+
+{% block body %}
+<main class="signup-page" x-data="{
+    terms: false,
+    medical: false,
+    get canSubmit() { return this.terms && this.medical }
+}">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="signup-flashes">
+        {% for category, message in messages %}
+        <div class="flash flash--{{ category }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <section class="signup-shell" aria-labelledby="signup-title">
+        <a href="{{ url_for('landing') }}" class="signup-logo-link" aria-label="חזרה לדף הבית">
+            <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="signup-logo">
+        </a>
+
+        <div class="signup-card">
+            <p class="signup-kicker">21 יום ניסיון. בלי כרטיס אשראי.</p>
+            <h1 id="signup-title">סוף סוף להיות על זה</h1>
+
+            <div class="signup-consents" role="group" aria-label="אישורים נדרשים">
+                <label class="consent-checkbox signup-consent" :class="{ 'consent-checkbox--checked': terms }" for="signup-consent-terms">
+                    <input type="checkbox" id="signup-consent-terms" x-model="terms">
+                    <span>
+                        <span class="consent-badge consent-badge--required">{{ hs.CONSENT_REQUIRED_LABEL }}</span>
+                        {{ hs.CONSENT_TERMS | safe }}
+                    </span>
+                </label>
+
+                <label class="consent-checkbox signup-consent" :class="{ 'consent-checkbox--checked': medical }" for="signup-consent-medical">
+                    <input type="checkbox" id="signup-consent-medical" x-model="medical">
+                    <span>
+                        <span class="consent-badge consent-badge--required">{{ hs.CONSENT_REQUIRED_LABEL }}</span>
+                        {{ hs.CONSENT_MEDICAL }}
+                    </span>
+                </label>
+            </div>
+
+            <a :href="canSubmit ? '{{ url_for('auth.login') }}?terms=1&medical=1' : '#'"
+               class="btn btn--primary btn--full signup-submit"
+               :disabled="!canSubmit"
+               :class="{ 'btn--disabled': !canSubmit }"
+               @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1'">
+                התחבר עם Google והמשך
+            </a>
+
+            <p class="signup-note">{{ hs.CONSENT_MARKETING_NOTICE }}</p>
+        </div>
+    </section>
+</main>
+{% endblock %}

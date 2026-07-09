@@ -36,14 +36,19 @@
     <!-- Hero -->
     <section class="landing-hero">
         <div class="container hero-grid">
-            <div>
+            <div class="hero-copy">
                 <img src="{{ url_for('static', filename='images/1.png') }}" alt="הלוגו של דוגרי - בועת דיבור בצבע קינמון עם הכיתוב 'דוגרי, איתך על ההרגלים'" class="hero-logo">
-                <h1 class="hero-promise">סוף סוף להיות על זה. בלי להפוך כל ארוחה לפרויקט.</h1>
-                <p class="hero-sub">מעקב הרגלים בעברית, בטלגרם, בגובה העיניים.</p>
+                <h1 class="hero-promise">מעקב הרגלים בעברית, בטלגרם, בגובה העיניים.</h1>
+                <p class="hero-sub">סוף סוף להיות על זה. בלי להפוך כל ארוחה לפרויקט.</p>
                 <div class="eyebrow">עובד בתוך טלגרם. מבין עברית. לא דורש כוח רצון.</div>
                 <p class="hero-lede">חמישה הרגלים שמשנים את היום-יום שלך - תיעוד בשיחה, לא בטופס.</p>
                 <div class="hero-actions">
-                    <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
+                    <a href="{{ url_for('signup') }}" class="btn btn--primary">התחבר עם גוגל</a>
+                </div>
+                <div class="trust-row" aria-label="פרטים חשובים">
+                    <span>21 יום ניסיון</span>
+                    <span>בלי כרטיס אשראי</span>
+                    <span>עובד בטלגרם</span>
                 </div>
             </div>
 
@@ -137,44 +142,7 @@
             <p class="tagline">המעקב הכי טוב הוא זה שאנחנו באמת עושים.</p>
             <p class="cta-highlight">21 יום לראות אם אתה באמת מצליח להיות על זה. בלי כרטיס אשראי.</p>
             <p>אחר כך אפשר להצטרף בעלות של 47 ₪ לחודש - אפשר לבטל בלחיצה.</p>
-            <a href="#signup" class="btn btn--primary">התחבר עם גוגל</a>
-        </div>
-    </section>
-
-    <!-- Consent & Signup section -->
-    <section class="consent-section reveal" id="signup">
-        <div class="container">
-            <div class="consent-card">
-                <h2>בואו נתחיל</h2>
-
-                <div class="consent-checkbox" :class="{ 'consent-checkbox--checked': terms }">
-                    <input type="checkbox" id="consent-terms" x-model="terms">
-                    <label for="consent-terms">
-                        <span class="consent-badge consent-badge--required">{{ hs.CONSENT_REQUIRED_LABEL }}</span>
-                        {{ hs.CONSENT_TERMS | safe }}
-                    </label>
-                </div>
-
-                <div class="consent-checkbox" :class="{ 'consent-checkbox--checked': medical }">
-                    <input type="checkbox" id="consent-medical" x-model="medical">
-                    <label for="consent-medical">
-                        <span class="consent-badge consent-badge--required">{{ hs.CONSENT_REQUIRED_LABEL }}</span>
-                        {{ hs.CONSENT_MEDICAL }}
-                    </label>
-                </div>
-
-                <div class="consent-actions">
-                    <a :href="canSubmit ? '{{ url_for('auth.login') }}?terms=1&medical=1' : '#'"
-                       class="btn btn--primary btn--full"
-                       :disabled="!canSubmit"
-                       :class="{ 'btn--disabled': !canSubmit }"
-                       @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1'">
-                        התחבר עם גוגל
-                    </a>
-                </div>
-
-                <p class="marketing-notice">{{ hs.CONSENT_MARKETING_NOTICE }}</p>
-            </div>
+            <a href="{{ url_for('signup') }}" class="btn btn--primary">התחבר עם גוגל</a>
         </div>
     </section>
 

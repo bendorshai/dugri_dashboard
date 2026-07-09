@@ -104,6 +104,24 @@ def create_app(config: dict | None = None) -> Flask:
             og_page_url=og_page_url,
         )
 
+    @app.route("/signup")
+    def signup():
+        from flask import render_template, request, url_for
+        import hebrew_strings as hs
+
+        contact_email = config.get("contact_email", "")
+        base_url = request.url_root.rstrip("/")
+        og_image_url = base_url + url_for("static", filename="images/1.png")
+        og_page_url = base_url + url_for("signup")
+
+        return render_template(
+            "signup.html",
+            contact_email=contact_email,
+            hs=hs,
+            og_image_url=og_image_url,
+            og_page_url=og_page_url,
+        )
+
     @app.route("/prev-landing")
     def prev_landing():
         from flask import render_template, request, url_for
@@ -124,15 +142,20 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.route("/welcome")
     def welcome():
-        from flask import render_template, redirect, url_for, session
+        from flask import render_template, redirect, url_for, session, request
         import hebrew_strings as hs
 
+        host = request.host.split(":", 1)[0]
+        is_local_dev = app.debug and host in {"localhost", "127.0.0.1"}
+
         if "user_email" not in session or "signup_session_token" not in session:
-            return redirect(url_for("landing"))
+            if not is_local_dev:
+                return redirect(url_for("landing"))
+            session["signup_session_token"] = "dev-preview-token"
 
         bot_username = config.get("dugri_bot_username", "")
         signup_token = session["signup_session_token"]
-        user_name = session.get("user_name", "")
+        user_name = session.get("user_name", "Preview")
         deep_link = f"https://t.me/{bot_username}?start={signup_token}"
 
         return render_template(

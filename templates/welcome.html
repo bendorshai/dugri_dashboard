@@ -1,263 +1,77 @@
 {% extends "base.html" %}
 
-{% block title %}דוגרי — ברוך הבא{% endblock %}
-
-{% block head %}
-<style>
-    .welcome-page {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem 1.5rem;
-        background: linear-gradient(180deg, #EDF5F8 0%, #E0EFF4 100%);
-        text-align: center;
-    }
-
-    .welcome-logo {
-        max-width: 140px;
-        height: auto;
-        margin-bottom: 2rem;
-    }
-
-    .welcome-heading {
-        font-size: clamp(1.5rem, 4vw, 2.25rem);
-        color: #8B5E38;
-        margin-bottom: 2rem;
-        line-height: 1.3;
-    }
-
-    .welcome-cta {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        padding: 1.1rem 3rem;
-        border: none;
-        border-radius: 12px;
-        font-size: 1.3rem;
-        font-weight: 700;
-        background: #A67448;
-        color: #fff;
-        text-decoration: none;
-        transition: all 0.2s ease;
-        box-shadow: 0 12px 28px rgba(166, 116, 72, 0.2);
-    }
-
-    .welcome-cta:hover {
-        background: #8B5E38;
-        transform: translateY(-1px);
-        box-shadow: 0 16px 36px rgba(166, 116, 72, 0.25);
-        color: #fff;
-    }
-
-    .welcome-fallback {
-        margin-top: 1.25rem;
-        font-size: 0.875rem;
-        color: #7A756D;
-    }
-
-    .welcome-fallback button {
-        color: #A67448;
-        cursor: pointer;
-        background: none;
-        border: none;
-        font-size: inherit;
-        font-family: inherit;
-        text-decoration: underline;
-    }
-
-    .welcome-fallback button:hover {
-        color: #8B5E38;
-    }
-
-    .copy-toast {
-        display: inline-block;
-        padding: 0.3rem 0.7rem;
-        border-radius: 6px;
-        background: #8FA876;
-        color: white;
-        font-size: 0.8rem;
-        font-weight: 700;
-        margin-right: 0.5rem;
-    }
-
-    /* -- Home screen tip section -- */
-    .tip-section {
-        max-width: 380px;
-        width: 100%;
-        margin-bottom: 2rem;
-        padding: 1.25rem 1.5rem;
-        background: rgba(255, 255, 255, 0.55);
-        border-radius: 16px;
-        border: 1px solid rgba(166, 116, 72, 0.12);
-        text-align: right;
-    }
-
-    .tip-badge {
-        display: inline-block;
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #A67448;
-        background: rgba(166, 116, 72, 0.1);
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        margin-bottom: 0.75rem;
-    }
-
-    .tip-intro {
-        font-size: 0.95rem;
-        color: #5C5550;
-        line-height: 1.5;
-        margin-bottom: 1rem;
-    }
-
-    .tip-tabs {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-    }
-
-    .tip-tab {
-        flex: 1;
-        padding: 0.5rem 0.75rem;
-        border: 1.5px solid rgba(166, 116, 72, 0.2);
-        border-radius: 10px;
-        background: transparent;
-        color: #7A756D;
-        font-size: 0.9rem;
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-
-    .tip-tab.active {
-        background: #A67448;
-        color: #fff;
-        border-color: #A67448;
-    }
-
-    .tip-steps {
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .tip-step {
-        display: flex;
-        align-items: baseline;
-        gap: 0.6rem;
-        font-size: 0.9rem;
-        color: #5C5550;
-        line-height: 1.4;
-    }
-
-    .step-num {
-        flex-shrink: 0;
-        width: 22px;
-        height: 22px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: #8FA876;
-        color: #fff;
-        font-size: 0.75rem;
-        font-weight: 700;
-    }
-
-    .tip-alt {
-        font-size: 0.8rem;
-        color: #9C9590;
-        margin-top: 0.5rem;
-        padding-top: 0.5rem;
-        border-top: 1px solid rgba(0, 0, 0, 0.06);
-    }
-
-    .tip-segue {
-        text-align: center;
-        font-size: 0.95rem;
-        color: #8B5E38;
-        font-weight: 600;
-        margin-top: 1rem;
-        margin-bottom: 0;
-    }
-
-    .welcome-footer {
-        margin-top: 3rem;
-        font-size: 0.8rem;
-        color: #9C9590;
-    }
-
-    .welcome-footer a {
-        color: #7A756D;
-        margin: 0 0.5rem;
-    }
-</style>
-{% endblock %}
+{% block title %}דוגרי - ברוך הבא{% endblock %}
 
 {% block body %}
 <main class="welcome-page" x-data="{ copied: false, platform: 'android' }">
-    <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="welcome-logo">
+    <section class="welcome-shell" aria-labelledby="welcome-title">
+        <div class="welcome-main">
+            <img src="{{ url_for('static', filename='images/1.png') }}" alt="דוגרי" class="welcome-logo">
 
-    <h1 class="welcome-heading">{{ hs.POST_SIGNUP_WELCOME.format(name=user_name or '') }}</h1>
+            <p class="welcome-kicker">החשבון מוכן</p>
+            <h1 id="welcome-title" class="welcome-heading">{{ hs.POST_SIGNUP_WELCOME.format(name=user_name or '') }}</h1>
+            <p class="welcome-subtitle">השלב האחרון הוא לפתוח את דוגרי בטלגרם. משם כל המעקב קורה בצ'אט שכבר נמצא אצלך בטלפון.</p>
 
-    <!-- Home screen tip -->
-    <div class="tip-section">
-        <div class="tip-badge">{{ hs.HOME_TIP_BADGE }}</div>
-        <p class="tip-intro">{{ hs.HOME_TIP_INTRO }}</p>
+            <a href="{{ deep_link }}" class="welcome-cta">
+                {{ hs.POST_SIGNUP_CTA }}
+            </a>
 
-        <div class="tip-tabs">
-            <button class="tip-tab" :class="{ active: platform === 'android' }"
-                    @click="platform = 'android'">
-                🤖 {{ hs.HOME_TIP_TAB_ANDROID }}
-            </button>
-            <button class="tip-tab" :class="{ active: platform === 'iphone' }"
-                    @click="platform = 'iphone'">
-                🍎 {{ hs.HOME_TIP_TAB_IPHONE }}
-            </button>
+            <p class="welcome-fallback">
+                <span x-show="copied" x-cloak class="welcome-copy-toast">הקישור הועתק</span>
+                אם הכפתור לא נפתח,
+                <button type="button" @click="navigator.clipboard.writeText('{{ deep_link }}').then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
+                    העתק את הקישור
+                </button>
+            </p>
         </div>
 
-        <div class="tip-steps" x-show="platform === 'android'" x-transition.opacity>
-            {% for step in hs.HOME_TIP_ANDROID_STEPS %}
-            <div class="tip-step">
-                <span class="step-num">{{ loop.index }}</span>
-                <span>{{ step }}</span>
+        <aside class="tip-section" aria-label="{{ hs.HOME_TIP_BADGE }}">
+            <div class="tip-badge">{{ hs.HOME_TIP_BADGE }}</div>
+            <p class="tip-intro">{{ hs.HOME_TIP_INTRO }}</p>
+
+            <div class="tip-tabs" role="tablist" aria-label="בחירת מכשיר">
+                <button type="button"
+                        class="tip-tab"
+                        :class="{ active: platform === 'android' }"
+                        :aria-selected="platform === 'android'"
+                        @click="platform = 'android'">
+                    {{ hs.HOME_TIP_TAB_ANDROID }}
+                </button>
+                <button type="button"
+                        class="tip-tab"
+                        :class="{ active: platform === 'iphone' }"
+                        :aria-selected="platform === 'iphone'"
+                        @click="platform = 'iphone'">
+                    {{ hs.HOME_TIP_TAB_IPHONE }}
+                </button>
             </div>
-            {% endfor %}
-        </div>
 
-        <div class="tip-steps" x-show="platform === 'iphone'" x-transition.opacity>
-            {% for step in hs.HOME_TIP_IPHONE_STEPS %}
-            <div class="tip-step">
-                <span class="step-num">{{ loop.index }}</span>
-                <span>{{ step.format(bot_username=bot_username) }}</span>
+            <div class="tip-steps" x-show="platform === 'android'" x-transition.opacity>
+                {% for step in hs.HOME_TIP_ANDROID_STEPS %}
+                <div class="tip-step">
+                    <span class="step-num">{{ loop.index }}</span>
+                    <span>{{ step }}</span>
+                </div>
+                {% endfor %}
             </div>
-            {% endfor %}
-            <p class="tip-alt">{{ hs.HOME_TIP_IPHONE_ALT }}</p>
-        </div>
 
-        <p class="tip-segue">{{ hs.HOME_TIP_SEGUE }}</p>
-    </div>
+            <div class="tip-steps" x-show="platform === 'iphone'" x-transition.opacity>
+                {% for step in hs.HOME_TIP_IPHONE_STEPS %}
+                <div class="tip-step">
+                    <span class="step-num">{{ loop.index }}</span>
+                    <span>{{ step.format(bot_username=bot_username) }}</span>
+                </div>
+                {% endfor %}
+                <p class="tip-alt">{{ hs.HOME_TIP_IPHONE_ALT }}</p>
+            </div>
 
-    <a href="{{ deep_link }}" class="welcome-cta">
-        {{ hs.POST_SIGNUP_CTA }}
-    </a>
+            <p class="tip-segue">{{ hs.HOME_TIP_SEGUE }}</p>
+        </aside>
+    </section>
 
-    <p class="welcome-fallback">
-        <span x-show="copied" x-cloak class="copy-toast">הקישור הועתק!</span>
-        אם הכפתור לא נפתח אצלך,
-        <button @click="navigator.clipboard.writeText('{{ deep_link }}').then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
-            לחץ כאן להעתקת הקישור
-        </button>
-    </p>
-
-    <div class="welcome-footer">
+    <footer class="welcome-footer">
         <a href="{{ url_for('terms') }}">תנאי שימוש</a>
         <a href="{{ url_for('privacy') }}">מדיניות פרטיות</a>
-    </div>
+    </footer>
 </main>
 {% endblock %}
