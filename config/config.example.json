@@ -15,7 +15,7 @@
         "db_name": "health_tracker"
     },
     "dugri_bot_username": "DugriBot",
-    "contact_email": "hello@dugri.co",
+    "contact_email": "support@dugri.life",
     "admin_emails": ["admin@example.com"],
     "telegram_bot_token": "YOUR_TELEGRAM_BOT_TOKEN",
     "founder_telegram_username": "your_username",

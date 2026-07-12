@@ -62,8 +62,6 @@
                @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1'">
                 התחבר עם Google והמשך
             </a>
-
-            <p class="signup-note">{{ hs.CONSENT_MARKETING_NOTICE }}</p>
         </div>
     </section>
 </main>

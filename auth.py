@@ -12,7 +12,7 @@ from flask import (
 )
 
 from storage import DashboardStorage
-from hebrew_strings import ERROR_MISSING_CONSENT, ERROR_OAUTH_FAILED
+from hebrew_strings import ERROR_MISSING_CONSENT, ERROR_OAUTH_FAILED, DOC_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def _build_consents() -> dict:
         "medical_disclaimer_accepted_at": now,
         "marketing_opt_in": marketing,
         "marketing_opt_in_at": now if marketing else None,
-        "consent_version": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "doc_version": DOC_VERSION,
     }
 
 

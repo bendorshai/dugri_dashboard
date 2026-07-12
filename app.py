@@ -91,7 +91,7 @@ def create_app(config: dict | None = None) -> Flask:
         from flask import render_template, request, session, url_for
         import hebrew_strings as hs
 
-        contact_email = config.get("contact_email", "")
+        contact_email = config.get("contact_email") or "support@dugri.life"
         base_url = request.url_root.rstrip("/")
         og_image_url = base_url + url_for("static", filename="images/1.png")
         og_page_url = base_url + "/"
@@ -109,7 +109,7 @@ def create_app(config: dict | None = None) -> Flask:
         from flask import render_template, request, url_for
         import hebrew_strings as hs
 
-        contact_email = config.get("contact_email", "")
+        contact_email = config.get("contact_email") or "support@dugri.life"
         base_url = request.url_root.rstrip("/")
         og_image_url = base_url + url_for("static", filename="images/1.png")
         og_page_url = base_url + url_for("signup")
@@ -127,7 +127,7 @@ def create_app(config: dict | None = None) -> Flask:
         from flask import render_template, request, url_for
         import hebrew_strings as hs
 
-        contact_email = config.get("contact_email", "")
+        contact_email = config.get("contact_email") or "support@dugri.life"
         base_url = request.url_root.rstrip("/")
         og_image_url = base_url + url_for("static", filename="images/1.png")
         og_page_url = base_url + "/"
@@ -170,14 +170,14 @@ def create_app(config: dict | None = None) -> Flask:
     def terms():
         from flask import render_template
         import hebrew_strings as hs
-        contact_email = config.get("contact_email", "")
+        contact_email = config.get("contact_email") or "support@dugri.life"
         return render_template("terms.html", hs=hs, contact_email=contact_email)
 
     @app.route("/privacy")
     def privacy():
         from flask import render_template
         import hebrew_strings as hs
-        contact_email = config.get("contact_email", "")
+        contact_email = config.get("contact_email") or "support@dugri.life"
         return render_template("privacy.html", hs=hs, contact_email=contact_email)
 
     @app.route("/about")
