@@ -250,9 +250,9 @@ Reviewer tags: [PRIV] privacy, [CONS] consumer, [MED] medical, [ENF] enforceabil
 - [x] Database registration / DPO - **N/A now** (Amendment 13: registration doesn't apply to non-selling databases; notification threshold = 100k sensitive-data subjects). Revisit near 100k. (C3)
 - [x] **DPAs** - operator confirmed **none signed** with any provider; wording set accordingly (H2). Action item: sign free OpenAI/Railway/MongoDB DPAs later.
 - [x] **Deletion cron** - N/A: auto-deletion commitment REMOVED (R2-07). No cron needed.
-- [ ] **Billing code** trial window = **14 days**? (C1)
-- [ ] **`subscription.html`** price wording updated to plain **"47 ₪"** (no "כולל מע\"מ", per עוסק פטור)? (H10/B4)
-- [ ] **`support@dugri.life`** mailbox exists and is monitored? (H1)
+- [x] **Billing code** trial window = **14 days** - CONFIRMED (2026-07-13): `health_tracker/config/trial_periods.yaml` default cohort `trial_days: 14`; `logic/subscription_logic.py` `DEFAULT_TRIAL_DAYS = 14`. (C1)
+- [x] **`subscription.html`** price wording is plain **"47 ₪"** - CONFIRMED (2026-07-13): renders `SUB_SUBSCRIBE_CTA.format(price)` from config, no "כולל מע\"מ" text. Also verified landing/signup copy = 14 days + 47 ₪ no VAT. (H10/B4)
+- [ ] **`support@dugri.life`** mailbox exists and is monitored? (H1) - OPERATIONAL, cannot verify from code. Founder to confirm the mailbox is live + monitored before the docs go public.
 
 ---
 
