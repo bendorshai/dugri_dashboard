@@ -375,3 +375,18 @@ Second council pass audited the DECISIONS themselves. Refund matrix confirmed co
   - **Remove `CONSENT_MARKETING_NOTICE` from the signup page** (`signup.html` / `hebrew_strings.py`) - added as a companion task.
   - No marketing sent until a proper opt-in is built later.
   - Sequencing concern dissolves (nothing marketing-related asserted in the text anymore). M5/18+ already handled (R2-14); deletion cron dropped (R2-07).
+
+---
+
+## PART 6 - IMPLEMENTED + COUNCIL ROUND 3 (verify actual HTMLs vs plan)
+
+Implemented on branch `legal-docs-edit` (worktree). Full rewrite of `terms.html` (§1-16) + `privacy.html` (§1-12) + surrounding code (contact_email fallback, `doc_version` integer in `auth.py`, `DOC_VERSION` constant, marketing removal in signup/hebrew_strings, CLAUDE.md trial 14 + retention). Regression suite `tests/test_legal_docs.py` (15 tests) pins the load-bearing decisions - all green. Dashboard baseline otherwise unchanged (4 pre-existing landing/welcome Mongo fails only).
+
+Round-3 council verified the actual files against the plan: **faithful and clean; every in-scope DECISION correctly implemented.** Emergent findings (from the new wording, not deviations) resolved one-by-one:
+- **F1 [MED, medical] §11(ו) risk-groups re-created the C2 personal-injury disclaimer → FIXED (2026-07-13):** softened "אחריות מלאה ובלעדית" to "אחראי להחלטתו", and added "אין באמור בסעיף זה כדי לגרוע מהוראות סעיף קטן (ז)" (subordinates it to the non-excludable-personal-injury carve-out).
+- **F2 [HIGH, consumer] no-fault pro-rata refund buried in §8(ד), §7(ג) said absolute "no pro-rata" → FIXED:** §7(ג) now ends "...ולא יינתן החזר יחסי, בכפוף לאמור בסעיף 8(ד)".
+- **F3 [LOW, medical] no positive "goodwill safety gesture" bridge in §4/§8 → LEFT AS-IS (founder):** the negative caveat in §8(ה) suffices.
+- **F4 [MED, consumer] 500₪ lifetime cap on economic loss (מקפח residual) → FIXED:** §11(ה) cap changed to "300 ₪ או סך התשלומים בששת החודשים שקדמו לאירוע, הגבוה מביניהם" (removed the aggregate-lifetime framing; more generous = less מקפח-exposed). Bodily/mental-harm carve-out retained.
+- **F5 [LOW, consumer] cooling-off trigger "מיום החיוב הראשון" → LEFT AS-IS (founder):** pro-consumer, no real harm scenario.
+
+**Operational / merge items (not code):** confirm `support@dugri.life` mailbox is live; the corrected worktree `CLAUDE.md` must be the one that lands on `main`; `marketing_opt_in` remains as harmless dead scaffolding in `auth.py` (optional cleanup).
