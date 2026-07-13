@@ -34,8 +34,15 @@
         </a>
 
         <div class="signup-card">
-            <p class="signup-kicker">14 יום ניסיון. בלי כרטיס אשראי.</p>
             <h1 id="signup-title">סוף סוף להיות על זה</h1>
+
+            <div class="signup-faq">
+                {% for line in hs.SIGNUP_FAQ_LINES %}
+                <p class="signup-faq-line">{{ line }}</p>
+                {% endfor %}
+            </div>
+
+            <p class="signup-kicker">14 יום ניסיון. בלי כרטיס אשראי.</p>
 
             <div class="signup-consents" role="group" aria-label="אישורים נדרשים">
                 <label class="consent-checkbox signup-consent" :class="{ 'consent-checkbox--checked': terms }" for="signup-consent-terms">

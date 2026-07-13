@@ -12,6 +12,13 @@ CONSENT_TERMS = 'אני מסכים/ה ל<a href="/terms" target="_blank" rel="no
 CONSENT_MEDICAL = "אני מבין/ה שדוגרי הוא כלי למודעות, לא תחליף לייעוץ רפואי או תזונתי, ומסכים/ה לעיבוד מידע בריאותי (משקל, תזונה, שינה, פעילות גופנית) לצורך מתן השירות."
 CONSENT_REQUIRED_LABEL = "חובה"
 
+# -- Signup page micro-FAQ (between title and trial kicker) --
+SIGNUP_FAQ_LINES = [
+    "כותבים או מצלמים לדוגרי את מה שאתם אוכלים",
+    "דוגרי עוקב ומכניס אתכם לעניינים לאט לאט",
+    "תנו לדוגרי חודש והוא כבר יקלוט אתכם בקטע מפתיע",
+]
+
 # -- Error messages --
 ERROR_MISSING_CONSENT = "כדי להמשיך, צריך לאשר את כל התנאים"
 ERROR_OAUTH_FAILED = "ההתחברות נכשלה. נסה שוב."
@@ -22,8 +29,8 @@ POST_SIGNUP_CTA = "פתח את דוגרי בטלגרם"
 POST_SIGNUP_FALLBACK = "אם הכפתור לא נפתח אצלך, לחץ כאן להעתקת הקישור"
 
 # -- Home screen tip (welcome page) --
-HOME_TIP_BADGE = "💡 טיפ מקצוען"
-HOME_TIP_INTRO = "רגע לפני - דוגרי עובד הכי טוב כשהוא נגיש מהמסך הראשי, כמו אפליקציה רגילה."
+HOME_TIP_BADGE = "💡 טיפ שעושה את כל ההבדל"
+HOME_TIP_INTRO = "רגע לפני - איך לשים את דוגרי כאייקון נפרד בפלאפון?"
 HOME_TIP_TAB_ANDROID = "אנדרואיד"
 HOME_TIP_TAB_IPHONE = "אייפון"
 HOME_TIP_ANDROID_STEPS = [

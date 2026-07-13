@@ -39,6 +39,39 @@ class TestLandingPage:
         assert "/about" in data
 
 
+class TestSignupPage:
+    FAQ_LINES = [
+        "כותבים או מצלמים לדוגרי את מה שאתם אוכלים",
+        "דוגרי עוקב ומכניס אתכם לעניינים לאט לאט",
+        "תנו לדוגרי חודש והוא כבר יקלוט אתכם בקטע מפתיע",
+    ]
+    TITLE = "סוף סוף להיות על זה"
+    KICKER = "14 יום ניסיון. בלי כרטיס אשראי."
+
+    def test_signup_returns_200(self, client):
+        resp = client.get("/signup")
+        assert resp.status_code == 200
+
+    def test_signup_has_faq_lines(self, client):
+        data = client.get("/signup").data.decode("utf-8")
+        for line in self.FAQ_LINES:
+            assert line in data
+
+    def test_signup_faq_between_title_and_kicker(self, client):
+        # Order must be: title -> micro-FAQ -> trial kicker -> checkboxes
+        data = client.get("/signup").data.decode("utf-8")
+        title_i = data.index(self.TITLE)
+        faq_i = data.index(self.FAQ_LINES[0])
+        kicker_i = data.index(self.KICKER)
+        consents_i = data.index("signup-consents")
+        assert title_i < faq_i < kicker_i < consents_i
+
+    def test_signup_kicker_moved_after_title(self, client):
+        # The trial line now sits after the title, not before it.
+        data = client.get("/signup").data.decode("utf-8")
+        assert data.index(self.TITLE) < data.index(self.KICKER)
+
+
 class TestWelcomePage:
     def test_welcome_shows_telegram_link(self, client):
         _login(client)
@@ -73,9 +106,22 @@ class TestWelcomePage:
         _login(client)
         resp = client.get("/welcome")
         data = resp.data.decode("utf-8")
-        assert "טיפ מקצוען" in data
+        assert "טיפ שעושה את כל ההבדל" in data
         assert "אנדרואיד" in data
         assert "אייפון" in data
+
+    def test_welcome_protip_above_button(self, client):
+        # The Pro-Tip section must render above the Telegram CTA button.
+        _login(client)
+        data = client.get("/welcome").data.decode("utf-8")
+        assert data.index("tip-section") < data.index("welcome-cta")
+
+    def test_welcome_intro_asks_how_to_add_icon(self, client):
+        _login(client)
+        data = client.get("/welcome").data.decode("utf-8")
+        assert "איך לשים את דוגרי כאייקון נפרד בפלאפון?" in data
+        # Old phrasing is gone.
+        assert "עובד הכי טוב כשהוא נגיש מהמסך הראשי" not in data
 
 
 class TestLegalPages:

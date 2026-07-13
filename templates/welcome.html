@@ -12,6 +12,49 @@
             <h1 id="welcome-title" class="welcome-heading">{{ hs.POST_SIGNUP_WELCOME.format(name=user_name or '') }}</h1>
             <p class="welcome-subtitle">השלב האחרון הוא לפתוח את דוגרי בטלגרם. משם כל המעקב קורה בצ'אט שכבר נמצא אצלך בטלפון.</p>
 
+            <aside class="tip-section" aria-label="{{ hs.HOME_TIP_BADGE }}">
+                <div class="tip-badge">{{ hs.HOME_TIP_BADGE }}</div>
+                <p class="tip-intro">{{ hs.HOME_TIP_INTRO }}</p>
+
+                <div class="tip-tabs" role="tablist" aria-label="בחירת מכשיר">
+                    <button type="button"
+                            class="tip-tab"
+                            :class="{ active: platform === 'android' }"
+                            :aria-selected="platform === 'android'"
+                            @click="platform = 'android'">
+                        {{ hs.HOME_TIP_TAB_ANDROID }}
+                    </button>
+                    <button type="button"
+                            class="tip-tab"
+                            :class="{ active: platform === 'iphone' }"
+                            :aria-selected="platform === 'iphone'"
+                            @click="platform = 'iphone'">
+                        {{ hs.HOME_TIP_TAB_IPHONE }}
+                    </button>
+                </div>
+
+                <div class="tip-steps" x-show="platform === 'android'" x-transition.opacity>
+                    {% for step in hs.HOME_TIP_ANDROID_STEPS %}
+                    <div class="tip-step">
+                        <span class="step-num">{{ loop.index }}</span>
+                        <span>{{ step }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="tip-steps" x-show="platform === 'iphone'" x-transition.opacity>
+                    {% for step in hs.HOME_TIP_IPHONE_STEPS %}
+                    <div class="tip-step">
+                        <span class="step-num">{{ loop.index }}</span>
+                        <span>{{ step.format(bot_username=bot_username) }}</span>
+                    </div>
+                    {% endfor %}
+                    <p class="tip-alt">{{ hs.HOME_TIP_IPHONE_ALT }}</p>
+                </div>
+
+                <p class="tip-segue">{{ hs.HOME_TIP_SEGUE }}</p>
+            </aside>
+
             <a href="{{ deep_link }}" class="welcome-cta">
                 {{ hs.POST_SIGNUP_CTA }}
             </a>
@@ -25,48 +68,6 @@
             </p>
         </div>
 
-        <aside class="tip-section" aria-label="{{ hs.HOME_TIP_BADGE }}">
-            <div class="tip-badge">{{ hs.HOME_TIP_BADGE }}</div>
-            <p class="tip-intro">{{ hs.HOME_TIP_INTRO }}</p>
-
-            <div class="tip-tabs" role="tablist" aria-label="בחירת מכשיר">
-                <button type="button"
-                        class="tip-tab"
-                        :class="{ active: platform === 'android' }"
-                        :aria-selected="platform === 'android'"
-                        @click="platform = 'android'">
-                    {{ hs.HOME_TIP_TAB_ANDROID }}
-                </button>
-                <button type="button"
-                        class="tip-tab"
-                        :class="{ active: platform === 'iphone' }"
-                        :aria-selected="platform === 'iphone'"
-                        @click="platform = 'iphone'">
-                    {{ hs.HOME_TIP_TAB_IPHONE }}
-                </button>
-            </div>
-
-            <div class="tip-steps" x-show="platform === 'android'" x-transition.opacity>
-                {% for step in hs.HOME_TIP_ANDROID_STEPS %}
-                <div class="tip-step">
-                    <span class="step-num">{{ loop.index }}</span>
-                    <span>{{ step }}</span>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="tip-steps" x-show="platform === 'iphone'" x-transition.opacity>
-                {% for step in hs.HOME_TIP_IPHONE_STEPS %}
-                <div class="tip-step">
-                    <span class="step-num">{{ loop.index }}</span>
-                    <span>{{ step.format(bot_username=bot_username) }}</span>
-                </div>
-                {% endfor %}
-                <p class="tip-alt">{{ hs.HOME_TIP_IPHONE_ALT }}</p>
-            </div>
-
-            <p class="tip-segue">{{ hs.HOME_TIP_SEGUE }}</p>
-        </aside>
     </section>
 
     <footer class="welcome-footer">
