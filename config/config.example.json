@@ -26,5 +26,12 @@
         "api_secret": "YOUR_GREEN_INVOICE_API_SECRET",
         "sandbox": true,
         "subscription_price_ils": 1
+    },
+    "meta": {
+        "pixel_id": "",
+        "capi_access_token": "",
+        "api_version": "v20.0",
+        "enabled": false,
+        "test_event_code": ""
     }
 }

@@ -80,6 +80,12 @@ def create_app(config: dict | None = None) -> Flask:
         admin_emails = config.get("admin_emails", [])
         return {"is_admin": s.get("user_email") in admin_emails}
 
+    @app.context_processor
+    def inject_meta_pixel():
+        meta = config.get("meta", {})
+        pixel_id = meta.get("pixel_id", "") if meta.get("enabled") else ""
+        return {"meta_pixel_id": pixel_id}
+
     @app.after_request
     def set_cache_headers(response):
         if response.content_type and "text/html" in response.content_type:
@@ -158,11 +164,23 @@ def create_app(config: dict | None = None) -> Flask:
         user_name = session.get("user_name", "Preview")
         deep_link = f"https://t.me/{bot_username}?start={signup_token}"
 
+        signup_event_id = ""
+        user_email = session.get("user_email")
+        if user_email:
+            try:
+                mongo_cfg = config["mongodb"]
+                from storage import DashboardStorage
+                _storage = DashboardStorage(uri=mongo_cfg["uri"], db_name=mongo_cfg["db_name"])
+                signup_event_id = _storage.get_or_create_signup_event_id(user_email)
+            except Exception:
+                pass
+
         return render_template(
             "welcome.html",
             deep_link=deep_link,
             user_name=user_name,
             bot_username=bot_username,
+            signup_event_id=signup_event_id,
             hs=hs,
         )
 

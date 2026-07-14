@@ -468,5 +468,23 @@ def subscription_webhook():
         "subscription_end_acknowledged": False,
     })
 
+    # Fire the Meta Purchase conversion event (best-effort, deduped by token id).
+    try:
+        import services.meta_capi as meta_capi
+        cfg = current_app.config["APP_CONFIG"]
+        price = cfg.get("green_invoice", {}).get("subscription_price_ils", 47)
+        event_id = meta_capi._sha256(f"purchase:{token_id or user_email}")
+        meta_capi.send_event(
+            cfg.get("meta", {}),
+            email=user_email,
+            event_name="Purchase",
+            event_id=event_id,
+            user_meta=user.get("meta"),
+            custom_data={"value": price, "currency": "ILS"},
+            action_source="website",
+        )
+    except Exception:
+        logger.warning("Meta Purchase event failed (non-fatal)", exc_info=True)
+
     logger.info("Subscription activated for %s (token: %s)", user_email, token_id[:8] if token_id else "none")
     return jsonify({"status": "ok"}), 200

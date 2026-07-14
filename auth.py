@@ -176,6 +176,20 @@ def callback():
         if photo_url and photo_url != user.get("photo_url"):
             storage.update_user_profile(email, {"photo_url": photo_url})
 
+    # Capture Meta identifiers (best-effort) for conversion attribution.
+    try:
+        xff = request.headers.get("X-Forwarded-For", "")
+        client_ip = xff.split(",")[0].strip() if xff else request.remote_addr
+        storage.set_meta_identifiers(
+            email,
+            fbp=request.cookies.get("_fbp"),
+            fbc=request.cookies.get("_fbc"),
+            client_ip=client_ip,
+            client_user_agent=request.headers.get("User-Agent"),
+        )
+    except Exception:
+        logger.warning("Meta identifier capture failed (non-fatal)", exc_info=True)
+
     session["user_email"] = email
     session["user_name"] = name
 

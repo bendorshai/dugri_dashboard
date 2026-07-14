@@ -365,3 +365,26 @@ def create_self_care_log():
     if entry_id:
         return jsonify({"ok": True, "id": entry_id}), 201
     return jsonify({"error": "could not create"}), 400
+
+
+@api_bp.route("/meta-identifiers", methods=["POST"])
+def meta_identifiers():
+    """Browser fallback: persist _fbp/_fbc/fbclid for the logged-in user."""
+    email = session.get("user_email")
+    if not email:
+        return jsonify({"error": "not logged in"}), 401
+    data = request.get_json(silent=True) or {}
+    fbc = data.get("fbc")
+    fbclid = data.get("fbclid")
+    if not fbc and fbclid:
+        # Meta's documented format when only fbclid is available.
+        fbc = f"fb.1.{int(datetime.now().timestamp() * 1000)}.{fbclid}"
+    storage = _get_storage()
+    storage.set_meta_identifiers(
+        email,
+        fbp=data.get("fbp") or None,
+        fbc=fbc or None,
+        fbclid=fbclid or None,
+        landing_url=data.get("landing_url") or None,
+    )
+    return jsonify({"status": "ok"})

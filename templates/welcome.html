@@ -55,7 +55,8 @@
                 <p class="tip-segue">{{ hs.HOME_TIP_SEGUE }}</p>
             </aside>
 
-            <a href="{{ deep_link }}" class="welcome-cta">
+            <a href="{{ deep_link }}" class="welcome-cta"
+               onclick="try{if(window.fbq){fbq('track','Lead',{},{eventID:'{{ signup_event_id }}'});}}catch(e){}">
                 {{ hs.POST_SIGNUP_CTA }}
             </a>
 
@@ -75,4 +76,18 @@
         <a href="{{ url_for('privacy') }}">מדיניות פרטיות</a>
     </footer>
 </main>
+<script>
+(function(){
+  function c(n){var m=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)');return m?m.pop():'';}
+  try{
+    var fbp=c('_fbp'), fbc=c('_fbc');
+    var fbclid=new URLSearchParams(window.location.search).get('fbclid');
+    if(fbp||fbc||fbclid){
+      fetch('{{ url_for("api.meta_identifiers") }}',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fbp:fbp,fbc:fbc,fbclid:fbclid,landing_url:document.referrer})});
+    }
+  }catch(e){}
+})();
+</script>
 {% endblock %}

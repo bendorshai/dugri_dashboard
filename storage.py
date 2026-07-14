@@ -42,6 +42,7 @@ class DashboardStorage:
             "signup_session_token": None,
             "signup_session_token_expires_at": None,
             "consents": consents or {},
+            "meta": {"signup_event_id": secrets.token_urlsafe(16)},
             "trial_started_at": None,
             "subscription_status": "trial_pending",
             # Profile fields
@@ -77,6 +78,34 @@ class DashboardStorage:
     def update_user_profile(self, email: str, data: dict) -> None:
         data["updated_at"] = self._now()
         self._users.update_one({"_id": email}, {"$set": data})
+
+    # -- Meta (Facebook) conversion identifiers --
+
+    def set_meta_identifiers(self, email: str, *, fbp: str | None = None,
+                             fbc: str | None = None, fbclid: str | None = None,
+                             landing_url: str | None = None, client_ip: str | None = None,
+                             client_user_agent: str | None = None) -> None:
+        """Persist Meta attribution identifiers under the user's meta.* sub-doc.
+        Skips empty values; never overwrites with None."""
+        update = {f"meta.{k}": v for k, v in {
+            "fbp": fbp, "fbc": fbc, "fbclid": fbclid, "landing_url": landing_url,
+            "client_ip": client_ip, "client_user_agent": client_user_agent,
+        }.items() if v}
+        if not update:
+            return
+        update["updated_at"] = self._now()
+        self._users.update_one({"_id": email}, {"$set": update})
+
+    def get_or_create_signup_event_id(self, email: str) -> str:
+        """Stable per-user event id shared by the welcome-CTA pixel + any server Lead."""
+        user = self._users.find_one({"_id": email}, {"meta": 1})
+        existing = (user or {}).get("meta", {}).get("signup_event_id")
+        if existing:
+            return existing
+        new_id = secrets.token_urlsafe(16)
+        self._users.update_one({"_id": email},
+                               {"$set": {"meta.signup_event_id": new_id, "updated_at": self._now()}})
+        return new_id
 
     def complete_onboarding(self, email: str) -> None:
         self._users.update_one(
