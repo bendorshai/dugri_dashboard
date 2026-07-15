@@ -76,7 +76,10 @@ class TestCreateUser:
         doc = storage._users.insert_one.call_args[0][0]
         assert doc["subscription_status"] == "trial_pending"
         assert doc["trial_started_at"] is None
-        assert doc["telegram_user_id"] is None
+        # telegram_user_id is omitted (not null) so the sparse unique index skips
+        # unlinked users; .get() therefore returns None for a fresh signup.
+        assert doc.get("telegram_user_id") is None
+        assert "telegram_user_id" not in doc
         assert doc["signup_session_token"] is None
 
 

@@ -38,7 +38,11 @@ class DashboardStorage:
             "_id": email,
             "name": name,
             "photo_url": photo_url,
-            "telegram_user_id": None,
+            # telegram_user_id is intentionally OMITTED (not set to null): the
+            # users collection has a sparse UNIQUE index on telegram_user_id, and
+            # a *present* null is indexed - so a second unlinked signup would
+            # collide on null (E11000). Leaving the field absent lets the sparse
+            # index skip unlinked users; linking sets a real id later.
             "signup_session_token": None,
             "signup_session_token_expires_at": None,
             "consents": consents or {},
