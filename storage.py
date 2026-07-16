@@ -43,7 +43,11 @@ class DashboardStorage:
             "events_received": fields.get("events_received"),
             "fbtrace_id": fields.get("fbtrace_id"),
             "error": fields.get("error"),
-            "timestamp": self._now(),
+            # Store a real datetime (BSON Date) - NOT self._now()'s ISO string - so
+            # this matches the bot's utc_now() write and admin sort-by-timestamp
+            # orders bot + dashboard rows consistently (Mongo sorts mixed types by
+            # type-bracket, so string vs Date would split them into two groups).
+            "timestamp": datetime.now(timezone.utc),
         }
         try:
             self._db["meta_events_log"].insert_one(doc)
