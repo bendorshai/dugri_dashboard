@@ -54,6 +54,33 @@ def _get_admin_storage() -> AdminStorage:
     return AdminStorage(uri=mongo_cfg["uri"], db_name=mongo_cfg["db_name"])
 
 
+# Plain-language explanation of each conversion event, shown as a row tooltip.
+EVENT_DESCRIPTIONS = {
+    "reached_bot": "User opened the bot and linked their account (server-confirmed arrival). Fires once, on first /start.",
+    "first_meal": "User logged their first meal. Fires once.",
+    "streak_3_days": "User wrote to Dugri 3 days in a row. Fires once.",
+    "active_9_days": "User still active 9+ days after signup. Fires once.",
+    "paid": "User paid for a subscription (payment webhook). Value 47 ILS.",
+    "Purchase": "User paid for a subscription (payment webhook). Value 47 ILS.",
+}
+
+
+@admin_bp.route("/meta-events")
+@admin_required
+def meta_events():
+    storage = _get_admin_storage()
+    rows = storage.get_meta_events()
+    total = len(rows)
+    sent_ok_count = sum(1 for r in rows if r.get("sent_ok"))
+    distinct_users = len({r.get("telegram_user_id") for r in rows if r.get("telegram_user_id")})
+    return render_template(
+        "admin/meta_events.html",
+        active_tab="admin", active_sub="meta_events",
+        rows=rows, total=total, sent_ok_count=sent_ok_count,
+        distinct_users=distinct_users, descriptions=EVENT_DESCRIPTIONS,
+    )
+
+
 @admin_bp.route("/")
 @admin_required
 def dashboard():

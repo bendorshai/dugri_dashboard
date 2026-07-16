@@ -78,6 +78,27 @@ class AdminStorage:
         self._feature_requests = self._db["feature_requests"]
         self._token_logs = self._db["token_logs"]
         self._conversation_logs = self._db["conversation_logs"]
+        self._meta_events_log = self._db["meta_events_log"]
+
+    # -- Meta conversion events --
+
+    def get_meta_events(self, limit: int = 500) -> list[dict]:
+        """Recent fired Meta conversion events (newest first), enriched with the
+        user's name via telegram_user_id."""
+        rows = list(self._meta_events_log.find().sort("timestamp", -1).limit(limit))
+        tids = [r.get("telegram_user_id") for r in rows if r.get("telegram_user_id")]
+        users_by_tid = {}
+        if tids:
+            for u in self._users.find(
+                {"telegram_user_id": {"$in": tids}},
+                {"_id": 1, "name": 1, "telegram_user_id": 1},
+            ):
+                users_by_tid[u["telegram_user_id"]] = u
+        for r in rows:
+            u = users_by_tid.get(r.get("telegram_user_id"), {})
+            r["user_name"] = u.get("name")
+            r["user_email"] = r.get("user_email") or u.get("_id")
+        return rows
 
     # -- Token Analytics --
 

@@ -1,0 +1,72 @@
+{% extends "dashboard/layout.html" %}
+
+{% block title %}Dugri - Meta Events{% endblock %}
+
+{% block dashboard_content %}
+<div class="admin-dashboard">
+
+    <!-- Admin Sub-tabs -->
+    <div class="admin-tabs">
+        <a href="{{ url_for('admin.dashboard') }}" class="admin-tab">Dashboard</a>
+        <a href="{{ url_for('admin.errors') }}" class="admin-tab">Errors</a>
+        <a href="{{ url_for('admin.feature_requests') }}" class="admin-tab">Feature Requests</a>
+        <a href="{{ url_for('admin.tokens') }}" class="admin-tab">Tokens</a>
+        <a href="{{ url_for('admin.meta_events') }}" class="admin-tab active">Meta Events</a>
+        <a href="{{ url_for('admin.simulator') }}" class="admin-tab">Simulator</a>
+    </div>
+
+    <!-- KPI Cards -->
+    <section class="admin-kpis" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="kpi-card">
+            <span class="kpi-label">Total Events</span>
+            <span class="kpi-value">{{ total }}</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Sent OK</span>
+            <span class="kpi-value">{{ sent_ok_count }}</span>
+        </div>
+        <div class="kpi-card">
+            <span class="kpi-label">Distinct Users</span>
+            <span class="kpi-value">{{ distinct_users }}</span>
+        </div>
+    </section>
+
+    <!-- Events Table -->
+    <section class="admin-leads">
+        <h2>Meta Conversion Events - our own record, independent of Meta</h2>
+        <p class="admin-hint">Hover an event name for what it means.</p>
+        {% if rows %}
+        <table class="leads-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Event</th>
+                    <th>Source</th>
+                    <th>Time</th>
+                    <th>Sent OK?</th>
+                    <th>Received</th>
+                    <th>fbtrace_id</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td>{{ r.user_name or r.user_email or r.telegram_user_id or '-' }}</td>
+                    <td title="{{ descriptions.get(r.event_key) or descriptions.get(r.event_name) or '' }}" style="cursor: help;">
+                        {{ r.event_name or r.event_key or '-' }}
+                    </td>
+                    <td>{{ r.source or '-' }}</td>
+                    <td>{{ (r.timestamp | string)[:19] }}</td>
+                    <td>{% if r.sent_ok %}✅{% elif r.sent_ok is none %}—{% else %}❌ {{ r.error or '' }}{% endif %}</td>
+                    <td>{{ r.events_received if r.events_received is not none else '-' }}</td>
+                    <td title="{{ r.fbtrace_id or '' }}">{{ (r.fbtrace_id or '-')[:16] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="leads-empty">No Meta events recorded yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
