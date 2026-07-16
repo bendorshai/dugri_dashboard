@@ -65,7 +65,7 @@ a {
     text-decoration: none;
 }
 
-a:hover {
+a:not(.btn):hover {
     color: var(--primary-dark);
 }
 
@@ -133,6 +133,20 @@ a:hover {
 .btn--danger:hover {
     background: #c0392b;
     border-color: #c0392b;
+}
+
+/* Canonical conversion-CTA button. Resting: cinnamon + white.
+   Hover: light cinnamon + dark text - text never disappears.
+   Mirrors the .cta-band reference button (style.css:539-549). */
+.btn--cta {
+    background: var(--primary);   /* #A67448 - global twin of --cinnamon */
+    color: var(--white);
+}
+
+.btn.btn--cta:hover {          /* 0,3,0 - beats a:hover and
+                                  .landing-page .btn--primary:hover (0,2,1) */
+    background: var(--primary-light);
+    color: #3D3428;
 }
 
 .btn--full {
@@ -260,10 +274,6 @@ a:hover {
 
 .landing-page .btn--primary {
     background: var(--cinnamon);
-}
-
-.landing-page .btn--primary:hover {
-    background: var(--cinnamon-dark);
 }
 
 .trust-row {
@@ -1148,8 +1158,7 @@ a:hover {
 }
 
 .welcome-cta:hover {
-    background: var(--primary-dark);
-    color: var(--white);
+    /* background + text color come from the shared .btn--cta:hover */
     transform: translateY(-1px);
     box-shadow: 0 20px 48px rgba(166, 116, 72, 0.3);
 }

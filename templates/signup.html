@@ -63,7 +63,7 @@
             </div>
 
             <a :href="canSubmit ? '{{ url_for('auth.login') }}?terms=1&medical=1' : '#'"
-               class="btn btn--primary btn--full signup-submit"
+               class="btn btn--primary btn--full btn--cta signup-submit"
                :disabled="!canSubmit"
                :class="{ 'btn--disabled': !canSubmit }"
                @click.prevent="if (canSubmit) window.location.href = '{{ url_for('auth.login') }}?terms=1&medical=1'">
