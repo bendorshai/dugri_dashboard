@@ -31,6 +31,7 @@ class GreenInvoiceService:
         self._api_secret = api_secret
         self._token: str | None = None
         self._token_expires_at: float = 0
+        self._plugin_id: str | None = None
 
     def _authenticate(self) -> str:
         """Get a JWT token, using cached value if still valid."""
@@ -59,6 +60,38 @@ class GreenInvoiceService:
             "Content-Type": "application/json",
         }
 
+    def _get_payment_plugin_id(self) -> str:
+        """Resolve the account's credit-card clearing terminal plugin id.
+
+        The /payments/form endpoint must be told which clearing terminal to
+        use via `pluginId`; without it Green Invoice returns a misleading
+        errorCode 2403 ("document type not supported for this business type").
+        We resolve it dynamically (the plugin flagged `payments: true`) so the
+        same code works against the sandbox and production terminals, which
+        have different ids. Cached for the lifetime of the instance.
+        """
+        if self._plugin_id:
+            return self._plugin_id
+
+        resp = requests.get(
+            f"{self._base_url}/api/v1/plugins",
+            headers=self._headers(),
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            raise GreenInvoiceError(f"Plugins fetch failed: {resp.status_code} {resp.text}")
+
+        plugins = resp.json() or []
+        terminal = next(
+            (p for p in plugins if p.get("payments") and p.get("id")), None
+        )
+        if terminal is None:
+            raise GreenInvoiceError(
+                "No payment clearing terminal configured on this Green Invoice account"
+            )
+        self._plugin_id = terminal["id"]
+        return self._plugin_id
+
     def get_payment_form_url(
         self,
         user_email: str,
@@ -74,6 +107,7 @@ class GreenInvoiceService:
         """
         payload = {
             "type": DOC_TYPE_RECEIPT,
+            "pluginId": self._get_payment_plugin_id(),
             "lang": "he",
             "currency": "ILS",
             "amount": amount_ils,
@@ -103,7 +137,8 @@ class GreenInvoiceService:
             headers=self._headers(),
             timeout=15,
         )
-        if resp.status_code != 200:
+        # GI returns 201 Created on success for the payment form.
+        if resp.status_code not in (200, 201):
             raise GreenInvoiceError(f"Payment form failed: {resp.status_code} {resp.text}")
 
         data = resp.json()
@@ -136,7 +171,7 @@ class GreenInvoiceService:
                 headers=self._headers(),
                 timeout=30,
             )
-            if resp.status_code == 200:
+            if resp.status_code in (200, 201):
                 return {"success": True, "data": resp.json()}
             else:
                 logger.error("Token charge failed: %s %s", resp.status_code, resp.text)

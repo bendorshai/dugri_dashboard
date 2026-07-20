@@ -230,6 +230,61 @@ class TestPurchaseWebhook:
         assert resp.status_code == 200
         mock_post.assert_not_called()
 
+    @patch("services.meta_capi.requests.post")
+    @patch("dashboard_views.DashboardStorage")
+    def test_purchase_logged_to_meta_events_log(self, mock_storage_cls, mock_post, meta_client):
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = {
+            "_id": TEST_EMAIL, "subscription_status": "trial_ended",
+            "telegram_user_id": 42, "meta": {},
+        }
+        mock_storage_cls.return_value = mock_storage
+
+        post_resp = MagicMock()
+        post_resp.status_code = 200
+        post_resp.ok = True
+        post_resp.json.return_value = {"events_received": 1, "fbtrace_id": "tb"}
+        mock_post.return_value = post_resp
+
+        resp = meta_client.post(
+            "/dashboard/subscription/webhook?gi-type=ipn",
+            json={"custom": TEST_EMAIL, "tokenId": "tok1"},
+        )
+        assert resp.status_code == 200
+
+        # The webhook records the Purchase in our own audit log with the send outcome.
+        mock_storage.log_meta_event.assert_called_once()
+        kw = mock_storage.log_meta_event.call_args.kwargs
+        assert kw["event_name"] == "Purchase"
+        assert kw["event_key"] == "paid"
+        assert kw["sent_ok"] is True
+        assert kw["fbtrace_id"] == "tb"
+        assert kw["events_received"] == 1
+        assert kw["telegram_user_id"] == 42
+
+
+class TestLogMetaEvent:
+    def test_log_meta_event_inserts_row(self, real_storage):
+        marker = "log-meta-event-test-trace"
+        coll = real_storage._db["meta_events_log"]
+        coll.delete_many({"fbtrace_id": marker})
+        real_storage.log_meta_event(
+            telegram_user_id=7, user_email=TEST_EMAIL, event_key="paid",
+            event_name="Purchase", action_source="website", sent_ok=True,
+            http_status=200, events_received=1, fbtrace_id=marker,
+            custom_data={"value": 47, "currency": "ILS"},
+        )
+        try:
+            row = coll.find_one({"fbtrace_id": marker})
+            assert row is not None
+            assert row["event_name"] == "Purchase"
+            assert row["source"] == "dashboard"
+            assert row["sent_ok"] is True
+            assert row["telegram_user_id"] == 7
+            assert "timestamp" in row
+        finally:
+            coll.delete_many({"fbtrace_id": marker})
+
 
 # -- Unit tests for services.meta_capi.send_event ----------------------------
 

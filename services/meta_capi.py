@@ -14,15 +14,16 @@ def _sha256(v: str) -> str:
 
 def send_event(meta_config: dict, *, email: str, event_name: str, event_id: str,
                user_meta: dict | None = None, custom_data: dict | None = None,
-               action_source: str = "website", event_source_url: str | None = None) -> None:
-    """Best-effort CAPI send. No-op unless meta.enabled + pixel_id + token are set.
-    Never raises; swallows + logs on failure."""
+               action_source: str = "website", event_source_url: str | None = None) -> dict | None:
+    """Best-effort CAPI send. Returns the send outcome
+    ({"sent_ok","http_status","events_received","fbtrace_id"} or {"sent_ok":False,"error"}),
+    or None when meta is disabled/unconfigured (nothing sent). Never raises."""
     if not meta_config or not meta_config.get("enabled"):
-        return
+        return None
     pixel_id = meta_config.get("pixel_id")
     token = meta_config.get("capi_access_token")
     if not pixel_id or not token:
-        return
+        return None
     user_meta = user_meta or {}
     user_data = {"em": _sha256(email), "external_id": _sha256(email)}
     for src, dst in (("fbp", "fbp"), ("fbc", "fbc"),
@@ -42,6 +43,15 @@ def send_event(meta_config: dict, *, email: str, event_name: str, event_id: str,
     ver = meta_config.get("api_version", "v20.0")
     url = f"https://graph.facebook.com/{ver}/{pixel_id}/events?access_token={token}"
     try:
-        requests.post(url, json=payload, timeout=3)
-    except Exception:
+        resp = requests.post(url, json=payload, timeout=3)
+        body = {}
+        try:
+            body = resp.json()
+        except Exception:
+            pass
+        return {"sent_ok": bool(resp.ok), "http_status": resp.status_code,
+                "events_received": body.get("events_received"),
+                "fbtrace_id": body.get("fbtrace_id")}
+    except Exception as e:
         logger.warning("Meta CAPI (dashboard) send failed (swallowed)", exc_info=True)
+        return {"sent_ok": False, "error": str(e)}

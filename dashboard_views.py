@@ -511,7 +511,7 @@ def subscription_webhook():
         cfg = current_app.config["APP_CONFIG"]
         price = cfg.get("green_invoice", {}).get("subscription_price_ils", 47)
         event_id = meta_capi._sha256(f"purchase:{token_id or user_email}")
-        meta_capi.send_event(
+        outcome = meta_capi.send_event(
             cfg.get("meta", {}),
             email=user_email,
             event_name="Purchase",
@@ -520,6 +520,14 @@ def subscription_webhook():
             custom_data={"value": price, "currency": "ILS"},
             action_source="website",
         )
+        # Record it in our own audit log (only when a send was actually attempted).
+        if outcome is not None:
+            storage.log_meta_event(
+                telegram_user_id=user.get("telegram_user_id"), user_email=user_email,
+                event_key="paid", event_name="Purchase", action_source="website",
+                event_time=None, custom_data={"value": price, "currency": "ILS"},
+                **outcome,
+            )
     except Exception:
         logger.warning("Meta Purchase event failed (non-fatal)", exc_info=True)
 

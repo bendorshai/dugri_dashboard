@@ -26,6 +26,34 @@ class DashboardStorage:
     def get_user(self, email: str) -> dict | None:
         return self._users.find_one({"_id": email})
 
+    def log_meta_event(self, **fields) -> None:
+        """Append one fired Meta conversion event (with its send outcome) to the
+        shared meta_events_log collection. Best-effort; source='dashboard'."""
+        doc = {
+            "telegram_user_id": fields.get("telegram_user_id"),
+            "user_email": fields.get("user_email"),
+            "event_key": fields.get("event_key", ""),
+            "event_name": fields.get("event_name", ""),
+            "action_source": fields.get("action_source"),
+            "source": "dashboard",
+            "event_time": fields.get("event_time"),
+            "custom_data": fields.get("custom_data"),
+            "sent_ok": fields.get("sent_ok"),
+            "http_status": fields.get("http_status"),
+            "events_received": fields.get("events_received"),
+            "fbtrace_id": fields.get("fbtrace_id"),
+            "error": fields.get("error"),
+            # Store a real datetime (BSON Date) - NOT self._now()'s ISO string - so
+            # this matches the bot's utc_now() write and admin sort-by-timestamp
+            # orders bot + dashboard rows consistently (Mongo sorts mixed types by
+            # type-bracket, so string vs Date would split them into two groups).
+            "timestamp": datetime.now(timezone.utc),
+        }
+        try:
+            self._db["meta_events_log"].insert_one(doc)
+        except Exception:
+            logger.warning("Failed to log meta event", exc_info=True)
+
     def create_user(
         self,
         email: str,
