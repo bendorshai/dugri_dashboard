@@ -73,7 +73,8 @@ class TestPaymentFormUrl:
     def test_returns_form_url(self, mock_post, mock_get, gi_sandbox):
         responses = [
             MagicMock(status_code=200, json=lambda: {"token": "jwt_123", "expires_in": 1800}),
-            MagicMock(status_code=200, json=lambda: {"url": "https://sandbox.d.greeninvoice.co.il/form/abc"}),
+            # GI returns 201 Created (not 200) on a successful payment form.
+            MagicMock(status_code=201, json=lambda: {"success": True, "url": "https://sandbox.d.greeninvoice.co.il/form/abc"}),
         ]
         mock_post.side_effect = responses
         # Plugin lookup returns a payment clearing terminal
@@ -188,7 +189,8 @@ class TestChargeToken:
     def test_successful_charge(self, mock_post, gi_sandbox):
         responses = [
             MagicMock(status_code=200, json=lambda: {"token": "jwt_123", "expires_in": 1800}),
-            MagicMock(status_code=200, json=lambda: {"transactionId": "txn_456"}),
+            # GI payments endpoints return 201 Created on success.
+            MagicMock(status_code=201, json=lambda: {"transactionId": "txn_456"}),
         ]
         mock_post.side_effect = responses
 

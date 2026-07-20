@@ -137,7 +137,8 @@ class GreenInvoiceService:
             headers=self._headers(),
             timeout=15,
         )
-        if resp.status_code != 200:
+        # GI returns 201 Created on success for the payment form.
+        if resp.status_code not in (200, 201):
             raise GreenInvoiceError(f"Payment form failed: {resp.status_code} {resp.text}")
 
         data = resp.json()
@@ -170,7 +171,7 @@ class GreenInvoiceService:
                 headers=self._headers(),
                 timeout=30,
             )
-            if resp.status_code == 200:
+            if resp.status_code in (200, 201):
                 return {"success": True, "data": resp.json()}
             else:
                 logger.error("Token charge failed: %s %s", resp.status_code, resp.text)
