@@ -68,13 +68,19 @@ class TestBaseUrl:
 
 
 class TestPaymentFormUrl:
+    @patch("services.green_invoice.requests.get")
     @patch("services.green_invoice.requests.post")
-    def test_returns_form_url(self, mock_post, gi_sandbox):
+    def test_returns_form_url(self, mock_post, mock_get, gi_sandbox):
         responses = [
             MagicMock(status_code=200, json=lambda: {"token": "jwt_123", "expires_in": 1800}),
             MagicMock(status_code=200, json=lambda: {"url": "https://sandbox.d.greeninvoice.co.il/form/abc"}),
         ]
         mock_post.side_effect = responses
+        # Plugin lookup returns a payment clearing terminal
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [{"id": "plug_1", "payments": True, "type": 12200}],
+        )
 
         url = gi_sandbox.get_payment_form_url(
             user_email="user@test.com",
@@ -92,14 +98,21 @@ class TestPaymentFormUrl:
         assert payload["amount"] == 1
         assert payload["currency"] == "ILS"
         assert payload["custom"] == "user@test.com"
+        # The clearing terminal must be bound to the form, else GI returns 2403
+        assert payload["pluginId"] == "plug_1"
 
+    @patch("services.green_invoice.requests.get")
     @patch("services.green_invoice.requests.post")
-    def test_form_failure_raises(self, mock_post, gi_sandbox):
+    def test_form_failure_raises(self, mock_post, mock_get, gi_sandbox):
         responses = [
             MagicMock(status_code=200, json=lambda: {"token": "jwt_123", "expires_in": 1800}),
             MagicMock(status_code=400, text="Bad request"),
         ]
         mock_post.side_effect = responses
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [{"id": "plug_1", "payments": True, "type": 12200}],
+        )
 
         with pytest.raises(GreenInvoiceError, match="Payment form failed"):
             gi_sandbox.get_payment_form_url(
@@ -110,6 +123,64 @@ class TestPaymentFormUrl:
                 failure_url="https://app.com/f",
                 notify_url="https://app.com/w",
             )
+
+
+class TestPaymentPluginResolution:
+    """The /payments/form call must include the clearing terminal's pluginId.
+
+    Green Invoice returns a misleading errorCode 2403 ("document type not
+    supported for this business type") when pluginId is omitted, even though
+    the document type is valid. The id is resolved dynamically from
+    GET /plugins (the entry with payments==true) so it works across the
+    sandbox and production terminals without config duplication.
+    """
+
+    @patch("services.green_invoice.requests.get")
+    @patch("services.green_invoice.requests.post")
+    def test_resolves_and_caches_plugin_id(self, mock_post, mock_get, gi_sandbox):
+        mock_post.return_value = MagicMock(
+            status_code=200, json=lambda: {"token": "jwt_123", "expires_in": 1800}
+        )
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [
+                {"id": "other", "payments": False, "type": 9999},
+                {"id": "terminal_42", "payments": True, "type": 12200},
+            ],
+        )
+
+        pid1 = gi_sandbox._get_payment_plugin_id()
+        pid2 = gi_sandbox._get_payment_plugin_id()
+
+        assert pid1 == "terminal_42"
+        assert pid2 == "terminal_42"
+        # Cached: only one plugins fetch despite two calls
+        assert mock_get.call_count == 1
+
+    @patch("services.green_invoice.requests.get")
+    @patch("services.green_invoice.requests.post")
+    def test_raises_when_no_payment_terminal(self, mock_post, mock_get, gi_sandbox):
+        mock_post.return_value = MagicMock(
+            status_code=200, json=lambda: {"token": "jwt_123", "expires_in": 1800}
+        )
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [{"id": "other", "payments": False, "type": 9999}],
+        )
+
+        with pytest.raises(GreenInvoiceError, match="clearing terminal"):
+            gi_sandbox._get_payment_plugin_id()
+
+    @patch("services.green_invoice.requests.get")
+    @patch("services.green_invoice.requests.post")
+    def test_raises_when_plugins_fetch_fails(self, mock_post, mock_get, gi_sandbox):
+        mock_post.return_value = MagicMock(
+            status_code=200, json=lambda: {"token": "jwt_123", "expires_in": 1800}
+        )
+        mock_get.return_value = MagicMock(status_code=500, text="server error")
+
+        with pytest.raises(GreenInvoiceError, match="Plugins fetch failed"):
+            gi_sandbox._get_payment_plugin_id()
 
 
 class TestChargeToken:
