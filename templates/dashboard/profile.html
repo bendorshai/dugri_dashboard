@@ -83,8 +83,99 @@
                    value="{{ user.get('height_cm', '') or '' }}"
                    min="100" max="250">
         </div>
+
+        <div class="form-group"
+             x-data="timezoneWidget('{{ current_timezone }}')" x-init="init()">
+            <label class="form-label" for="timezone">אזור זמן</label>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.5rem;">
+                דוגרי שולח לך הודעות לפי השעון המקומי שלך - הודעת בוקר בבוקר שלך, לא באמצע הלילה.
+            </p>
+
+            <div x-show="mismatch" x-cloak
+                 style="background: var(--accent-soft, #eef5f8); border: 1px solid var(--border, #e0d8cc);
+                        border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.75rem;
+                        display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+                <span x-text="bannerText"></span>
+                <button type="button" class="btn btn--secondary" @click="applyDetected()">
+                    עדכן ל־<span x-text="detected"></span>
+                </button>
+            </div>
+
+            <select class="form-input" id="timezone" name="timezone"
+                    x-model="selected" @change="source = 'user_manual'; updatePreview()">
+                {# Server-rendered so the dropdown works even if Alpine/JS fails to
+                   load; JS only ADDS a browser-detected off-list zone on top. #}
+                {% for tz in timezone_options %}
+                <option value="{{ tz }}" {{ 'selected' if tz == current_timezone else '' }}>{{ tz }}</option>
+                {% endfor %}
+            </select>
+            <input type="hidden" name="timezone_source" x-model="source">
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;" x-text="preview"></p>
+        </div>
     </div>
 
     <button type="submit" class="btn btn--primary btn--full" style="margin-top: 1rem;">שמור שינויים</button>
 </form>
+
+<script>
+function timezoneWidget(current) {
+    return {
+        selected: current,
+        source: '',            // '' until the user changes it (server keeps existing source)
+        detected: '',
+        mismatch: false,
+        bannerText: '',
+        preview: '',
+        init() {
+            try { this.detected = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; }
+            catch (e) { this.detected = ''; }
+            // Make the detected zone selectable even if it's not in the curated
+            // server-rendered list, so binding selected to it can't fall back to
+            // the first <option> and save the WRONG timezone.
+            this.ensureOption(this.detected);
+            // Prompt to relocate only if the detected zone shows a DIFFERENT wall
+            // time than the current selection - suppresses legacy IANA aliases
+            // (e.g. Asia/Calcutta vs Asia/Kolkata) that are really the same zone.
+            if (this.detected && this.detected !== this.selected
+                && !this.sameWallTime(this.detected, this.selected)) {
+                this.mismatch = true;
+                this.bannerText = 'נראה שאתה עכשיו באזור זמן ' + this.detected + '.';
+            }
+            this.updatePreview();
+        },
+        ensureOption(tz) {
+            var sel = document.getElementById('timezone');
+            if (!sel || !tz) return;
+            for (var i = 0; i < sel.options.length; i++) {
+                if (sel.options[i].value === tz) return;
+            }
+            var o = document.createElement('option');
+            o.value = tz; o.text = tz;
+            sel.appendChild(o);
+        },
+        applyDetected() {
+            this.ensureOption(this.detected);
+            this.selected = this.detected;
+            this.source = 'user_confirmed';
+            this.mismatch = false;
+            this.updatePreview();
+        },
+        sameWallTime(a, b) {
+            try {
+                var now = new Date();
+                return now.toLocaleString('en-US', { timeZone: a }) ===
+                       now.toLocaleString('en-US', { timeZone: b });
+            } catch (e) { return false; }
+        },
+        updatePreview() {
+            try {
+                var now = new Date().toLocaleTimeString('he-IL',
+                    { timeZone: this.selected, hour: '2-digit', minute: '2-digit' });
+                this.preview = 'עכשיו אצלך בערך ' + now +
+                    '. הודעת הבוקר של דוגרי תגיע בבוקר שלך (בערך 08:00-10:00).';
+            } catch (e) { this.preview = ''; }
+        }
+    };
+}
+</script>
 {% endblock %}

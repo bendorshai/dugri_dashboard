@@ -5,3 +5,4 @@ requests==2.32.3
 openai==1.66.3
 python-dotenv==1.1.0
 pytest==8.3.5
+pytz==2024.2  # timezone validation - MUST match the bot's pytz so both repos agree on which zones are valid

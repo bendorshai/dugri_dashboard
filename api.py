@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request, current_app, session
 from auth import login_required
 from analyzer import DashboardAnalyzer
 from storage import DashboardStorage
+from supported_timezones import is_valid_timezone
 
 # Hebrew day names (Sunday=0 .. Saturday=6 mapped from Python's Monday=0)
 _HEBREW_DAYS = {
@@ -387,4 +388,38 @@ def meta_identifiers():
         fbclid=fbclid or None,
         landing_url=data.get("landing_url") or None,
     )
+    return jsonify({"status": "ok"})
+
+
+@api_bp.route("/timezone-detect", methods=["POST"])
+def timezone_detect():
+    """Browser auto-detect: persist the user's IANA timezone.
+
+    Called fire-and-forget from the welcome page (source=browser_detected) and
+    from the profile relocation banner (source=user_confirmed). Invalid zones are
+    silently ignored - the user never sees an error (house rule); server logs it.
+    """
+    email = session.get("user_email")
+    if not email:
+        return jsonify({"error": "not logged in"}), 401
+    data = request.get_json(silent=True) or {}
+    tz = (data.get("timezone") or "").strip()
+    source = (data.get("source") or "").strip()
+    if source not in ("browser_detected", "user_confirmed"):
+        source = "browser_detected"
+    if not is_valid_timezone(tz):
+        current_app.logger.warning("timezone_detect: ignoring invalid tz %r for %s", tz, email)
+        return jsonify({"status": "ignored"})
+    storage = _get_storage()
+    # Provenance precedence: browser_detected is a passive one-shot initial capture
+    # (welcome.html fires it fire-and-forget on EVERY visit). It may only set the
+    # zone from an unset/default provenance - never overwrite a prior detection or
+    # a deliberate choice - so a returning user on a transient OS/VPN zone doesn't
+    # silently get re-timed. Relocation is an explicit user_confirmed tap, which
+    # always wins.
+    if source == "browser_detected":
+        current = storage.get_user(email) or {}
+        if current.get("timezone_source") not in (None, "", "default"):
+            return jsonify({"status": "kept"})
+    storage.set_timezone(email, tz, source)
     return jsonify({"status": "ok"})

@@ -12,6 +12,7 @@ from flask import (
 from auth import login_required
 from storage import DashboardStorage
 from services.green_invoice import GreenInvoiceService, GreenInvoiceError
+from supported_timezones import SUPPORTED_TIMEZONES, DEFAULT_TIMEZONE, is_valid_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +265,19 @@ def trend_api():
 def profile():
     storage = _get_storage()
     user = storage.get_user(session["user_email"])
-    return render_template("dashboard/profile.html", user=user, active_tab="profile")
+    # Dropdown options: the curated list, plus the user's current zone if it was
+    # auto-detected to something we don't list (so it still displays as selected).
+    current_tz = (user or {}).get("timezone") or DEFAULT_TIMEZONE
+    tz_options = list(SUPPORTED_TIMEZONES)
+    if current_tz not in tz_options:
+        tz_options.insert(0, current_tz)
+    return render_template(
+        "dashboard/profile.html",
+        user=user,
+        active_tab="profile",
+        timezone_options=tz_options,
+        current_timezone=current_tz,
+    )
 
 
 @dashboard_bp.route("/profile", methods=["POST"])
@@ -307,6 +320,30 @@ def profile_post():
         profile_data["height_cm"] = int(height_cm)
     else:
         profile_data["height_cm"] = None
+
+    # Timezone: written only when the submitted zone actually DIFFERS from the
+    # stored one. Diffing (rather than trusting the JS-set source field) means a
+    # manual dropdown change persists even if client JS failed to set the source,
+    # while an unrelated profile save (unchanged zone) never clobbers the stored
+    # provenance/updated_at. The source refines manual vs the banner's confirmed;
+    # anything else is treated as manual. Invalid values are silently ignored
+    # (house rule: silent errors, server log only).
+    tz = request.form.get("timezone", "").strip()
+    if tz and is_valid_timezone(tz):
+        # Compare against the SAME effective zone the page rendered in the dropdown
+        # (a legacy user with no stored timezone key renders the default), so an
+        # unrelated save that submits the unchanged default is not misread as a
+        # deliberate change that fabricates 'user_manual' provenance.
+        stored_tz = (storage.get_user(email) or {}).get("timezone") or DEFAULT_TIMEZONE
+        if tz != stored_tz:
+            tz_source = request.form.get("timezone_source", "").strip()
+            if tz_source not in ("user_manual", "user_confirmed"):
+                tz_source = "user_manual"
+            profile_data["timezone"] = tz
+            profile_data["timezone_source"] = tz_source
+            profile_data["timezone_updated_at"] = datetime.now(timezone.utc).isoformat()
+    elif tz:
+        logger.warning("profile_post: ignoring invalid timezone %r for %s", tz, email)
 
     storage.update_user_profile(email, profile_data)
     return redirect(url_for("dashboard_views.profile"))

@@ -58,6 +58,8 @@ class DashboardStorage:
             "targets": {"calories": None, "protein": None, "sleep_time": None, "workouts_per_week": None},
             "eating_window": None,
             "timezone": "Asia/Jerusalem",
+            "timezone_source": "default",
+            "timezone_updated_at": None,
             "onboarding": {"name_collected": False, "habits": {}},
             "feedback_steering_prompt": None,
             "last_feedback_offered_at": None,
@@ -82,6 +84,20 @@ class DashboardStorage:
     def update_user_profile(self, email: str, data: dict) -> None:
         data["updated_at"] = self._now()
         self._users.update_one({"_id": email}, {"$set": data})
+
+    def set_timezone(self, email: str, timezone: str, source: str) -> None:
+        """Persist the user's timezone + its provenance. Caller MUST validate
+        the timezone string first (supported_timezones.is_valid_timezone).
+
+        source is one of: browser_detected | user_confirmed | user_manual.
+        """
+        now = self._now()
+        self._users.update_one({"_id": email}, {"$set": {
+            "timezone": timezone,
+            "timezone_source": source,
+            "timezone_updated_at": now,
+            "updated_at": now,
+        }})
 
     # -- Meta (Facebook) conversion identifiers --
 
@@ -552,6 +568,8 @@ class DashboardStorage:
             },
             "eating_window": None,
             "timezone": "Asia/Jerusalem",
+            "timezone_source": "default",
+            "timezone_updated_at": None,
             "onboarding": {"name_collected": True, "habits": {}},
             "feedback_steering_prompt": None,
             "last_feedback_offered_at": None,

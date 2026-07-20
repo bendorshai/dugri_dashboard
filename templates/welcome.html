@@ -88,6 +88,16 @@
         body:JSON.stringify({fbp:fbp,fbc:fbc,fbclid:fbclid,landing_url:document.referrer})});
     }
   }catch(e){}
+  // Fire-and-forget: capture the browser's timezone at signup so Dugri messages
+  // the user on their local clock from day one. The browser knows the OS zone.
+  try{
+    var tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if(tz){
+      fetch('{{ url_for("api.timezone_detect") }}',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({timezone:tz,source:'browser_detected'})});
+    }
+  }catch(e){}
 })();
 </script>
 {% endblock %}
