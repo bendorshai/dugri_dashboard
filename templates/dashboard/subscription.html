@@ -123,6 +123,39 @@
     {% endif %}
 </div>
 
+{# ---- Billing history + download ---- #}
+{% if history %}
+<div class="card" style="margin-top: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <h3 style="margin: 0;">{{ hs.SUB_HISTORY_HEADING }}</h3>
+        <a href="{{ url_for('dashboard_views.subscription_history_csv') }}"
+           style="font-size: 0.85rem; color: var(--primary, #A67448);">
+            {{ hs.SUB_HISTORY_DOWNLOAD }}
+        </a>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+        <thead>
+            <tr style="color: var(--text-muted); text-align: right;">
+                <th style="padding: 0.4rem 0; font-weight: 500;">{{ hs.SUB_HISTORY_COL_DATE }}</th>
+                <th style="padding: 0.4rem 0; font-weight: 500;">{{ hs.SUB_HISTORY_COL_AMOUNT }}</th>
+                <th style="padding: 0.4rem 0; font-weight: 500;">{{ hs.SUB_HISTORY_COL_STATUS }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in history %}
+            <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 0.4rem 0;">{{ row.date }}</td>
+                <td style="padding: 0.4rem 0;">{{ row.amount }} ₪</td>
+                <td style="padding: 0.4rem 0;">
+                    {{ hs.SUB_HISTORY_OK if row.status == 'success' else hs.SUB_HISTORY_FAIL }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if contact_email %}
 <p class="form-hint" style="margin-top: 1rem; text-align: center;">
     {{ hs.SUB_CONTACT.format('<a href="mailto:' + contact_email + '">' + contact_email + '</a>') | safe }}

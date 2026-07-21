@@ -134,6 +134,60 @@ class DashboardStorage:
         data["updated_at"] = self._now()
         self._users.update_one({"_id": email}, {"$set": data})
 
+    # -- Monthly renewal charging (see dashboard_views run_due_charges) --------
+
+    def find_due_for_charge(self, now_iso: str) -> list[dict]:
+        """Paid users with a stored card token whose next bill date has arrived."""
+        return list(self._users.find({
+            "subscription_status": "paid",
+            "subscription_token_id": {"$exists": True, "$nin": [None, ""]},
+            "next_bill_at": {"$exists": True, "$lte": now_iso},
+        }))
+
+    def claim_charge_period(self, email: str, billing_period: str) -> bool:
+        """Atomically claim a billing period for charging. Returns True iff THIS
+        call won the claim. Wins for a new period, or to retry a same-period
+        `failed`; never re-claims `in_progress` (concurrent tick / restart) or
+        `done` (already charged) - the money-safety guard against double-charge.
+        """
+        res = self._users.update_one(
+            {"_id": email, "$or": [
+                {"subscription_charge_period": {"$ne": billing_period}},
+                {"subscription_charge_state": "failed"},
+            ]},
+            {"$set": {
+                "subscription_charge_period": billing_period,
+                "subscription_charge_state": "in_progress",
+                "subscription_charge_claimed_at": self._now(),
+            }},
+        )
+        return res.modified_count == 1
+
+    def record_charge_attempt(self, **fields) -> None:
+        """Append one charge attempt to the append-only charge_attempts ledger."""
+        doc = {
+            "user_email": fields.get("user_email"),
+            "telegram_user_id": fields.get("telegram_user_id"),
+            "billing_period": fields.get("billing_period"),
+            "amount_agorot": fields.get("amount_agorot"),
+            "status": fields.get("status"),  # success | failed
+            "provider_txn_id": fields.get("provider_txn_id"),
+            "gi_document_id": fields.get("gi_document_id"),
+            "idempotency_key": fields.get("idempotency_key"),
+            "attempt_no": fields.get("attempt_no"),
+            "error": fields.get("error"),
+            "created_at": datetime.now(timezone.utc),
+        }
+        try:
+            self._db["charge_attempts"].insert_one(doc)
+        except Exception:
+            logger.warning("Failed to record charge attempt", exc_info=True)
+
+    def get_charge_history(self, email: str) -> list[dict]:
+        """All charge attempts for a user, newest first (for the billing history UI)."""
+        return list(self._db["charge_attempts"].find(
+            {"user_email": email}).sort("_id", -1))
+
     def set_timezone(self, email: str, timezone: str, source: str) -> None:
         """Persist the user's timezone + its provenance. Caller MUST validate
         the timezone string first (supported_timezones.is_valid_timezone).

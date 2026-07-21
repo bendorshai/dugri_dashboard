@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from flask import (
     Blueprint, flash, jsonify, render_template, redirect, url_for, request, session, current_app,
+    Response,
 )
 
 from auth import login_required
@@ -448,16 +449,29 @@ def _activate_paid(storage, email: str, user: dict, gi_document_id: str,
     """Flip a user to a fresh 30-day paid subscription and fire the Meta Purchase
     event. Shared by the IPN webhook and the GI reconcile path so both activate
     identically."""
+    from billing_date import next_bill_date
+    now_dt = datetime.now(timezone.utc)
     now = DashboardStorage._now()
-    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    expires_at = (now_dt + timedelta(days=30)).isoformat()
+    # Anchor the monthly billing day to the signup day-of-month, and compute the
+    # next charge date from it (no drift). next_bill_at drives the renewal loop.
+    anchor_day = now_dt.day
+    nb = next_bill_date(anchor_day, now_dt.date())
+    next_bill_at = datetime(nb.year, nb.month, nb.day, tzinfo=timezone.utc).isoformat()
     fields = {
         "subscription_status": "paid",
         "subscription_gi_document_id": gi_document_id,
         "subscription_started_at": now,
         "subscription_expires_at": expires_at,
         "subscription_last_charged_at": now,
+        "subscription_anchor_day": anchor_day,
+        "next_bill_at": next_bill_at,
+        "subscription_charge_state": "done",  # this period is paid; loop skips it
+        "subscription_charge_period": now_dt.strftime("%Y-%m"),
+        "charge_retry_count": 0,
         "subscription_expiry_message_sent": False,
         "subscription_end_acknowledged": False,
+        "subscription_charge_failed_message_sent": False,
         # Genuine non-paid -> paid transition: reset the purchase-message flag so
         # dugri sends the festive congrats (bot dedupes via this flag + a 72h
         # window). _activate_paid is only ever a transition, never a renewal.
@@ -470,6 +484,16 @@ def _activate_paid(storage, email: str, user: dict, gi_document_id: str,
     storage.update_user_profile(email, fields)
     logger.info("Subscription activated for %s (doc %s, token %s)",
                 email, gi_document_id, (token_id[:8] if token_id else "none"))
+
+    # Record the first payment in the charge ledger so it appears in the billing
+    # history + CSV export alongside future renewals.
+    storage.record_charge_attempt(
+        user_email=email, telegram_user_id=(user or {}).get("telegram_user_id"),
+        billing_period=now_dt.strftime("%Y-%m"),
+        amount_agorot=(int(round(float(amount_shekels) * 100))
+                       if isinstance(amount_shekels, (int, float)) else None),
+        status="success", gi_document_id=gi_document_id, attempt_no=1,
+    )
 
     # Fire the Meta Purchase conversion event (best-effort, deduped by doc/token).
     try:
@@ -553,6 +577,17 @@ def subscription():
     status = user.get("subscription_status", "trial_pending") if user else "trial_pending"
     expires_at = _format_date_he(user.get("subscription_expires_at")) if user else ""
 
+    # Billing history for the on-page list (first payment + any renewals).
+    raw_history = storage.get_charge_history(email)
+    history = [
+        {
+            "date": _format_date_he(str(row.get("created_at"))),
+            "amount": (row.get("amount_agorot") or 0) // 100,
+            "status": row.get("status"),
+        }
+        for row in (raw_history if isinstance(raw_history, list) else [])
+    ]
+
     return render_template(
         "dashboard/subscription.html",
         user=user,
@@ -561,8 +596,37 @@ def subscription():
         status=status,
         expires_at=expires_at,
         trial_days_left=_trial_days_left(user),
+        history=history,
         contact_email=contact_email,
         hs=hs,
+    )
+
+
+@dashboard_bp.route("/subscription/history.csv")
+@login_required
+def subscription_history_csv():
+    """Download the billing history as CSV (for import into accounting software)."""
+    import csv
+    import io
+    storage = _get_storage()
+    rows = storage.get_charge_history(session["user_email"])
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["date", "amount_ils", "status", "billing_period",
+                     "gi_document_id", "transaction_id"])
+    for r in rows:
+        writer.writerow([
+            _format_date_he(str(r.get("created_at"))),
+            (r.get("amount_agorot") or 0) / 100,
+            r.get("status", ""),
+            r.get("billing_period", ""),
+            r.get("gi_document_id", "") or "",
+            r.get("provider_txn_id", "") or "",
+        ])
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=dugri-billing-history.csv"},
     )
 
 
@@ -723,3 +787,120 @@ def subscription_webhook():
         document_id=document_id, verified=bool(verified_doc),
     )
     return jsonify({"status": outcome}), 200
+
+
+# ------------------------------------------------------------------
+# Monthly renewal charging (gated by config renewals_enabled, default off)
+# ------------------------------------------------------------------
+
+MAX_CHARGE_RETRIES = 4  # after this many consecutive failures, end the subscription
+
+
+def _charge_one(storage, user: dict, billing_period: str) -> str:
+    """Charge one due user for `billing_period`. Caller MUST have already won the
+    atomic claim. Returns "success" or "failed". Writes a ledger row either way.
+    """
+    from billing_date import next_bill_date
+    email = user["_id"]
+    token = user.get("subscription_token_id")
+    price = _subscription_price()
+    idem = f"{email}:{billing_period}"
+    attempt_no = int(user.get("charge_retry_count", 0)) + 1
+
+    try:
+        gi = _get_gi_service(_user_is_sandbox(user))
+        result = gi.charge_token(token, price, idempotency_key=idem)
+    except Exception as e:
+        logger.exception("charge_token raised for %s", email)
+        result = {"success": False, "error": str(e)}
+
+    if result.get("success"):
+        now_dt = datetime.now(timezone.utc)
+        anchor = int(user.get("subscription_anchor_day") or now_dt.day)
+        try:
+            base = datetime.fromisoformat(str(user["next_bill_at"])).date()
+        except (ValueError, TypeError):
+            base = now_dt.date()
+        nb = next_bill_date(anchor, base)
+        next_bill_at = datetime(nb.year, nb.month, nb.day, tzinfo=timezone.utc).isoformat()
+        storage.update_user_profile(email, {
+            "subscription_charge_state": "done",
+            "subscription_last_charged_at": DashboardStorage._now(),
+            "next_bill_at": next_bill_at,
+            "subscription_expires_at": (now_dt + timedelta(days=31)).isoformat(),
+            "charge_retry_count": 0,
+            "subscription_charge_failed_message_sent": False,
+            "subscription_gi_document_id": result.get("document_id")
+                or user.get("subscription_gi_document_id"),
+        })
+        storage.record_charge_attempt(
+            user_email=email, telegram_user_id=user.get("telegram_user_id"),
+            billing_period=billing_period, amount_agorot=int(price) * 100,
+            status="success", provider_txn_id=result.get("transaction_id"),
+            gi_document_id=result.get("document_id"), idempotency_key=idem,
+            attempt_no=attempt_no,
+        )
+        logger.info("Renewal charged %s for %s", email, billing_period)
+        return "success"
+
+    # Failure: mark failed so next tick retries; after MAX, end the subscription.
+    fields = {"subscription_charge_state": "failed", "charge_retry_count": attempt_no}
+    ended = attempt_no >= MAX_CHARGE_RETRIES
+    if ended:
+        fields["subscription_status"] = "subscription_ended"
+    storage.update_user_profile(email, fields)
+    storage.record_charge_attempt(
+        user_email=email, telegram_user_id=user.get("telegram_user_id"),
+        billing_period=billing_period, amount_agorot=int(price) * 100,
+        status="failed", error=str(result.get("error"))[:300],
+        idempotency_key=idem, attempt_no=attempt_no,
+    )
+    # Notify the user: a specific "update your card" heads-up on the FIRST failure
+    # of this period; the end-of-subscription notice after the final failure.
+    if ended:
+        _notify_bot_subscription_event(email, "charge_failed_ended", user)
+    elif not user.get("subscription_charge_failed_message_sent"):
+        storage.update_user_profile(email, {"subscription_charge_failed_message_sent": True})
+        _notify_bot_subscription_event(email, "charge_failed", user)
+    logger.warning("Renewal charge failed for %s (attempt %d, ended=%s)",
+                   email, attempt_no, ended)
+    return "failed"
+
+
+@dashboard_bp.route("/internal/run-due-charges", methods=["POST"])
+def run_due_charges():
+    """Internal endpoint pinged by the bot poller each tick to charge due
+    subscriptions. Secret-protected and GATED by config `renewals_enabled`
+    (default OFF) so no money moves until the flow is verified end-to-end with a
+    real tokenized card. All money logic lives here (where the GI client lives);
+    the bot only provides the periodic heartbeat + delivers the failure message.
+    """
+    cfg = current_app.config["APP_CONFIG"]
+    secret = cfg.get("internal_secret")
+    if not secret or request.headers.get("X-Internal-Secret") != secret:
+        return jsonify({"error": "unauthorized"}), 401
+    if not cfg.get("renewals_enabled", False):
+        return jsonify({"status": "disabled"}), 200
+
+    storage = _get_storage()
+    now = datetime.now(timezone.utc)
+    charged = failed = skipped = 0
+    for user in storage.find_due_for_charge(now.isoformat()):
+        email = user.get("_id")
+        try:
+            nb = datetime.fromisoformat(str(user["next_bill_at"]))
+        except (ValueError, TypeError, KeyError):
+            continue
+        billing_period = nb.strftime("%Y-%m")
+        # Atomic per-period claim BEFORE charging - the double-charge guard.
+        if not storage.claim_charge_period(email, billing_period):
+            skipped += 1
+            continue
+        # Re-read to get the claimed state / latest retry count.
+        fresh = storage.get_user(email) or user
+        outcome = _charge_one(storage, fresh, billing_period)
+        charged += outcome == "success"
+        failed += outcome == "failed"
+    logger.info("run_due_charges: charged=%d failed=%d skipped=%d", charged, failed, skipped)
+    return jsonify({"status": "ok", "charged": charged, "failed": failed,
+                    "skipped": skipped}), 200

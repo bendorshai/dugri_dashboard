@@ -109,6 +109,14 @@ class GreenInvoiceService:
         payload = {
             "type": DOC_TYPE_RECEIPT,
             "pluginId": self._get_payment_plugin_id(),
+            # Request that the card be saved as a reusable token for the monthly
+            # renewal charge. NOTE (2026-07): Green Invoice silently ignores
+            # unknown fields (so this is harmless), and the exact field + how the
+            # saved token is returned to us is UNCONFIRMED - the terminal has
+            # tokens:true, but the token is not in the receipt document and the
+            # IPN (which would carry it) is not reliably delivered. Renewals are
+            # gated OFF until token capture is confirmed with Morning support.
+            "addToken": True,
             "lang": "he",
             "currency": "ILS",
             "amount": amount_ils,
@@ -235,10 +243,23 @@ class GreenInvoiceService:
         matches.sort(key=lambda d: d.get("number", 0), reverse=True)
         return matches[0] if matches else None
 
-    def charge_token(self, token_id: str, amount_ils: int) -> dict:
+    def charge_token(self, token_id: str, amount_ils: int,
+                     idempotency_key: str | None = None) -> dict:
         """Charge a stored card token for recurring billing.
 
-        Returns dict with 'success' bool and response data.
+        A type-400 receipt is issued for the charge (client email comes from the
+        stored token's client), so the renewal receipt is emailed like the first
+        payment. When ``idempotency_key`` is supplied it is sent to Green Invoice
+        (and mirrored as the charge ``remarks``/external ref) so a retried charge
+        after a crash is deduped provider-side - the true defense against a
+        charge-succeeds-then-DB-write-fails double-charge.
+
+        Returns ``{success, data?, document_id?, transaction_id?, error?, status?}``.
+
+        NOTE (2026-07): the exact provider idempotency-field name is unconfirmed
+        against Green Invoice docs; the caller ALSO guards with an atomic Mongo
+        per-period claim, so a wrong field degrades safety only to the Mongo
+        guarantee, never below it. Confirm the field on a real charged token.
         """
         payload = {
             "amount": amount_ils,
@@ -254,6 +275,9 @@ class GreenInvoiceService:
                 }
             ],
         }
+        if idempotency_key:
+            payload["externalId"] = idempotency_key
+            payload["remarks"] = idempotency_key
 
         try:
             resp = requests.post(
@@ -263,10 +287,15 @@ class GreenInvoiceService:
                 timeout=30,
             )
             if resp.status_code in (200, 201):
-                return {"success": True, "data": resp.json()}
-            else:
-                logger.error("Token charge failed: %s %s", resp.status_code, resp.text)
-                return {"success": False, "error": resp.text, "status": resp.status_code}
+                data = resp.json() if resp.text else {}
+                return {
+                    "success": True,
+                    "data": data,
+                    "document_id": data.get("id") or data.get("documentId"),
+                    "transaction_id": data.get("transactionId") or data.get("paymentId"),
+                }
+            logger.error("Token charge failed: %s %s", resp.status_code, resp.text)
+            return {"success": False, "error": resp.text, "status": resp.status_code}
         except requests.RequestException as e:
             logger.exception("Token charge request error")
             return {"success": False, "error": str(e)}

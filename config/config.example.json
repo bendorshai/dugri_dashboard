@@ -32,6 +32,7 @@
         },
         "subscription_price_ils": 1
     },
+    "renewals_enabled": false,
     "meta": {
         "pixel_id": "",
         "capi_access_token": "",
