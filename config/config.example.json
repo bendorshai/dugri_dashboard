@@ -22,9 +22,14 @@
     "bot_internal_url": "https://your-bot-domain.railway.app/internal/notify-target-update",
     "internal_secret": "YOUR_INTERNAL_SECRET",
     "green_invoice": {
-        "api_id": "YOUR_GREEN_INVOICE_API_ID",
-        "api_secret": "YOUR_GREEN_INVOICE_API_SECRET",
-        "sandbox": true,
+        "sandbox": {
+            "api_id": "YOUR_SANDBOX_GREEN_INVOICE_API_ID",
+            "api_secret": "YOUR_SANDBOX_GREEN_INVOICE_API_SECRET"
+        },
+        "realdeal": {
+            "api_id": "YOUR_PRODUCTION_GREEN_INVOICE_API_ID",
+            "api_secret": "YOUR_PRODUCTION_GREEN_INVOICE_API_SECRET"
+        },
         "subscription_price_ils": 1
     },
     "meta": {

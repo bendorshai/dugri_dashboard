@@ -191,6 +191,43 @@ class TestSubscriptionReconcile:
         storage.update_user_profile.assert_not_called()
 
 
+class TestGiEnvironmentRouting:
+    """_get_gi_service routes to the sandbox vs realdeal GI account per user."""
+
+    def test_sandbox_routes_to_sandbox_keys_and_base(self, app):
+        from dashboard_views import _get_gi_service
+        with app.app_context():
+            svc = _get_gi_service(True)
+        assert svc._api_id == "sandbox-gi-id"
+        assert svc._base_url == "https://sandbox.d.greeninvoice.co.il"
+
+    def test_realdeal_routes_to_realdeal_keys_and_base(self, app):
+        from dashboard_views import _get_gi_service
+        with app.app_context():
+            svc = _get_gi_service(False)
+        assert svc._api_id == "realdeal-gi-id"
+        assert svc._base_url == "https://api.greeninvoice.co.il"
+
+    def test_legacy_flat_config_fallback(self, app):
+        from dashboard_views import _get_gi_service
+        with app.app_context():
+            # Simulate the pre-migration flat config shape.
+            app.config["APP_CONFIG"]["green_invoice"] = {
+                "api_id": "flat-id", "api_secret": "flat-secret", "sandbox": True,
+                "subscription_price_ils": 1,
+            }
+            svc = _get_gi_service(False)
+        assert svc._api_id == "flat-id"
+        # Flat config carries its own sandbox bool.
+        assert svc._base_url == "https://sandbox.d.greeninvoice.co.il"
+
+    def test_user_is_sandbox_defaults_false(self):
+        from dashboard_views import _user_is_sandbox
+        assert _user_is_sandbox({"_id": "a@b.com"}) is False
+        assert _user_is_sandbox({"_id": "a@b.com", "sandbox": True}) is True
+        assert _user_is_sandbox(None) is False
+
+
 class TestSubscriptionStart:
     """POST /dashboard/subscription/start redirects to GI form."""
 

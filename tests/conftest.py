@@ -21,9 +21,8 @@ SAMPLE_CONFIG = {
     "contact_email": "test@dugri.co",
     "admin_emails": ["admin@test.com"],
     "green_invoice": {
-        "api_id": "test-gi-id",
-        "api_secret": "test-gi-secret",
-        "sandbox": True,
+        "sandbox": {"api_id": "sandbox-gi-id", "api_secret": "sandbox-gi-secret"},
+        "realdeal": {"api_id": "realdeal-gi-id", "api_secret": "realdeal-gi-secret"},
         "subscription_price_ils": 1,
     },
 }

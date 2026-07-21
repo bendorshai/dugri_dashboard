@@ -353,14 +353,33 @@ def profile_post():
 # Subscription
 # ------------------------------------------------------------------
 
-def _get_gi_service() -> GreenInvoiceService:
-    cfg = current_app.config["APP_CONFIG"]
-    gi_cfg = cfg["green_invoice"]
+def _get_gi_service(is_sandbox: bool = False) -> GreenInvoiceService:
+    """Build a Green Invoice client for the given environment.
+
+    Test users (user document `sandbox` == True) hit the GI **sandbox** account;
+    real users hit the **realdeal** (production) account. Config carries a keyed
+    key-set per environment under `green_invoice.sandbox` / `green_invoice.realdeal`.
+    Falls back to the legacy flat `api_id`/`api_secret` (+ `sandbox` bool) shape
+    when the nested key-sets are absent, so a deploy before the Railway config
+    update does not break payments (remove the fallback once Railway is updated).
+    """
+    gi_cfg = current_app.config["APP_CONFIG"]["green_invoice"]
+    env = "sandbox" if is_sandbox else "realdeal"
+    keys = gi_cfg.get(env)
+    if isinstance(keys, dict) and keys.get("api_id"):
+        return GreenInvoiceService(
+            api_id=keys["api_id"], api_secret=keys["api_secret"], sandbox=is_sandbox,
+        )
+    # Legacy flat config (pre-migration).
     return GreenInvoiceService(
-        api_id=gi_cfg["api_id"],
-        api_secret=gi_cfg["api_secret"],
+        api_id=gi_cfg.get("api_id", ""),
+        api_secret=gi_cfg.get("api_secret", ""),
         sandbox=gi_cfg.get("sandbox", True),
     )
+
+
+def _user_is_sandbox(user: dict | None) -> bool:
+    return bool(user and user.get("sandbox", False))
 
 
 def _subscription_price() -> int:
@@ -462,7 +481,8 @@ def _reconcile_paid_from_gi(storage, user: dict | None) -> bool:
     if not email:
         return False
     try:
-        receipt = _get_gi_service().find_recent_receipt(email, _subscription_price())
+        gi = _get_gi_service(_user_is_sandbox(user))
+        receipt = gi.find_recent_receipt(email, _subscription_price())
     except Exception:
         logger.warning("reconcile: GI lookup failed (non-fatal)", exc_info=True)
         return False
@@ -519,13 +539,17 @@ def subscription_start():
     user = storage.get_user(email)
 
     price = _subscription_price()
+    is_sandbox = _user_is_sandbox(user)
+    env = "sandbox" if is_sandbox else "realdeal"
     base_url = request.url_root.rstrip("/")
     success_url = f"{base_url}{url_for('dashboard_views.subscription_success')}"
     failure_url = f"{base_url}{url_for('dashboard_views.subscription_failure')}"
-    notify_url = f"{base_url}{url_for('dashboard_views.subscription_webhook')}"
+    # Tag the IPN callback with the environment so the (session-less) webhook
+    # verifies against the same GI account this user is paying through.
+    notify_url = f"{base_url}{url_for('dashboard_views.subscription_webhook')}?env={env}"
 
     try:
-        gi = _get_gi_service()
+        gi = _get_gi_service(is_sandbox)
         form_url = gi.get_payment_form_url(
             user_email=email,
             user_name=user.get("name", "") if user else "",
@@ -614,10 +638,13 @@ def subscription_webhook():
     # email, amount and settled-status all come from the verified GI document
     # (review-fixes Finding #1: bind the document to the user + price, else a
     # settled document id presented for custom=<victim> would flip the victim).
+    # Route to the GI account this payment went through: the env is tagged on the
+    # notifyUrl at form-creation time (?env=sandbox|realdeal); default realdeal.
+    is_sandbox = request.args.get("env") == "sandbox"
     verified_doc = None
     try:
         if document_id:
-            verified_doc = _get_gi_service().verify_payment(document_id)
+            verified_doc = _get_gi_service(is_sandbox).verify_payment(document_id)
     except Exception:
         logger.warning("verify_payment raised (non-fatal)", exc_info=True)
 
