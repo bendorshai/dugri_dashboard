@@ -53,15 +53,36 @@
 
     {# ---- Paid (active subscription) ---- #}
     {% elif status == 'paid' %}
-    <h3 style="margin-bottom: 1rem;">{{ hs.SUB_ACTIVE_HEADING }}</h3>
-    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-        {{ hs.SUB_ACTIVE_BODY.format(expires_at) }}
+    <h3 style="margin-bottom: 0.75rem;">{{ hs.SUB_ACTIVE_HEADING }}</h3>
+    <p style="color: var(--text-muted); margin-bottom: 1rem;">
+        {{ hs.SUB_ACTIVE_BODY }}
     </p>
 
+    {# Transparency: what we charge, how much, when #}
+    <dl style="margin: 0 0 1.5rem; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem;">
+        <div style="display: flex; justify-content: space-between; padding: 0.4rem 0;">
+            <dt style="color: var(--text-muted);">{{ hs.SUB_DETAIL_WHAT_LABEL }}</dt>
+            <dd style="margin: 0; font-weight: 600;">{{ hs.SUB_DETAIL_WHAT_VALUE }}</dd>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-top: 1px solid var(--border);">
+            <dt style="color: var(--text-muted);">{{ hs.SUB_DETAIL_AMOUNT_LABEL }}</dt>
+            <dd style="margin: 0; font-weight: 600;">{{ hs.SUB_DETAIL_AMOUNT_VALUE.format(price) }}</dd>
+        </div>
+        {% if expires_at %}
+        <div style="display: flex; justify-content: space-between; padding: 0.4rem 0; border-top: 1px solid var(--border);">
+            <dt style="color: var(--text-muted);">{{ hs.SUB_DETAIL_WHEN_LABEL }}</dt>
+            <dd style="margin: 0; font-weight: 600;">{{ expires_at }}</dd>
+        </div>
+        {% endif %}
+    </dl>
+
     <template x-if="!showCancel">
-        <button class="btn btn--secondary btn--full" @click="showCancel = true">
-            {{ hs.SUB_CANCEL_BTN }}
-        </button>
+        <div style="text-align: center;">
+            <a href="#" @click.prevent="showCancel = true"
+               style="color: var(--text-muted); font-size: 0.85rem; text-decoration: underline;">
+                {{ hs.SUB_CANCEL_BTN }}
+            </a>
+        </div>
     </template>
     <template x-if="showCancel">
         <div style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem;">

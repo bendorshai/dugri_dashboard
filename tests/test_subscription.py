@@ -75,6 +75,11 @@ class TestSubscriptionPage:
         assert resp.status_code == 200
         assert "מנוי פעיל".encode("utf-8") in resp.data
         assert "ביטול מנוי".encode("utf-8") in resp.data
+        # Transparency block: what / how much / when.
+        assert "מה נחייב".encode("utf-8") in resp.data
+        assert "מנוי חודשי לדוגרי".encode("utf-8") in resp.data
+        assert "1 ₪".encode("utf-8") in resp.data          # test config price
+        assert "17/07/2026".encode("utf-8") in resp.data    # next-bill date
 
     @patch("dashboard_views.DashboardStorage")
     def test_cancelled_shows_expiry_date(self, mock_cls, client):
