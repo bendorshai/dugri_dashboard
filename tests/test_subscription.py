@@ -196,6 +196,60 @@ class TestSubscriptionReconcile:
         storage.update_user_profile.assert_not_called()
 
 
+class TestSubscriptionLifecycleNotify:
+    """Dashboard fires an instant POST to the bot to send the festive subscribe /
+    cancel Telegram message."""
+
+    @patch("dashboard_views.requests.post")
+    @patch("dashboard_views.DashboardStorage")
+    def test_cancel_notifies_bot(self, mock_cls, mock_post, client, app):
+        app.config["APP_CONFIG"]["bot_internal_url"] = "http://bot.local"
+        app.config["APP_CONFIG"]["internal_secret"] = "s3cr3t"
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = _make_user(
+            "paid", telegram_user_id=42,
+            subscription_expires_at="2026-08-20T00:00:00+00:00")
+        mock_cls.return_value = mock_storage
+        _login(client)
+
+        resp = client.post("/dashboard/subscription/cancel")
+        assert resp.status_code == 302
+
+        # A cancel resets the flag and pings the bot's lifecycle endpoint.
+        assert mock_storage.update_user_profile.call_args[0][1][
+            "subscription_cancel_message_sent"] is False
+        called = [c for c in mock_post.call_args_list
+                  if "notify-subscription-event" in c.args[0]]
+        assert len(called) == 1
+        assert called[0].kwargs["json"]["event"] == "cancel"
+        assert called[0].kwargs["headers"]["X-Internal-Secret"] == "s3cr3t"
+
+    @patch("dashboard_views.requests.post")
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_activation_notifies_bot_purchase(self, mock_cls, mock_gi, mock_post, client, app):
+        app.config["APP_CONFIG"]["bot_internal_url"] = "http://bot.local"
+        storage = MagicMock()
+        storage.get_user.side_effect = [
+            _make_user("trial_active"),
+            _make_user("paid", subscription_expires_at="2026-08-20T00:00:00+00:00"),
+        ]
+        mock_cls.return_value = storage
+        mock_gi.return_value.find_recent_receipt.return_value = {
+            "id": "doc_x", "amount": 1, "client": {"emails": ["test@example.com"]},
+        }
+        _login(client)
+        client.get("/dashboard/subscription")
+
+        # Activation reset the purchase flag + pinged the bot with event=purchase.
+        data = storage.update_user_profile.call_args[0][1]
+        assert data["subscription_purchase_message_sent"] is False
+        called = [c for c in mock_post.call_args_list
+                  if "notify-subscription-event" in c.args[0]]
+        assert len(called) == 1
+        assert called[0].kwargs["json"]["event"] == "purchase"
+
+
 class TestGiEnvironmentRouting:
     """_get_gi_service routes to the sandbox vs realdeal GI account per user."""
 

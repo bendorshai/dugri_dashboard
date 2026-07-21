@@ -211,6 +211,33 @@ def _notify_bot_target_change(email: str, old_targets: dict, new_targets: dict):
         logger.exception("Failed to notify bot about target change")
 
 
+def _notify_bot_subscription_event(email: str, event: str, user: dict | None = None):
+    """Fire an instant, authenticated POST telling the bot to send the subscribe
+    ("purchase") or "cancel" lifecycle message in Telegram. Best-effort: the bot
+    also has a 72h idempotent scheduler backstop that resends if this POST is
+    lost, and dedupes via a sent-flag so nothing double-sends. Non-fatal."""
+    cfg = current_app.config["APP_CONFIG"]
+    bot_url = cfg.get("bot_internal_url", "")
+    secret = cfg.get("internal_secret", "")
+    if not bot_url:
+        return
+    user = user or _get_storage().get_user(email)
+    try:
+        requests.post(
+            f"{bot_url}/internal/notify-subscription-event",
+            json={
+                "email": email,
+                "telegram_user_id": (user or {}).get("telegram_user_id"),
+                "event": event,
+            },
+            headers={"X-Internal-Secret": secret},
+            timeout=5,
+        )
+    except Exception:
+        logger.warning("Failed to notify bot about subscription %s event", event,
+                       exc_info=True)
+
+
 # ------------------------------------------------------------------
 # Activity history
 # ------------------------------------------------------------------
@@ -431,6 +458,10 @@ def _activate_paid(storage, email: str, user: dict, gi_document_id: str,
         "subscription_last_charged_at": now,
         "subscription_expiry_message_sent": False,
         "subscription_end_acknowledged": False,
+        # Genuine non-paid -> paid transition: reset the purchase-message flag so
+        # dugri sends the festive congrats (bot dedupes via this flag + a 72h
+        # window). _activate_paid is only ever a transition, never a renewal.
+        "subscription_purchase_message_sent": False,
     }
     if isinstance(amount_shekels, (int, float)):
         fields["subscription_price_paid"] = int(round(float(amount_shekels) * 100))
@@ -464,6 +495,11 @@ def _activate_paid(storage, email: str, user: dict, gi_document_id: str,
             )
     except Exception:
         logger.warning("Meta Purchase event failed (non-fatal)", exc_info=True)
+
+    # Tell the bot to send the festive subscribe message (instant push; the bot
+    # has a backstop + dedupe). Fires on first purchase AND re-subscribe, never
+    # on a renewal (renewals never call _activate_paid).
+    _notify_bot_subscription_event(email, "purchase", user)
 
 
 def _reconcile_paid_from_gi(storage, user: dict | None) -> bool:
@@ -594,7 +630,11 @@ def subscription_cancel():
         storage.update_user_profile(email, {
             "subscription_status": "cancelled",
             "subscription_cancelled_at": DashboardStorage._now(),
+            # Reset so dugri sends the cancel confirmation (bot dedupes + backstop).
+            "subscription_cancel_message_sent": False,
         })
+        # Tell the bot to send the cancel confirmation message (instant push).
+        _notify_bot_subscription_event(email, "cancel", user)
 
     return redirect(url_for("dashboard_views.subscription"))
 
