@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -181,6 +182,58 @@ class GreenInvoiceService:
             )
             return None
         return doc
+
+    def find_recent_receipt(
+        self, email: str, amount_ils: int, within_days: int = 3, limit: int = 50
+    ) -> dict | None:
+        """Find the most recent settled receipt (type 400) for this client email
+        and exact amount, created within the last `within_days`.
+
+        Used to reconcile a paid subscription WITHOUT relying on GI's IPN push
+        (which is not reliably delivered): after a real card payment GI issues
+        the receipt, so we can confirm the payment authoritatively by looking it
+        up. Returns the matching search item (has `id`, `amount`, `client`,
+        `documentDate`, `number`) or None. NEVER raises.
+        """
+        if not email:
+            return None
+        try:
+            resp = requests.post(
+                f"{self._base_url}/api/v1/documents/search",
+                json={"pageSize": limit, "page": 1, "sort": "creationDate"},
+                headers=self._headers(),
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                logger.warning("GI search failed: %s %s", resp.status_code, resp.text)
+                return None
+            items = resp.json().get("items", []) or []
+        except (GreenInvoiceError, requests.RequestException):
+            logger.warning("GI search: request error", exc_info=True)
+            return None
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=within_days)).date()
+        email_l = email.lower()
+        matches = []
+        for it in items:
+            if it.get("type") != DOC_TYPE_RECEIPT:
+                continue
+            amt = it.get("amount")
+            if not isinstance(amt, (int, float)) or int(amt) != int(amount_ils):
+                continue
+            emails = [e.lower() for e in (it.get("client", {}).get("emails") or [])]
+            if email_l not in emails:
+                continue
+            try:
+                doc_date = datetime.fromisoformat(str(it.get("documentDate"))).date()
+            except (ValueError, TypeError):
+                doc_date = None
+            if doc_date is not None and doc_date < cutoff:
+                continue
+            matches.append(it)
+        # Newest first by document number (sequential; higher = newer).
+        matches.sort(key=lambda d: d.get("number", 0), reverse=True)
+        return matches[0] if matches else None
 
     def charge_token(self, token_id: str, amount_ils: int) -> dict:
         """Charge a stored card token for recurring billing.

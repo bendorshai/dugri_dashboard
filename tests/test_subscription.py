@@ -12,7 +12,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -43,18 +43,23 @@ def _make_user(status="trial_active", **overrides):
 class TestSubscriptionPage:
     """GET /dashboard/subscription renders correct state."""
 
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("dashboard_views.DashboardStorage")
-    def test_trial_active_shows_subscribe_button(self, mock_cls, client):
+    def test_trial_active_shows_subscribe_button(self, mock_cls, mock_gi, client):
         mock_cls.return_value.get_user.return_value = _make_user("trial_active")
+        mock_gi.return_value.find_recent_receipt.return_value = None  # no reconcile
         _login(client)
         resp = client.get("/dashboard/subscription")
         assert resp.status_code == 200
+        # No trial_expiry_at on the fixture -> falls back to the generic heading.
         assert "14 יום ניסיון חינם".encode("utf-8") in resp.data
         assert "subscription/start".encode("utf-8") in resp.data
 
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("dashboard_views.DashboardStorage")
-    def test_trial_ended_shows_urgent_subscribe(self, mock_cls, client):
+    def test_trial_ended_shows_urgent_subscribe(self, mock_cls, mock_gi, client):
         mock_cls.return_value.get_user.return_value = _make_user("trial_ended")
+        mock_gi.return_value.find_recent_receipt.return_value = None
         _login(client)
         resp = client.get("/dashboard/subscription")
         assert resp.status_code == 200
@@ -82,13 +87,108 @@ class TestSubscriptionPage:
         assert "המנוי בוטל".encode("utf-8") in resp.data
         assert "17/07/2026".encode("utf-8") in resp.data
 
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("dashboard_views.DashboardStorage")
-    def test_subscription_ended_shows_resubscribe(self, mock_cls, client):
+    def test_subscription_ended_shows_resubscribe(self, mock_cls, mock_gi, client):
         mock_cls.return_value.get_user.return_value = _make_user("subscription_ended")
+        mock_gi.return_value.find_recent_receipt.return_value = None
         _login(client)
         resp = client.get("/dashboard/subscription")
         assert resp.status_code == 200
         assert "המנוי שלך הסתיים".encode("utf-8") in resp.data
+
+
+class TestTrialDaysDisplay:
+    """The trial heading shows days remaining, not a static '14 days'."""
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_shows_days_remaining(self, mock_cls, mock_gi, client):
+        expiry = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+        mock_cls.return_value.get_user.return_value = _make_user(
+            "trial_active", trial_expiry_at=expiry)
+        mock_gi.return_value.find_recent_receipt.return_value = None
+        _login(client)
+        resp = client.get("/dashboard/subscription")
+        assert resp.status_code == 200
+        assert "נשארו לך 5 ימים".encode("utf-8") in resp.data
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_shows_last_day(self, mock_cls, mock_gi, client):
+        expiry = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
+        mock_cls.return_value.get_user.return_value = _make_user(
+            "trial_active", trial_expiry_at=expiry)
+        mock_gi.return_value.find_recent_receipt.return_value = None
+        _login(client)
+        resp = client.get("/dashboard/subscription")
+        assert resp.status_code == 200
+        assert "היום האחרון".encode("utf-8") in resp.data
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_no_expiry_falls_back_to_generic(self, mock_cls, mock_gi, client):
+        # trial_pending has no trial_expiry_at -> generic heading, no crash.
+        mock_cls.return_value.get_user.return_value = _make_user("trial_pending")
+        mock_gi.return_value.find_recent_receipt.return_value = None
+        _login(client)
+        resp = client.get("/dashboard/subscription")
+        assert resp.status_code == 200
+        assert "14 יום ניסיון חינם".encode("utf-8") in resp.data
+
+
+class TestSubscriptionReconcile:
+    """Non-paid users are activated by confirming a settled GI receipt, without
+    relying on GI's (undelivered) IPN push."""
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_reconcile_activates_from_gi_receipt(self, mock_cls, mock_gi, client):
+        storage = MagicMock()
+        # get_user is called before reconcile (trial) and after (paid).
+        storage.get_user.side_effect = [
+            _make_user("trial_active"),
+            _make_user("paid", subscription_expires_at="2026-08-20T00:00:00+00:00"),
+        ]
+        mock_cls.return_value = storage
+        mock_gi.return_value.find_recent_receipt.return_value = {
+            "id": "doc_x", "amount": 1, "client": {"emails": ["test@example.com"]},
+        }
+        _login(client)
+        resp = client.get("/dashboard/subscription")
+        assert resp.status_code == 200
+
+        data = storage.update_user_profile.call_args[0][1]
+        assert data["subscription_status"] == "paid"
+        assert data["subscription_gi_document_id"] == "doc_x"
+        assert data["subscription_price_paid"] == 100  # 1 shekel -> agorot
+        # Page reflects the activated state.
+        assert "מנוי פעיל".encode("utf-8") in resp.data
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_reconcile_skipped_for_paid_user(self, mock_cls, mock_gi, client):
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user(
+            "paid", subscription_expires_at="2026-08-20T00:00:00+00:00")
+        mock_cls.return_value = storage
+        _login(client)
+        resp = client.get("/dashboard/subscription")
+        assert resp.status_code == 200
+        mock_gi.return_value.find_recent_receipt.assert_not_called()
+        storage.update_user_profile.assert_not_called()
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_no_receipt_no_activation(self, mock_cls, mock_gi, client):
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user("trial_active")
+        mock_cls.return_value = storage
+        mock_gi.return_value.find_recent_receipt.return_value = None
+        _login(client)
+        resp = client.get("/dashboard/subscription")
+        assert resp.status_code == 200
+        storage.update_user_profile.assert_not_called()
 
 
 class TestSubscriptionStart:

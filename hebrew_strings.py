@@ -79,6 +79,10 @@ PRIVACY_SUBTITLE = (
 # -- Subscription page --
 SUB_TITLE = "מנוי"
 SUB_TRIAL_ACTIVE_HEADING = "14 יום ניסיון חינם"
+# Dynamic trial-remaining headings (chosen by days left; see subscription.html).
+SUB_TRIAL_DAYS_LEFT = "נשארו לך {} ימים בתקופת הניסיון"
+SUB_TRIAL_LAST_DAY = "היום האחרון של תקופת הניסיון"
+SUB_TRIAL_ENDING_TODAY = "תקופת הניסיון מסתיימת היום"
 SUB_TRIAL_ACTIVE_BODY = "אתה כרגע בתקופת ניסיון חינמית. בסיומה תוכל להמשיך עם מנוי."
 SUB_TRIAL_ENDED_HEADING = "תקופת הניסיון הסתיימה"
 SUB_TRIAL_ENDED_BODY = "כדי להמשיך לתעד ולקבל אימון מדוגרי, הפעל מנוי."

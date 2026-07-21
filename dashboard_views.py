@@ -379,13 +379,117 @@ def _format_date_he(iso_str: str | None) -> str:
         return ""
 
 
+def _trial_days_left(user: dict | None) -> int | None:
+    """Whole days remaining in the trial (ceil, floored at 0), or None when the
+    trial expiry is unknown (e.g. trial_pending - not yet started in the bot)."""
+    if not user:
+        return None
+    expiry = user.get("trial_expiry_at")
+    if not expiry:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(expiry))
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    secs = (dt - datetime.now(timezone.utc)).total_seconds()
+    return max(0, -(-int(secs) // 86400))  # ceil division, never negative
+
+
+def _activate_paid(storage, email: str, user: dict, gi_document_id: str,
+                   amount_shekels, token_id: str | None = None) -> None:
+    """Flip a user to a fresh 30-day paid subscription and fire the Meta Purchase
+    event. Shared by the IPN webhook and the GI reconcile path so both activate
+    identically."""
+    now = DashboardStorage._now()
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    fields = {
+        "subscription_status": "paid",
+        "subscription_gi_document_id": gi_document_id,
+        "subscription_started_at": now,
+        "subscription_expires_at": expires_at,
+        "subscription_last_charged_at": now,
+        "subscription_expiry_message_sent": False,
+        "subscription_end_acknowledged": False,
+    }
+    if isinstance(amount_shekels, (int, float)):
+        fields["subscription_price_paid"] = int(round(float(amount_shekels) * 100))
+    if token_id:
+        fields["subscription_token_id"] = token_id
+    storage.update_user_profile(email, fields)
+    logger.info("Subscription activated for %s (doc %s, token %s)",
+                email, gi_document_id, (token_id[:8] if token_id else "none"))
+
+    # Fire the Meta Purchase conversion event (best-effort, deduped by doc/token).
+    try:
+        import services.meta_capi as meta_capi
+        cfg = current_app.config["APP_CONFIG"]
+        price = cfg.get("green_invoice", {}).get("subscription_price_ils", 47)
+        event_id = meta_capi._sha256(f"purchase:{gi_document_id or token_id or email}")
+        outcome = meta_capi.send_event(
+            cfg.get("meta", {}),
+            email=email,
+            event_name="Purchase",
+            event_id=event_id,
+            user_meta=(user or {}).get("meta"),
+            custom_data={"value": price, "currency": "ILS"},
+            action_source="website",
+        )
+        if outcome is not None:
+            storage.log_meta_event(
+                telegram_user_id=(user or {}).get("telegram_user_id"), user_email=email,
+                event_key="paid", event_name="Purchase", action_source="website",
+                event_time=None, custom_data={"value": price, "currency": "ILS"},
+                **outcome,
+            )
+    except Exception:
+        logger.warning("Meta Purchase event failed (non-fatal)", exc_info=True)
+
+
+def _reconcile_paid_from_gi(storage, user: dict | None) -> bool:
+    """Activate a subscription by confirming a settled receipt in GI, WITHOUT
+    relying on GI's IPN push (which is not reliably delivered). Runs on the
+    subscription page load: if a non-paid user has a fresh receipt for the plan
+    price, flip them to paid. Returns True if it activated. Idempotent - once
+    paid, the status guard skips it; the doc-id guard prevents re-consuming the
+    same receipt."""
+    if not user:
+        return False
+    if user.get("subscription_status") in ("paid", "cancelled"):
+        return False
+    email = user.get("_id")
+    if not email:
+        return False
+    try:
+        receipt = _get_gi_service().find_recent_receipt(email, _subscription_price())
+    except Exception:
+        logger.warning("reconcile: GI lookup failed (non-fatal)", exc_info=True)
+        return False
+    if not receipt:
+        return False
+    doc_id = receipt.get("id")
+    if doc_id and doc_id == user.get("subscription_gi_document_id"):
+        return False  # already consumed this receipt
+    _activate_paid(storage, email, user, doc_id, receipt.get("amount"))
+    logger.info("Reconciled paid from GI receipt %s for %s", doc_id, email)
+    return True
+
+
 @dashboard_bp.route("/subscription")
 @login_required
 def subscription():
     import hebrew_strings as hs
 
     storage = _get_storage()
-    user = storage.get_user(session["user_email"])
+    email = session["user_email"]
+    user = storage.get_user(email)
+    # Reconcile a missed activation: if the user paid but GI's IPN never arrived,
+    # confirm the payment against GI and activate now, so the page reflects reality
+    # instead of showing the trial state after a successful payment.
+    if _reconcile_paid_from_gi(storage, user):
+        user = storage.get_user(email)
+
     cfg = current_app.config["APP_CONFIG"]
     price = _subscription_price()
     contact_email = cfg.get("contact_email", "")
@@ -400,6 +504,7 @@ def subscription():
         price=price,
         status=status,
         expires_at=expires_at,
+        trial_days_left=_trial_days_left(user),
         contact_email=contact_email,
         hs=hs,
     )
@@ -539,47 +644,8 @@ def subscription_webhook():
             logger.warning("Payment webhook: doc %s amount %r != price %r",
                            document_id, amount, expected)
         else:
-            now = DashboardStorage._now()
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-            storage.update_user_profile(email, {
-                "subscription_status": "paid",
-                "subscription_token_id": token_id,
-                "subscription_gi_document_id": document_id,
-                "subscription_price_paid": int(round(float(amount) * 100)),  # agorot
-                "subscription_started_at": now,
-                "subscription_expires_at": expires_at,
-                "subscription_last_charged_at": now,
-                "subscription_expiry_message_sent": False,
-                "subscription_end_acknowledged": False,
-            })
+            _activate_paid(storage, email, user, document_id, amount, token_id=token_id)
             outcome = "paid"
-            logger.info("Subscription activated for %s (token: %s)",
-                        email, token_id[:8] if token_id else "none")
-
-            # Fire the Meta Purchase conversion event (best-effort, deduped by token).
-            try:
-                import services.meta_capi as meta_capi
-                cfg = current_app.config["APP_CONFIG"]
-                price = cfg.get("green_invoice", {}).get("subscription_price_ils", 47)
-                event_id = meta_capi._sha256(f"purchase:{token_id or email}")
-                meta_outcome = meta_capi.send_event(
-                    cfg.get("meta", {}),
-                    email=email,
-                    event_name="Purchase",
-                    event_id=event_id,
-                    user_meta=user.get("meta"),
-                    custom_data={"value": price, "currency": "ILS"},
-                    action_source="website",
-                )
-                if meta_outcome is not None:
-                    storage.log_meta_event(
-                        telegram_user_id=user.get("telegram_user_id"), user_email=email,
-                        event_key="paid", event_name="Purchase", action_source="website",
-                        event_time=None, custom_data={"value": price, "currency": "ILS"},
-                        **meta_outcome,
-                    )
-            except Exception:
-                logger.warning("Meta Purchase event failed (non-fatal)", exc_info=True)
 
     # Always record the raw call + what we did, for diagnosis.
     storage.log_webhook(

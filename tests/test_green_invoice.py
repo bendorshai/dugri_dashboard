@@ -211,3 +211,56 @@ class TestChargeToken:
 
         assert result["success"] is False
         assert "error" in result
+
+
+class TestFindRecentReceipt:
+    """find_recent_receipt locates the newest settled receipt for an email +
+    amount within the recency window, used to reconcile a paid subscription
+    without relying on GI's IPN."""
+
+    def _today(self):
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).date().isoformat()
+
+    def _search_response(self, items):
+        return MagicMock(status_code=200, json=lambda: {"items": items})
+
+    @patch("services.green_invoice.requests.post")
+    def test_returns_newest_matching(self, mock_post, gi_sandbox):
+        today = self._today()
+        mock_post.side_effect = [
+            MagicMock(status_code=200, json=lambda: {"token": "jwt", "expires_in": 1800}),
+            self._search_response([
+                {"id": "d1", "type": 400, "amount": 47, "number": 80004,
+                 "documentDate": today, "client": {"emails": ["a@b.com"]}},
+                {"id": "d0", "type": 400, "amount": 47, "number": 80003,
+                 "documentDate": today, "client": {"emails": ["a@b.com"]}},
+            ]),
+        ]
+        r = gi_sandbox.find_recent_receipt("a@b.com", 47)
+        assert r["id"] == "d1"  # newest by document number
+
+    @patch("services.green_invoice.requests.post")
+    def test_no_match_wrong_amount_or_email(self, mock_post, gi_sandbox):
+        today = self._today()
+        mock_post.side_effect = [
+            MagicMock(status_code=200, json=lambda: {"token": "jwt", "expires_in": 1800}),
+            self._search_response([
+                {"id": "d1", "type": 400, "amount": 99, "number": 5,
+                 "documentDate": today, "client": {"emails": ["a@b.com"]}},   # wrong amount
+                {"id": "d2", "type": 400, "amount": 47, "number": 6,
+                 "documentDate": today, "client": {"emails": ["x@y.com"]}},   # wrong email
+            ]),
+        ]
+        assert gi_sandbox.find_recent_receipt("a@b.com", 47) is None
+
+    @patch("services.green_invoice.requests.post")
+    def test_stale_receipt_excluded(self, mock_post, gi_sandbox):
+        mock_post.side_effect = [
+            MagicMock(status_code=200, json=lambda: {"token": "jwt", "expires_in": 1800}),
+            self._search_response([
+                {"id": "old", "type": 400, "amount": 47, "number": 1,
+                 "documentDate": "2020-01-01", "client": {"emails": ["a@b.com"]}},
+            ]),
+        ]
+        assert gi_sandbox.find_recent_receipt("a@b.com", 47) is None
