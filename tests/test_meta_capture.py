@@ -182,9 +182,15 @@ class TestPixelGating:
 # -- 6. Purchase event on webhook --------------------------------------------
 
 class TestPurchaseWebhook:
+    # The webhook flips to paid + fires Purchase only on a GI-VERIFIED payment
+    # document (amount == price, client email == a known user). These tests mock
+    # verify_payment to return such a document.
+    _VERIFIED_DOC = {"id": "doc1", "amount": 1, "client": {"emails": [TEST_EMAIL]}}
+
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("services.meta_capi.requests.post")
     @patch("dashboard_views.DashboardStorage")
-    def test_purchase_event_fired_on_webhook(self, mock_storage_cls, mock_post, meta_client):
+    def test_purchase_event_fired_on_webhook(self, mock_storage_cls, mock_post, mock_gi, meta_client):
         mock_storage = MagicMock()
         mock_storage.get_user.return_value = {
             "_id": TEST_EMAIL,
@@ -192,14 +198,15 @@ class TestPurchaseWebhook:
             "meta": {"fbp": "fb.1.p", "client_ip": "9.9.9.9", "client_user_agent": "UA"},
         }
         mock_storage_cls.return_value = mock_storage
+        mock_gi.return_value.verify_payment.return_value = self._VERIFIED_DOC
 
         post_resp = MagicMock()
         post_resp.status_code = 200
         mock_post.return_value = post_resp
 
         resp = meta_client.post(
-            "/dashboard/subscription/webhook?gi-type=ipn",
-            json={"custom": TEST_EMAIL, "tokenId": "tok1"},
+            "/dashboard/subscription/webhook",
+            json={"id": "doc1", "tokenId": "tok1"},
         )
         assert resp.status_code == 200
 
@@ -213,32 +220,36 @@ class TestPurchaseWebhook:
         assert len(em) == 64
         assert TEST_EMAIL not in em
 
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("services.meta_capi.requests.post")
     @patch("dashboard_views.DashboardStorage")
-    def test_purchase_not_fired_when_meta_disabled(self, mock_storage_cls, mock_post, client):
+    def test_purchase_not_fired_when_meta_disabled(self, mock_storage_cls, mock_post, mock_gi, client):
         # Default `client` fixture uses SAMPLE_CONFIG which has no meta block.
         mock_storage = MagicMock()
         mock_storage.get_user.return_value = {
             "_id": TEST_EMAIL, "subscription_status": "trial_ended", "meta": {},
         }
         mock_storage_cls.return_value = mock_storage
+        mock_gi.return_value.verify_payment.return_value = self._VERIFIED_DOC
 
         resp = client.post(
-            "/dashboard/subscription/webhook?gi-type=ipn",
-            json={"custom": TEST_EMAIL, "tokenId": "tok1"},
+            "/dashboard/subscription/webhook",
+            json={"id": "doc1", "tokenId": "tok1"},
         )
         assert resp.status_code == 200
         mock_post.assert_not_called()
 
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("services.meta_capi.requests.post")
     @patch("dashboard_views.DashboardStorage")
-    def test_purchase_logged_to_meta_events_log(self, mock_storage_cls, mock_post, meta_client):
+    def test_purchase_logged_to_meta_events_log(self, mock_storage_cls, mock_post, mock_gi, meta_client):
         mock_storage = MagicMock()
         mock_storage.get_user.return_value = {
             "_id": TEST_EMAIL, "subscription_status": "trial_ended",
             "telegram_user_id": 42, "meta": {},
         }
         mock_storage_cls.return_value = mock_storage
+        mock_gi.return_value.verify_payment.return_value = self._VERIFIED_DOC
 
         post_resp = MagicMock()
         post_resp.status_code = 200
@@ -247,8 +258,8 @@ class TestPurchaseWebhook:
         mock_post.return_value = post_resp
 
         resp = meta_client.post(
-            "/dashboard/subscription/webhook?gi-type=ipn",
-            json={"custom": TEST_EMAIL, "tokenId": "tok1"},
+            "/dashboard/subscription/webhook",
+            json={"id": "doc1", "tokenId": "tok1"},
         )
         assert resp.status_code == 200
 

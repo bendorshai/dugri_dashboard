@@ -4,7 +4,9 @@ Covers:
 - Subscription page renders correctly for each subscription_status
 - Subscribe flow redirects to GI payment form
 - Cancel flow sets status to 'cancelled', preserves subscription_expires_at
-- Webhook handler activates subscription on IPN
+- Webhook handler activates subscription ONLY on a GI-verified payment document
+  (email + amount taken from the authoritative GI document, never the IPN body),
+  and always records the raw call to webhook_logs for diagnosis.
 - Success/failure redirects show flash messages
 """
 
@@ -154,53 +156,95 @@ class TestSubscriptionCancel:
 
 
 class TestSubscriptionWebhook:
-    """POST /dashboard/subscription/webhook handles GI IPN."""
+    """POST /dashboard/subscription/webhook.
 
+    A user is flipped to `paid` ONLY when the IPN carries a document id that
+    VERIFIES against GI's authenticated API, the document's client email matches
+    a known user, and its amount equals the plan price (test config price = 1).
+    The untrusted IPN body is never trusted for email/amount. Every call is
+    logged to webhook_logs. The endpoint always returns 200 (GI must not retry-
+    storm), signalling the outcome in the JSON body.
+    """
+
+    def _doc(self, email="test@example.com", amount=1):
+        return {"id": "doc_1", "amount": amount, "client": {"emails": [email]}}
+
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("dashboard_views.DashboardStorage")
-    def test_ipn_activates_subscription(self, mock_cls, client):
+    def test_verified_payment_activates_subscription(self, mock_cls, mock_gi, client):
         mock_storage = MagicMock()
         mock_storage.get_user.return_value = _make_user("trial_ended")
         mock_cls.return_value = mock_storage
+        mock_gi.return_value.verify_payment.return_value = self._doc()
 
         resp = client.post(
-            "/dashboard/subscription/webhook?gi-type=ipn",
-            json={"custom": "test@example.com", "tokenId": "tok_abc123"},
+            "/dashboard/subscription/webhook",
+            json={"id": "doc_1", "tokenId": "tok_abc123"},
         )
         assert resp.status_code == 200
+        assert resp.get_json()["status"] == "paid"
 
         call_args = mock_storage.update_user_profile.call_args[0]
-        assert call_args[0] == "test@example.com"
+        assert call_args[0] == "test@example.com"  # email from the GI document
         data = call_args[1]
         assert data["subscription_status"] == "paid"
         assert data["subscription_token_id"] == "tok_abc123"
+        assert data["subscription_gi_document_id"] == "doc_1"
+        assert data["subscription_price_paid"] == 100  # 1 shekel -> 100 agorot
         assert data["subscription_started_at"] is not None
         assert data["subscription_expires_at"] is not None
+        # Raw call is always logged for diagnosis.
+        mock_storage.log_webhook.assert_called_once()
 
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("dashboard_views.DashboardStorage")
-    def test_non_ipn_ignored(self, mock_cls, client):
+    def test_unverifiable_ipn_does_not_activate(self, mock_cls, mock_gi, client):
+        # No document id / verify returns None -> no flip, but logged + 200.
+        mock_gi.return_value.verify_payment.return_value = None
+        mock_storage = MagicMock()
+        mock_cls.return_value = mock_storage
+
         resp = client.post(
-            "/dashboard/subscription/webhook?gi-type=success",
-            json={"custom": "test@example.com"},
+            "/dashboard/subscription/webhook",
+            json={"custom": "test@example.com", "tokenId": "tok_abc"},
         )
         assert resp.status_code == 200
-        mock_cls.return_value.update_user_profile.assert_not_called()
+        assert resp.get_json()["status"] == "ignored"
+        mock_storage.update_user_profile.assert_not_called()
+        mock_storage.log_webhook.assert_called_once()
 
+    @patch("dashboard_views.GreenInvoiceService")
     @patch("dashboard_views.DashboardStorage")
-    def test_missing_email_returns_400(self, mock_cls, client):
-        resp = client.post(
-            "/dashboard/subscription/webhook?gi-type=ipn",
-            json={"tokenId": "tok_abc"},
-        )
-        assert resp.status_code == 400
+    def test_amount_mismatch_does_not_activate(self, mock_cls, mock_gi, client):
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = _make_user("trial_ended")
+        mock_cls.return_value = mock_storage
+        # Verified doc but amount (99) != plan price (1) -> rejected.
+        mock_gi.return_value.verify_payment.return_value = self._doc(amount=99)
 
-    @patch("dashboard_views.DashboardStorage")
-    def test_unknown_user_returns_404(self, mock_cls, client):
-        mock_cls.return_value.get_user.return_value = None
         resp = client.post(
-            "/dashboard/subscription/webhook?gi-type=ipn",
-            json={"custom": "unknown@example.com", "tokenId": "tok_abc"},
+            "/dashboard/subscription/webhook",
+            json={"id": "doc_1", "tokenId": "tok_abc"},
         )
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "amount_mismatch"
+        mock_storage.update_user_profile.assert_not_called()
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_unknown_user_does_not_activate(self, mock_cls, mock_gi, client):
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = None
+        mock_cls.return_value = mock_storage
+        mock_gi.return_value.verify_payment.return_value = self._doc(email="ghost@example.com")
+
+        resp = client.post(
+            "/dashboard/subscription/webhook",
+            json={"id": "doc_1", "tokenId": "tok_abc"},
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "user_not_found"
+        mock_storage.update_user_profile.assert_not_called()
 
 
 class TestSuccessFailureRedirects:

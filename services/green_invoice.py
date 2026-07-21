@@ -144,6 +144,44 @@ class GreenInvoiceService:
         data = resp.json()
         return data["url"]
 
+    def get_document(self, document_id: str) -> dict:
+        """Fetch a document from GI's authenticated API. Raises on failure."""
+        resp = requests.get(
+            f"{self._base_url}/api/v1/documents/{document_id}",
+            headers=self._headers(),
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            raise GreenInvoiceError(
+                f"Get document failed: {resp.status_code} {resp.text}")
+        return resp.json()
+
+    def verify_payment(self, document_id: str) -> dict | None:
+        """Confirm an IPN refers to a real, settled payment via the authenticated API.
+
+        Re-fetches the document GI says was created and checks it is a genuine,
+        positive-amount payment. Returns the document dict when verified, else
+        None. NEVER raises - a verification failure must leave the webhook a
+        no-op, not 500 the caller. This closes the spoofing hole where an
+        unauthenticated IPN POST could flip any email to paid: without a real
+        settled document behind it, nothing happens.
+        """
+        if not document_id:
+            return None
+        try:
+            doc = self.get_document(document_id)
+        except (GreenInvoiceError, requests.RequestException):
+            logger.warning("GI verify: could not fetch document %s", document_id)
+            return None
+        amount = doc.get("amount")
+        if not isinstance(amount, (int, float)) or amount <= 0:
+            logger.warning(
+                "GI verify: document %s has non-positive/absent amount %r",
+                document_id, amount,
+            )
+            return None
+        return doc
+
     def charge_token(self, token_id: str, amount_ils: int) -> dict:
         """Charge a stored card token for recurring billing.
 

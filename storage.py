@@ -54,6 +54,27 @@ class DashboardStorage:
         except Exception:
             logger.warning("Failed to log meta event", exc_info=True)
 
+    def log_webhook(self, **fields) -> None:
+        """Append one raw inbound payment-webhook (GI IPN) call to webhook_logs,
+        for diagnosis. Best-effort; never raises. This is the ground-truth record
+        of exactly what Green Invoice sends, so a payload-format mismatch can be
+        seen and fixed instead of failing invisibly."""
+        doc = {
+            "args": fields.get("args"),
+            "json": fields.get("json"),
+            "form": fields.get("form"),
+            "headers": fields.get("headers"),
+            "outcome": fields.get("outcome"),
+            "matched_email": fields.get("matched_email"),
+            "document_id": fields.get("document_id"),
+            "verified": fields.get("verified"),
+            "timestamp": datetime.now(timezone.utc),
+        }
+        try:
+            self._db["webhook_logs"].insert_one(doc)
+        except Exception:
+            logger.warning("Failed to log webhook", exc_info=True)
+
     def create_user(
         self,
         email: str,

@@ -472,64 +472,121 @@ def subscription_cancel():
 
 @dashboard_bp.route("/subscription/webhook", methods=["POST"])
 def subscription_webhook():
-    """Green Invoice IPN webhook - called by GI servers after payment."""
-    gi_type = request.args.get("gi-type", "")
+    """Green Invoice IPN webhook - called by GI after a payment.
 
-    if gi_type != "ipn":
-        return jsonify({"status": "ignored"}), 200
+    Hardened + instrumented. The previous version hard-required ``?gi-type=ipn``
+    and trusted the body's ``custom``/``tokenId`` with no logging, so any
+    format mismatch dropped the call silently - no payment was ever recorded
+    (0 paid users, 0 tokens, 0 Purchase events in prod). This version:
+      - ALWAYS logs the raw request to ``webhook_logs`` (ground truth on GI's
+        real IPN format), so a mismatch is visible and fixable, not invisible.
+      - does NOT gate solely on ``gi-type``; it detects a payment by content.
+      - VERIFIES a document id against GI's authenticated API before flipping
+        anyone to paid: the paying email + amount come from the authoritative
+        GI document, never the untrusted IPN body (anti-spoof, Finding #1).
+    """
+    args = dict(request.args)
+    body_json = request.get_json(silent=True)
+    body_form = request.form.to_dict()
+    data = body_json if isinstance(body_json, dict) else (body_form or {})
+    merged = {**args, **data}  # GI may echo fields as query params or body
 
-    data = request.json or request.form.to_dict()
-    user_email = data.get("custom", "")
-    token_id = data.get("tokenId") or data.get("token_id", "")
+    def pick(*keys):
+        for k in keys:
+            v = merged.get(k)
+            if v:
+                return v
+        return ""
 
-    if not user_email:
-        logger.warning("Webhook missing user email in custom field")
-        return jsonify({"error": "missing user email"}), 400
+    document_id = pick("id", "documentId", "docId", "document_id", "document")
+    custom_email = pick("custom", "email")
+    token_id = pick("tokenId", "token_id", "token", "cardToken")
 
     storage = _get_storage()
-    user = storage.get_user(user_email)
-    if not user:
-        logger.warning("Webhook for unknown user: %s", user_email)
-        return jsonify({"error": "user not found"}), 404
 
-    now = DashboardStorage._now()
-    expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-
-    storage.update_user_profile(user_email, {
-        "subscription_status": "paid",
-        "subscription_token_id": token_id,
-        "subscription_started_at": now,
-        "subscription_expires_at": expires_at,
-        "subscription_last_charged_at": now,
-        "subscription_expiry_message_sent": False,
-        "subscription_end_acknowledged": False,
-    })
-
-    # Fire the Meta Purchase conversion event (best-effort, deduped by token id).
+    # Authoritative check: re-fetch the document from GI's authenticated API. We
+    # NEVER flip a user to paid on the untrusted IPN body alone - the paying
+    # email, amount and settled-status all come from the verified GI document
+    # (review-fixes Finding #1: bind the document to the user + price, else a
+    # settled document id presented for custom=<victim> would flip the victim).
+    verified_doc = None
     try:
-        import services.meta_capi as meta_capi
-        cfg = current_app.config["APP_CONFIG"]
-        price = cfg.get("green_invoice", {}).get("subscription_price_ils", 47)
-        event_id = meta_capi._sha256(f"purchase:{token_id or user_email}")
-        outcome = meta_capi.send_event(
-            cfg.get("meta", {}),
-            email=user_email,
-            event_name="Purchase",
-            event_id=event_id,
-            user_meta=user.get("meta"),
-            custom_data={"value": price, "currency": "ILS"},
-            action_source="website",
-        )
-        # Record it in our own audit log (only when a send was actually attempted).
-        if outcome is not None:
-            storage.log_meta_event(
-                telegram_user_id=user.get("telegram_user_id"), user_email=user_email,
-                event_key="paid", event_name="Purchase", action_source="website",
-                event_time=None, custom_data={"value": price, "currency": "ILS"},
-                **outcome,
-            )
+        if document_id:
+            verified_doc = _get_gi_service().verify_payment(document_id)
     except Exception:
-        logger.warning("Meta Purchase event failed (non-fatal)", exc_info=True)
+        logger.warning("verify_payment raised (non-fatal)", exc_info=True)
 
-    logger.info("Subscription activated for %s (token: %s)", user_email, token_id[:8] if token_id else "none")
-    return jsonify({"status": "ok"}), 200
+    outcome = "ignored"
+    email = ""
+    if verified_doc:
+        client = verified_doc.get("client") or {}
+        emails = client.get("emails") or []
+        email = emails[0] if emails else ""
+        # GI `amount` is in major units (shekels), confirmed against a real
+        # document. Require it to equal the plan price so an arbitrary settled
+        # document cannot activate a subscription (Finding #1 + #4).
+        amount = verified_doc.get("amount")
+        expected = _subscription_price()
+        price_ok = isinstance(amount, (int, float)) and int(amount) == int(expected)
+        user = storage.get_user(email) if email else None
+
+        if not email or not user:
+            outcome = "user_not_found"
+            logger.warning("Payment webhook: no user for GI doc %s email %r",
+                           document_id, email)
+        elif not price_ok:
+            outcome = "amount_mismatch"
+            logger.warning("Payment webhook: doc %s amount %r != price %r",
+                           document_id, amount, expected)
+        else:
+            now = DashboardStorage._now()
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+            storage.update_user_profile(email, {
+                "subscription_status": "paid",
+                "subscription_token_id": token_id,
+                "subscription_gi_document_id": document_id,
+                "subscription_price_paid": int(round(float(amount) * 100)),  # agorot
+                "subscription_started_at": now,
+                "subscription_expires_at": expires_at,
+                "subscription_last_charged_at": now,
+                "subscription_expiry_message_sent": False,
+                "subscription_end_acknowledged": False,
+            })
+            outcome = "paid"
+            logger.info("Subscription activated for %s (token: %s)",
+                        email, token_id[:8] if token_id else "none")
+
+            # Fire the Meta Purchase conversion event (best-effort, deduped by token).
+            try:
+                import services.meta_capi as meta_capi
+                cfg = current_app.config["APP_CONFIG"]
+                price = cfg.get("green_invoice", {}).get("subscription_price_ils", 47)
+                event_id = meta_capi._sha256(f"purchase:{token_id or email}")
+                meta_outcome = meta_capi.send_event(
+                    cfg.get("meta", {}),
+                    email=email,
+                    event_name="Purchase",
+                    event_id=event_id,
+                    user_meta=user.get("meta"),
+                    custom_data={"value": price, "currency": "ILS"},
+                    action_source="website",
+                )
+                if meta_outcome is not None:
+                    storage.log_meta_event(
+                        telegram_user_id=user.get("telegram_user_id"), user_email=email,
+                        event_key="paid", event_name="Purchase", action_source="website",
+                        event_time=None, custom_data={"value": price, "currency": "ILS"},
+                        **meta_outcome,
+                    )
+            except Exception:
+                logger.warning("Meta Purchase event failed (non-fatal)", exc_info=True)
+
+    # Always record the raw call + what we did, for diagnosis.
+    storage.log_webhook(
+        args=args, json=body_json, form=body_form,
+        headers={k: v for k, v in request.headers.items()
+                 if k.lower() not in ("cookie", "authorization")},
+        outcome=outcome, matched_email=(email if outcome == "paid" else ""),
+        document_id=document_id, verified=bool(verified_doc),
+    )
+    return jsonify({"status": outcome}), 200
