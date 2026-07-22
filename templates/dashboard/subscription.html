@@ -96,13 +96,15 @@
         </div>
     </template>
 
-    {# ---- Cancelled (still has access) ---- #}
+    {# ---- Cancelled (still has access) - resume WITHOUT charging ---- #}
     {% elif status == 'cancelled' %}
     <h3 style="margin-bottom: 1rem;">{{ hs.SUB_CANCELLED_HEADING }}</h3>
     <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
         {{ hs.SUB_CANCELLED_BODY.format(expires_at) }}
     </p>
-    <form method="POST" action="{{ url_for('dashboard_views.subscription_start') }}">
+    {# Still within the paid period: re-subscribe RESUMES (no new charge); the next
+       charge is at the current period end (expires_at). #}
+    <form method="POST" action="{{ url_for('dashboard_views.subscription_resume') }}">
         <button type="submit" class="btn btn--primary btn--full">
             {{ hs.SUB_RESUBSCRIBE_CTA }}
         </button>

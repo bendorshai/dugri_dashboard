@@ -250,6 +250,45 @@ class TestSubscriptionLifecycleNotify:
         assert called[0].kwargs["json"]["event"] == "purchase"
 
 
+class TestSubscriptionResume:
+    """Re-subscribing while still within the paid period RESUMES without charging."""
+
+    @patch("dashboard_views.requests.post")
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_resume_does_not_charge(self, mock_cls, mock_gi, mock_notify, client, app):
+        app.config["APP_CONFIG"]["bot_internal_url"] = "http://bot.local"
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user(
+            "cancelled", subscription_expires_at="2026-08-20T00:00:00+00:00")
+        mock_cls.return_value = storage
+        _login(client)
+
+        resp = client.post("/dashboard/subscription/resume")
+        assert resp.status_code == 302
+        # Flips to paid, keeps the schedule (next charge at period end), no GI charge/form.
+        data = storage.update_user_profile.call_args[0][1]
+        assert data["subscription_status"] == "paid"
+        assert data["next_bill_at"] == "2026-08-20T00:00:00+00:00"
+        assert data["subscription_cancelled_at"] is None
+        mock_gi.return_value.get_payment_form_url.assert_not_called()
+        mock_gi.return_value.charge_token.assert_not_called()
+        # Welcome-back message pinged to the bot.
+        called = [c for c in mock_notify.call_args_list
+                  if "notify-subscription-event" in c.args[0]]
+        assert called and called[0].kwargs["json"]["event"] == "purchase"
+
+    @patch("dashboard_views.DashboardStorage")
+    def test_resume_noop_when_not_cancelled(self, mock_cls, client):
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user("paid")
+        mock_cls.return_value = storage
+        _login(client)
+        resp = client.post("/dashboard/subscription/resume")
+        assert resp.status_code == 302
+        storage.update_user_profile.assert_not_called()
+
+
 class TestGiEnvironmentRouting:
     """_get_gi_service routes to the sandbox vs realdeal GI account per user."""
 

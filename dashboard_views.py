@@ -703,6 +703,33 @@ def subscription_cancel():
     return redirect(url_for("dashboard_views.subscription"))
 
 
+@dashboard_bp.route("/subscription/resume", methods=["POST"])
+@login_required
+def subscription_resume():
+    """Resume auto-renewal for a still-within-period cancellation - WITHOUT
+    charging. The user already paid for the current period, so re-subscribing just
+    turns the monthly renewal back on and keeps the existing schedule: the next
+    charge is at the current period-end (subscription_expires_at). No payment form,
+    no new receipt. A fully-ended subscription re-subscribes via subscription_start
+    (which does charge). This is the fix for `cancelled` users being wrongly charged
+    on re-subscribe.
+    """
+    storage = _get_storage()
+    email = session["user_email"]
+    user = storage.get_user(email)
+    if user and user.get("subscription_status") == "cancelled":
+        expires_at = user.get("subscription_expires_at")
+        storage.update_user_profile(email, {
+            "subscription_status": "paid",
+            "subscription_cancelled_at": None,
+            # Next charge is when the current paid period ends - no immediate charge.
+            "next_bill_at": expires_at,
+            "subscription_purchase_message_sent": False,  # welcome-back message
+        })
+        _notify_bot_subscription_event(email, "purchase", user)
+    return redirect(url_for("dashboard_views.subscription"))
+
+
 @dashboard_bp.route("/subscription/webhook", methods=["POST"])
 def subscription_webhook():
     """Green Invoice IPN webhook - called by GI after a payment.
