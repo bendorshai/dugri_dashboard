@@ -394,6 +394,23 @@ class TestSubscriptionWebhook:
 
     @patch("dashboard_views.GreenInvoiceService")
     @patch("dashboard_views.DashboardStorage")
+    def test_already_paid_ipn_does_not_reactivate(self, mock_cls, mock_gi, client):
+        # A duplicate IPN or a renewal-charge receipt IPN for an already-paid user
+        # must NOT re-run activation (that would reset next_bill_at forward + re-fire
+        # the purchase message). Money-safety guard.
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = _make_user("paid")
+        mock_cls.return_value = mock_storage
+        mock_gi.return_value.verify_payment.return_value = self._doc()
+
+        resp = client.post("/dashboard/subscription/webhook",
+                           json={"id": "doc_1", "tokenId": "tok_abc123"})
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "already_active"
+        mock_storage.update_user_profile.assert_not_called()
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
     def test_unverifiable_ipn_does_not_activate(self, mock_cls, mock_gi, client):
         # No document id / verify returns None -> no flip, but logged + 200.
         mock_gi.return_value.verify_payment.return_value = None

@@ -774,6 +774,14 @@ def subscription_webhook():
             outcome = "amount_mismatch"
             logger.warning("Payment webhook: doc %s amount %r != price %r",
                            document_id, amount, expected)
+        elif (user.get("subscription_status") == "paid"
+              or (document_id and document_id == user.get("subscription_gi_document_id"))):
+            # Already paid, OR this exact document was already consumed. A duplicate
+            # IPN or a RENEWAL-charge receipt IPN must NOT re-run _activate_paid
+            # (that would reset next_bill_at forward - skipping a paid month - and
+            # re-fire the Purchase event + festive message). Mirrors the reconcile
+            # guards. Only a genuine non-paid transition activates.
+            outcome = "already_active"
         else:
             _activate_paid(storage, email, user, document_id, amount, token_id=token_id)
             outcome = "paid"
@@ -799,6 +807,15 @@ MAX_CHARGE_RETRIES = 4  # after this many consecutive failures, end the subscrip
 def _charge_one(storage, user: dict, billing_period: str) -> str:
     """Charge one due user for `billing_period`. Caller MUST have already won the
     atomic claim. Returns "success" or "failed". Writes a ledger row either way.
+
+    KNOWN LIMITATION (must resolve BEFORE enabling renewals): if the process dies
+    between a SUCCESSFUL provider charge and the DB write below, the user is left
+    charge_state="in_progress" with next_bill_at unadvanced, and the atomic claim
+    will never re-claim an in_progress period - so they are charged but never
+    recognized as paid-through, silently. Re-claiming a stale in_progress is NOT
+    safe until the provider idempotency key (externalId) is confirmed to dedupe a
+    retried charge. Fix before go-live: a reconcile that, for an in_progress older
+    than N minutes, queries the provider by idempotency key and completes/reverts.
     """
     from billing_date import next_bill_date
     email = user["_id"]
