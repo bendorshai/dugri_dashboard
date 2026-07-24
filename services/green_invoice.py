@@ -165,6 +165,24 @@ class GreenInvoiceService:
                 f"Get document failed: {resp.status_code} {resp.text}")
         return resp.json()
 
+    def get_document_url(self, document_id: str) -> str | None:
+        """Return the hosted PDF link for a GI document (the emailed receipt), or
+        None if unavailable. GI documents carry a `url` object with `origin`/`he`
+        PDF links - we reuse those rather than generating a PDF ourselves. Never
+        raises: any error (missing doc, network, missing url) degrades to None so
+        the caller can 404 gracefully."""
+        try:
+            data = self.get_document(document_id)
+        except (GreenInvoiceError, requests.RequestException):
+            logger.warning("get_document_url: fetch failed for %s", document_id,
+                           exc_info=True)
+            return None
+        url = data.get("url") or {}
+        if isinstance(url, dict):
+            return url.get("origin") or url.get("he") or url.get("en")
+        # Some responses expose a bare string url.
+        return url if isinstance(url, str) and url else None
+
     def verify_payment(self, document_id: str) -> dict | None:
         """Confirm an IPN refers to a real, settled payment via the authenticated API.
 

@@ -515,3 +515,145 @@ class TestSuccessFailureRedirects:
         resp = client.get("/dashboard/subscription/failure", follow_redirects=True)
         assert resp.status_code == 200
         assert "התשלום לא הושלם".encode("utf-8") in resp.data
+
+
+class TestActivationDates:
+    """Fix 1 (B3 + A6): on activation, subscription_expires_at is the anchored,
+    drift-free next-bill date - NOT a naive now+30d - so the "next charge" UI row
+    and the cancel access-until copy show the real billing anchor."""
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_expires_at_equals_next_bill_at(self, mock_cls, mock_gi, client):
+        mock_storage = MagicMock()
+        mock_storage.get_user.return_value = _make_user("trial_ended")
+        mock_cls.return_value = mock_storage
+        mock_gi.return_value.verify_payment.return_value = {
+            "id": "doc_1", "amount": 1, "client": {"emails": ["test@example.com"]},
+        }
+        resp = client.post("/dashboard/subscription/webhook",
+                           json={"id": "doc_1", "tokenId": "tok_abc"})
+        assert resp.status_code == 200
+        data = mock_storage.update_user_profile.call_args[0][1]
+        # The access-until date is the anchored next charge date (no naive +30d).
+        assert data["subscription_expires_at"] == data["next_bill_at"]
+
+
+class TestBillingHistoryReceiptAndFormatting:
+    """Fix 2 (receipt PDF link) + Fix 4 (on-page/CSV amount formatting agree)."""
+
+    def _row(self, amount_agorot=4750, status="success", doc="doc_9"):
+        return {
+            "created_at": "2026-07-20T00:00:00+00:00",
+            "amount_agorot": amount_agorot,
+            "status": status,
+            "gi_document_id": doc,
+            "billing_period": "2026-07",
+            "provider_txn_id": "txn_1",
+        }
+
+    @patch("dashboard_views.DashboardStorage")
+    def test_onpage_amount_not_floored(self, mock_cls, client):
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user(
+            "paid", subscription_expires_at="2026-08-20T00:00:00+00:00")
+        storage.get_charge_history.return_value = [self._row(amount_agorot=4750)]
+        mock_cls.return_value = storage
+        _login(client)
+        resp = client.get("/dashboard/subscription")
+        assert resp.status_code == 200
+        # Non-round shekels render exactly (47.5), not floored to 47.
+        assert "47.5".encode("utf-8") in resp.data
+
+    @patch("dashboard_views.DashboardStorage")
+    def test_csv_amount_matches_onpage(self, mock_cls, client):
+        storage = MagicMock()
+        storage.get_charge_history.return_value = [self._row(amount_agorot=4750)]
+        mock_cls.return_value = storage
+        _login(client)
+        resp = client.get("/dashboard/subscription/history.csv")
+        assert resp.status_code == 200
+        assert "47.5" in resp.data.decode("utf-8")
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_receipt_redirects_for_owned_doc(self, mock_cls, mock_gi, client):
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user("paid")
+        storage.get_charge_history.return_value = [self._row(doc="doc_9")]
+        mock_cls.return_value = storage
+        mock_gi.return_value.get_document_url.return_value = "https://gi/receipt.pdf"
+        _login(client)
+        resp = client.get("/dashboard/subscription/receipt/doc_9")
+        assert resp.status_code == 302
+        assert resp.headers["Location"] == "https://gi/receipt.pdf"
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_receipt_404_for_foreign_doc(self, mock_cls, mock_gi, client):
+        # A document id NOT in this user's ledger must never be proxied.
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user("paid")
+        storage.get_charge_history.return_value = [self._row(doc="doc_9")]
+        mock_cls.return_value = storage
+        _login(client)
+        resp = client.get("/dashboard/subscription/receipt/doc_SOMEONE_ELSE")
+        assert resp.status_code == 404
+        mock_gi.return_value.get_document_url.assert_not_called()
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_receipt_404_when_gi_has_no_url(self, mock_cls, mock_gi, client):
+        storage = MagicMock()
+        storage.get_user.return_value = _make_user("paid")
+        storage.get_charge_history.return_value = [self._row(doc="doc_9")]
+        mock_cls.return_value = storage
+        mock_gi.return_value.get_document_url.return_value = None
+        _login(client)
+        resp = client.get("/dashboard/subscription/receipt/doc_9")
+        assert resp.status_code == 404
+
+
+class TestEnvRoutingEndToEnd:
+    """Fix 5: the per-user ?env= round-trip - subscription_start embeds the env in
+    the notifyUrl, and the session-less webhook routes GI by that ?env tag."""
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_start_embeds_env_sandbox_for_sandbox_user(self, mock_cls, mock_gi, client):
+        mock_cls.return_value.get_user.return_value = _make_user(
+            "trial_ended", sandbox=True)
+        mock_gi.return_value.get_payment_form_url.return_value = "https://gi/form"
+        _login(client)
+        resp = client.post("/dashboard/subscription/start")
+        assert resp.status_code == 302
+        notify_url = mock_gi.return_value.get_payment_form_url.call_args.kwargs["notify_url"]
+        assert "env=sandbox" in notify_url
+
+    @patch("dashboard_views.GreenInvoiceService")
+    @patch("dashboard_views.DashboardStorage")
+    def test_start_embeds_env_realdeal_for_default_user(self, mock_cls, mock_gi, client):
+        mock_cls.return_value.get_user.return_value = _make_user("trial_ended")
+        mock_gi.return_value.get_payment_form_url.return_value = "https://gi/form"
+        _login(client)
+        resp = client.post("/dashboard/subscription/start")
+        assert resp.status_code == 302
+        notify_url = mock_gi.return_value.get_payment_form_url.call_args.kwargs["notify_url"]
+        assert "env=realdeal" in notify_url
+
+    @patch("dashboard_views._get_gi_service")
+    @patch("dashboard_views.DashboardStorage")
+    def test_webhook_env_sandbox_routes_sandbox(self, mock_cls, mock_get_gi, client):
+        mock_cls.return_value = MagicMock()
+        mock_get_gi.return_value.verify_payment.return_value = None
+        client.post("/dashboard/subscription/webhook?env=sandbox",
+                    json={"id": "doc_1"})
+        assert mock_get_gi.call_args[0][0] is True
+
+    @patch("dashboard_views._get_gi_service")
+    @patch("dashboard_views.DashboardStorage")
+    def test_webhook_no_env_defaults_realdeal(self, mock_cls, mock_get_gi, client):
+        mock_cls.return_value = MagicMock()
+        mock_get_gi.return_value.verify_payment.return_value = None
+        client.post("/dashboard/subscription/webhook", json={"id": "doc_1"})
+        assert mock_get_gi.call_args[0][0] is False

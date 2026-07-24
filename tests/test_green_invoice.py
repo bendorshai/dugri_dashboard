@@ -264,3 +264,41 @@ class TestFindRecentReceipt:
             ]),
         ]
         assert gi_sandbox.find_recent_receipt("a@b.com", 47) is None
+
+
+class TestGetDocumentUrl:
+    """get_document_url returns the hosted receipt PDF link, or None on any error."""
+
+    def _auth(self):
+        return MagicMock(status_code=200,
+                         json=lambda: {"token": "jwt", "expires_in": 1800})
+
+    @patch("services.green_invoice.requests.get")
+    @patch("services.green_invoice.requests.post")
+    def test_returns_origin_pdf_url(self, mock_post, mock_get, gi_sandbox):
+        mock_post.return_value = self._auth()
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: {
+            "id": "doc_1", "url": {"origin": "https://gi/o.pdf", "he": "https://gi/he.pdf"}})
+        assert gi_sandbox.get_document_url("doc_1") == "https://gi/o.pdf"
+
+    @patch("services.green_invoice.requests.get")
+    @patch("services.green_invoice.requests.post")
+    def test_falls_back_to_he(self, mock_post, mock_get, gi_sandbox):
+        mock_post.return_value = self._auth()
+        mock_get.return_value = MagicMock(status_code=200,
+                                          json=lambda: {"url": {"he": "https://gi/he.pdf"}})
+        assert gi_sandbox.get_document_url("doc_1") == "https://gi/he.pdf"
+
+    @patch("services.green_invoice.requests.get")
+    @patch("services.green_invoice.requests.post")
+    def test_returns_none_on_http_error(self, mock_post, mock_get, gi_sandbox):
+        mock_post.return_value = self._auth()
+        mock_get.return_value = MagicMock(status_code=404, text="not found")
+        assert gi_sandbox.get_document_url("doc_1") is None
+
+    @patch("services.green_invoice.requests.get")
+    @patch("services.green_invoice.requests.post")
+    def test_returns_none_when_no_url(self, mock_post, mock_get, gi_sandbox):
+        mock_post.return_value = self._auth()
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: {"id": "doc_1"})
+        assert gi_sandbox.get_document_url("doc_1") is None

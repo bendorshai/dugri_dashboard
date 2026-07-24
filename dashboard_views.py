@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import (
-    Blueprint, flash, jsonify, render_template, redirect, url_for, request, session, current_app,
+    Blueprint, abort, flash, jsonify, render_template, redirect, url_for, request, session, current_app,
     Response,
 )
 
@@ -446,18 +446,21 @@ def _trial_days_left(user: dict | None) -> int | None:
 
 def _activate_paid(storage, email: str, user: dict, gi_document_id: str,
                    amount_shekels, token_id: str | None = None) -> None:
-    """Flip a user to a fresh 30-day paid subscription and fire the Meta Purchase
-    event. Shared by the IPN webhook and the GI reconcile path so both activate
-    identically."""
+    """Flip a user to a fresh paid subscription (access until the anchored next
+    bill date) and fire the Meta Purchase event. Shared by the IPN webhook and
+    the GI reconcile path so both activate identically."""
     from billing_date import next_bill_date
     now_dt = datetime.now(timezone.utc)
     now = DashboardStorage._now()
-    expires_at = (now_dt + timedelta(days=30)).isoformat()
     # Anchor the monthly billing day to the signup day-of-month, and compute the
     # next charge date from it (no drift). next_bill_at drives the renewal loop.
     anchor_day = now_dt.day
     nb = next_bill_date(anchor_day, now_dt.date())
     next_bill_at = datetime(nb.year, nb.month, nb.day, tzinfo=timezone.utc).isoformat()
+    # Access-until-end == the next charge date (the anchored, drift-free date),
+    # NOT a naive now+30d. The "next charge" UI row and the cancel access-until
+    # copy both render subscription_expires_at, so this keeps them exact.
+    expires_at = next_bill_at
     fields = {
         "subscription_status": "paid",
         "subscription_gi_document_id": gi_document_id,
@@ -582,8 +585,11 @@ def subscription():
     history = [
         {
             "date": _format_date_he(str(row.get("created_at"))),
-            "amount": (row.get("amount_agorot") or 0) // 100,
+            # Format identically to the CSV (:g -> "47", "47.5"; no trailing .0)
+            # so the on-page and downloaded amounts always agree.
+            "amount": f"{(row.get('amount_agorot') or 0) / 100:g}",
             "status": row.get("status"),
+            "gi_document_id": row.get("gi_document_id"),
         }
         for row in (raw_history if isinstance(raw_history, list) else [])
     ]
@@ -617,6 +623,8 @@ def subscription_history_csv():
     for r in rows:
         writer.writerow([
             _format_date_he(str(r.get("created_at"))),
+            # Numeric decimal (47.0, 47.5) for accounting-software import. The
+            # on-page list uses :g for clean human display; both agree in value.
             (r.get("amount_agorot") or 0) / 100,
             r.get("status", ""),
             r.get("billing_period", ""),
@@ -628,6 +636,28 @@ def subscription_history_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=dugri-billing-history.csv"},
     )
+
+
+@dashboard_bp.route("/subscription/receipt/<document_id>")
+@login_required
+def subscription_receipt(document_id: str):
+    """Redirect to the hosted GI receipt PDF for one of the user's own charges.
+
+    Ownership guard: the document id MUST appear in this user's charge ledger,
+    so a user can only ever open their own receipts (never proxy an arbitrary GI
+    document). The PDF url is fetched live (not stored) to avoid persisting
+    expiring signed links; if GI has no url we 404 rather than error."""
+    storage = _get_storage()
+    email = session["user_email"]
+    owned = any(str(r.get("gi_document_id")) == str(document_id)
+                for r in (storage.get_charge_history(email) or []))
+    if not owned:
+        abort(404)
+    user = storage.get_user(email)
+    url = _get_gi_service(_user_is_sandbox(user)).get_document_url(document_id)
+    if not url:
+        abort(404)
+    return redirect(url)
 
 
 @dashboard_bp.route("/subscription/start", methods=["POST"])

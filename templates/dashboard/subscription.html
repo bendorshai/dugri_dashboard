@@ -76,6 +76,10 @@
         {% endif %}
     </dl>
 
+    <p style="color: var(--text-muted); font-size: 0.8rem; margin: -0.75rem 0 1.5rem;">
+        {{ hs.SUB_RECEIPT_NOTE }}
+    </p>
+
     <template x-if="!showCancel">
         <div style="text-align: center;">
             <a href="#" @click.prevent="showCancel = true"
@@ -141,6 +145,7 @@
                 <th style="padding: 0.4rem 0; font-weight: 500;">{{ hs.SUB_HISTORY_COL_DATE }}</th>
                 <th style="padding: 0.4rem 0; font-weight: 500;">{{ hs.SUB_HISTORY_COL_AMOUNT }}</th>
                 <th style="padding: 0.4rem 0; font-weight: 500;">{{ hs.SUB_HISTORY_COL_STATUS }}</th>
+                <th style="padding: 0.4rem 0; font-weight: 500;"></th>
             </tr>
         </thead>
         <tbody>
@@ -150,6 +155,14 @@
                 <td style="padding: 0.4rem 0;">{{ row.amount }} ₪</td>
                 <td style="padding: 0.4rem 0;">
                     {{ hs.SUB_HISTORY_OK if row.status == 'success' else hs.SUB_HISTORY_FAIL }}
+                </td>
+                <td style="padding: 0.4rem 0; text-align: left;">
+                    {% if row.status == 'success' and row.gi_document_id %}
+                    <a href="{{ url_for('dashboard_views.subscription_receipt', document_id=row.gi_document_id) }}"
+                       style="font-size: 0.85rem; color: var(--primary, #A67448);">
+                        {{ hs.SUB_HISTORY_RECEIPT }}
+                    </a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
